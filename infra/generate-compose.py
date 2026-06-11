@@ -2,12 +2,15 @@
 """
 Reads deploy.yml and generates a docker-compose.yml with:
 - Traefik reverse proxy with Let's Encrypt
+- One internal (non-routed) service per enabled entry in `services:`
 - One service per enabled app with proper Traefik labels
 - Optional test deployment overlay via test-deploy.active.yml
 """
 
-import yaml
+import copy
 import os
+
+import yaml
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "deploy.yml")
 TEST_CONFIG_PATH = os.environ.get("TEST_CONFIG_PATH", "test-deploy.active.yml")
@@ -20,6 +23,7 @@ registry = config["registry"]
 email = config["letsencrypt_email"]
 
 services = {}
+named_volumes = {"letsencrypt": {}}
 
 # Traefik reverse proxy
 services["traefik"] = {
@@ -48,6 +52,35 @@ services["traefik"] = {
 }
 
 
+def collect_named_volumes(volume_entries):
+    """Register named volumes (e.g. "pgdata:/var/lib/...") in the top-level map."""
+    for entry in volume_entries:
+        source = entry.split(":", 1)[0]
+        if not source.startswith(("/", ".")):
+            named_volumes[source] = {}
+
+
+# Internal services (no Traefik routing, no host ports — only reachable
+# from other containers on the shared network)
+enabled_services = []
+for name, svc in config.get("services", {}).items():
+    if not svc.get("enabled", False):
+        continue
+
+    enabled_services.append(name)
+    service = {
+        "image": svc["image"],
+        "container_name": name,
+        "restart": "unless-stopped",
+        "networks": ["web"],
+    }
+    for key in ("environment", "volumes", "healthcheck"):
+        if svc.get(key):
+            service[key] = svc[key]
+    collect_named_volumes(svc.get("volumes", []))
+    services[name] = service
+
+
 def make_service_labels(name, fqdn, port):
     return [
         "traefik.enable=true",
@@ -64,6 +97,17 @@ def make_service_labels(name, fqdn, port):
         f"traefik.http.middlewares.{name}-security.headers.referrerPolicy=strict-origin-when-cross-origin",
         f"traefik.http.routers.{name}.middlewares={name}-security",
     ]
+
+
+def apply_app_extras(service, app):
+    """Optional depends_on (map of service -> condition) and healthcheck."""
+    depends_on = app.get("depends_on", {})
+    if depends_on:
+        service["depends_on"] = {
+            dep: {"condition": condition} for dep, condition in depends_on.items()
+        }
+    if app.get("healthcheck"):
+        service["healthcheck"] = copy.deepcopy(app["healthcheck"])
 
 
 # App services
@@ -89,6 +133,8 @@ for name, app in config.get("apps", {}).items():
     env_vars = app.get("environment", {})
     if env_vars:
         service["environment"] = env_vars
+
+    apply_app_extras(service, app)
 
     services[name] = service
 
@@ -147,18 +193,20 @@ if os.path.exists(TEST_CONFIG_PATH):
             "networks": ["web"],
         }
 
-        # Inherit runtime environment variables from app config
+        # Inherit runtime environment variables and extras from app config
         if app_name in config.get("apps", {}):
-            env_vars = config["apps"][app_name].get("environment", {})
+            app = config["apps"][app_name]
+            env_vars = app.get("environment", {})
             if env_vars:
-                test_service["environment"] = env_vars
+                test_service["environment"] = dict(env_vars)
+            apply_app_extras(test_service, app)
 
         services[test_name] = test_service
         test_apps.append(f"{app_name} → {test_fqdn}")
 
 compose = {
     "services": services,
-    "volumes": {"letsencrypt": {}},
+    "volumes": named_volumes,
     "networks": {
         "web": {"driver": "bridge", "name": "traefik_web"},
     },
@@ -169,5 +217,7 @@ with open(output_path, "w") as f:
     yaml.dump(compose, f, default_flow_style=False, sort_keys=False)
 
 print(f"Generated docker-compose.yml with enabled apps: {enabled_apps}")
+if enabled_services:
+    print(f"  + internal services: {enabled_services}")
 for t in test_apps:
     print(f"  + test: {t}")

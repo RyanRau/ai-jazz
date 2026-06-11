@@ -118,7 +118,57 @@ apps:
   #   port: 80
 ```
 
-## 6. First Deploy
+## 6. Internal Services (Postgres)
+
+Besides Traefik-routed `apps`, `deploy.yml` supports a top-level `services:` section for internal containers (databases, caches). These join the shared docker network but get **no Traefik labels and no host ports** — they are unreachable from the internet. Apps connect by service name (e.g. `postgres:5432`).
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    enabled: true
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mono -d mono"]
+```
+
+Named volumes referenced by services are added to the compose file automatically.
+
+Apps can declare `depends_on` (map of service → compose condition, e.g. `postgres: service_healthy`) and a `healthcheck` of their own; both also apply to the app's `-test` variant. Note: test deploys start containers with `--no-deps`, so the dependency condition is skipped there (prod Postgres is already running).
+
+### Runtime secrets on the droplet
+
+Put runtime secrets in `/opt/apps/.env` — docker compose loads it automatically for `${VAR}` interpolation in the generated compose file:
+
+```bash
+# /opt/apps/.env (chmod 600, owned by deploy)
+POSTGRES_PASSWORD=...
+API_DATABASE_URL=postgres://mono:<password>@postgres:5432/mono
+API_JWT_PRIVATE_KEY=<base64 PKCS8 key, from apps/api npm run generate-keys>
+```
+
+This keeps manual `docker compose up` on the droplet working without exporting anything, and avoids growing the CI ssh env list for runtime-only secrets.
+
+### Postgres backups
+
+Nightly `pg_dump` with a 7-slot day-of-week rotation — add as a cron for the `deploy` user:
+
+```bash
+mkdir -p /opt/backups
+crontab -e
+# 0 4 * * * docker exec postgres pg_dump -U mono mono | gzip > /opt/backups/mono-$(date +\%u).sql.gz
+```
+
+Restore: `gunzip -c /opt/backups/mono-3.sql.gz | docker exec -i postgres psql -U mono mono`
+
+### Test deploys and the database
+
+A test-deployed `api-test` container inherits the prod `environment`, so it **shares the prod Postgres database**. Migrations are forward-only and idempotent, so a test api running newer migrations is equivalent to deploying them — but do not use test deploys to try destructive migrations.
+
+## 7. First Deploy
 
 Either push to `main` to trigger the GitHub Actions workflow, or deploy manually on the droplet:
 
