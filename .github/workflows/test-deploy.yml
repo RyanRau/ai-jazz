@@ -83,6 +83,7 @@ jobs:
                 VITE_NHOST_SUBDOMAIN) BUILD_ARGS+=(--build-arg "VITE_NHOST_SUBDOMAIN=${{ secrets.VITE_NHOST_SUBDOMAIN }}") ;;
                 VITE_NHOST_REGION) BUILD_ARGS+=(--build-arg "VITE_NHOST_REGION=${{ secrets.VITE_NHOST_REGION }}") ;;
                 VITE_GALLERY_API_URL) BUILD_ARGS+=(--build-arg "VITE_GALLERY_API_URL=https://test-gallery-api.ryanzrau.dev") ;;
+                VITE_API_URL) BUILD_ARGS+=(--build-arg "VITE_API_URL=https://test-api.ryanzrau.dev") ;;
               esac
             done
 

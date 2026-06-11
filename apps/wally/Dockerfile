@@ -7,16 +7,21 @@ RUN npm install --ignore-scripts
 COPY packages/bluestar/ .
 RUN npm run build
 
+# Build api-client dependency
+WORKDIR /app/packages/api-client
+COPY packages/api-client/package*.json ./
+RUN npm install --ignore-scripts
+COPY packages/api-client/ .
+RUN npm run build
+
 # Install and build wally web
 WORKDIR /app/apps/wally/web
 COPY apps/wally/web/package*.json ./
 RUN npm ci
 COPY apps/wally/web/ .
 
-ARG VITE_NHOST_SUBDOMAIN
-ARG VITE_NHOST_REGION
-ENV VITE_NHOST_SUBDOMAIN=$VITE_NHOST_SUBDOMAIN
-ENV VITE_NHOST_REGION=$VITE_NHOST_REGION
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 FROM nginx:alpine

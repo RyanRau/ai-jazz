@@ -53,8 +53,7 @@ apps:
     enabled: true
     port: 80
     build_args:
-      - VITE_NHOST_SUBDOMAIN
-      - VITE_NHOST_REGION
+      - VITE_API_URL
   gallery:
     subdomain: "gallery"
     enabled: true

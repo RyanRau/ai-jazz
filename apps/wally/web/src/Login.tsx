@@ -1,17 +1,27 @@
 import { useState } from "react";
-import { useSignInEmailPassword } from "@nhost/react";
 import { css } from "goober";
 import { Card, Flexbox, Header, Text, TextInput, Button, useTheme } from "bluestar";
+import { useAuth } from "./AuthContext";
 
 export default function Login() {
   const theme = useTheme();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { signInEmailPassword, isLoading, error } = useSignInEmailPassword();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await signInEmailPassword(email, password);
+    setIsLoading(true);
+    setError(null);
+    try {
+      await login(email, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign in failed.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -69,7 +79,7 @@ export default function Login() {
                 `}
               />
             </div>
-            {error && <Text color={theme.colors.error}>{error.message}</Text>}
+            {error && <Text color={theme.colors.error}>{error}</Text>}
             <Button
               label={isLoading ? "Signing in..." : "Sign In"}
               isDisabled={isLoading}

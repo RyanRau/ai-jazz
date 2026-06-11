@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { css } from "goober";
 import { Flexbox, Header, Text, TextInput, TextAreaInput, Button, useTheme } from "bluestar";
-import { insertProduct, updateProduct } from "./graphql";
-import type { PreferredProduct } from "./graphql";
+import { insertProduct, updateProduct } from "./api";
+import type { PreferredProduct } from "./api";
 
 type Props = {
   product: PreferredProduct | null;

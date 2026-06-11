@@ -1,47 +1,44 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSignOut, useUserEmail } from "@nhost/react";
 import { css } from "goober";
 import { Flexbox, Header, Text, TextInput, Button, Spinner, Card, useTheme } from "bluestar";
-import { fetchProducts, deleteProduct } from "./graphql";
-import type { PreferredProduct } from "./graphql";
+import { fetchProducts, searchProducts, deleteProduct } from "./api";
+import type { PreferredProduct } from "./api";
+import { useAuth } from "./AuthContext";
 import ProductModal from "./ProductModal";
+
+const SEARCH_DEBOUNCE_MS = 250;
 
 export default function Dashboard() {
   const theme = useTheme();
-  const { signOut } = useSignOut();
-  const userEmail = useUserEmail();
+  const { user, logout } = useAuth();
   const [products, setProducts] = useState<PreferredProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  const [hasAny, setHasAny] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<PreferredProduct | null>(null);
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (query: string) => {
     setLoading(true);
     try {
-      const data = await fetchProducts();
+      const data = query.trim() ? await searchProducts(query.trim()) : await fetchProducts();
       setProducts(data);
+      if (!query.trim()) {
+        setHasAny(data.length > 0);
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
-
-  const filtered = products.filter((p) => {
-    const q = filter.toLowerCase();
-    return (
-      p.label.toLowerCase().includes(q) ||
-      p.search_terms.some((t) => t.toLowerCase().includes(q)) ||
-      p.walmart_product_id.toLowerCase().includes(q)
-    );
-  });
+    const timeout = setTimeout(() => loadProducts(filter), filter ? SEARCH_DEBOUNCE_MS : 0);
+    return () => clearTimeout(timeout);
+  }, [filter, loadProducts]);
 
   const handleDelete = async (id: string) => {
     await deleteProduct(id);
-    await loadProducts();
+    await loadProducts(filter);
   };
 
   const handleEdit = (product: PreferredProduct) => {
@@ -61,7 +58,7 @@ export default function Dashboard() {
 
   const handleModalSave = async () => {
     handleModalClose();
-    await loadProducts();
+    await loadProducts(filter);
   };
 
   return (
@@ -75,8 +72,8 @@ export default function Dashboard() {
       <Flexbox justifyContent="space-between" alignItems="center">
         <Header variant="h1">Wally</Header>
         <Flexbox gap={12} alignItems="center">
-          <Text variant="caption">{userEmail}</Text>
-          <Button label="Sign Out" type="secondary" density="dense" onClick={() => signOut()} />
+          <Text variant="caption">{user?.email}</Text>
+          <Button label="Sign Out" type="secondary" density="dense" onClick={() => logout()} />
         </Flexbox>
       </Flexbox>
 
@@ -88,7 +85,7 @@ export default function Dashboard() {
 
       <Flexbox gap={12} alignItems="flex-end">
         <Flexbox grow={1}>
-          <TextInput value={filter} onChange={setFilter} placeholder="Filter products..." />
+          <TextInput value={filter} onChange={setFilter} placeholder="Search products..." />
         </Flexbox>
         <Button label="Add Product" type="creation" onClick={handleAdd} />
       </Flexbox>
@@ -103,17 +100,17 @@ export default function Dashboard() {
         <Flexbox justifyContent="center" style={{ padding: "48px 0" }}>
           <Spinner size={28} />
         </Flexbox>
-      ) : filtered.length === 0 ? (
+      ) : products.length === 0 ? (
         <Flexbox justifyContent="center" style={{ padding: "48px 0" }}>
           <Text variant="body" color={theme.colors.textMuted}>
-            {products.length === 0
+            {!hasAny && !filter.trim()
               ? "No products yet. Add your first one!"
-              : "No products match your filter."}
+              : "No products match your search."}
           </Text>
         </Flexbox>
       ) : (
         <Flexbox direction="column" gap={8}>
-          {filtered.map((product) => (
+          {products.map((product) => (
             <Card key={product.id} padding={16}>
               <Flexbox justifyContent="space-between" alignItems="center">
                 <Flexbox direction="column" gap={8} grow={1} style={{ minWidth: 0 }}>
