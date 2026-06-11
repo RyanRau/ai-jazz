@@ -8,12 +8,12 @@ Personal monorepo for web apps deployed to `ryanzrau.dev` via Docker + Traefik o
 apps/              # Web app deployment artifacts (Dockerfile + nginx.conf per app)
   ryanzrau/       # Portfolio site → ryanzrau.dev
   bluestar/       # Storybook static site → ui.ryanzrau.dev
-  wally/          # Wally app → wally.ryanzrau.dev
-  gallery/        # Photo gallery → gallery.ryanzrau.dev
-  gallery_api/    # Gallery API (presigned URLs, image deletion) → gallery-api.ryanzrau.dev
+  wally/          # Wally app (preferred Walmart products) → wally.ryanzrau.dev
+  api/            # Shared backend API (auth + per-app modules) → api.ryanzrau.dev
   be_mine/        # Valentine card app (not currently deployed)
 packages/         # Shared packages
   bluestar/       # React component library source (used by apps/ryanzrau)
+  api-client/     # Auth/session + fetch client for apps/api (used by apps/wally)
 infra/            # Deployment tooling (generate-compose.py, README)
 deploy.yml        # Source of truth for which apps are deployed and their subdomains
 ```
@@ -39,17 +39,30 @@ All deployment is config-driven via `deploy.yml` at the repo root. The CI pipeli
        port: 80
        # Optional: build args resolved from GitHub secrets at build time
        build_args:
-         - VITE_NHOST_SUBDOMAIN
-         - VITE_NHOST_REGION
+         - VITE_API_URL
        # Optional: runtime env vars (for Node.js APIs, not baked into image)
        environment:
          SECRET_KEY: "${SECRET_KEY}"
+       # Optional: wait for an internal service (compose condition)
+       depends_on:
+         postgres: service_healthy
+       # Optional: container healthcheck (compose passthrough)
+       healthcheck:
+         test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
    ```
 3. Push to `main` — the CI workflow builds **all** enabled apps and deploys automatically (no change detection)
 
-**Static sites** use a two-stage Dockerfile: build with `node:20-alpine`, serve with `nginx:alpine`. See `apps/gallery/` for reference.
+**Static sites** use a two-stage Dockerfile: build with `node:20-alpine`, serve with `nginx:alpine`. See `apps/wally/` for reference.
 
-**Node.js APIs** use a two-stage Dockerfile: build with `node:20-alpine`, run with `node:20-alpine`. Runtime secrets go in `environment` (not `build_args`). See `apps/gallery_api/` for reference.
+**Node.js APIs** use a two-stage Dockerfile: build with `node:20-alpine`, run with `node:20-alpine`. Runtime secrets go in `environment` (not `build_args`). See `apps/api/` for reference.
+
+### Internal Services
+
+A top-level `services:` section in `deploy.yml` declares internal containers (e.g. Postgres) that join the shared docker network but get no Traefik routing and no host ports. Apps reach them by service name (`postgres:5432`). Named volumes are collected automatically. See `infra/README.md` for droplet secrets (`/opt/apps/.env`) and backups.
+
+### The Shared API (apps/api)
+
+`apps/api` is the backend platform for all apps at `api.ryanzrau.dev`: Hono + TypeScript on Postgres. It owns auth (`/auth/login|refresh|logout|me|jwks` — argon2 passwords, RS256 JWTs, rotating refresh tokens, closed signup via `npm run create-user` / `docker exec api node dist/scripts/create-user.js`) and per-app route modules behind the shared `requireAuth` middleware (e.g. `/wally/*`). To add a backend for a new app: add a SQL migration creating a dedicated Postgres schema, add a route module under `src/<app>/`, and mount it in `src/index.ts`. Frontends consume it via `packages/api-client`. Other services can verify its tokens against `https://api.ryanzrau.dev/auth/jwks`.
 
 ### deploy.yml Config Reference
 
@@ -61,6 +74,8 @@ All deployment is config-driven via `deploy.yml` at the repo root. The CI pipeli
 | `path`        | No       | Custom build context path (defaults to `apps/<name>`)                                |
 | `build_args`  | No       | List of Docker build arg names, resolved from GitHub secrets at build time           |
 | `environment` | No       | Map of runtime env vars passed to the container (use `${VAR}` to reference host env) |
+| `depends_on`  | No       | Map of internal service → compose condition (e.g. `postgres: service_healthy`)       |
+| `healthcheck` | No       | Compose healthcheck passthrough for the container                                    |
 
 **Adding a new build arg or secret:**
 
@@ -87,15 +102,15 @@ Any app (or multiple apps) can be deployed to test subdomains from a feature bra
 
    # Multiple apps
    apps:
-     - gallery
-     - gallery_api
+     - api
+     - wally
    ```
 
    App names must match keys in `deploy.yml`.
 
 2. Push the branch, then go to **Actions > Test Deploy > Run workflow** and select the branch.
 
-3. Apps are deployed to test subdomains (e.g., `test-gallery.ryanzrau.dev`). Re-run the workflow to deploy updates.
+3. Apps are deployed to test subdomains (e.g., `test-wally.ryanzrau.dev`). Re-run the workflow to deploy updates.
 
 4. When the PR is merged to main, the **Test Cleanup** workflow automatically removes the test deployment.
 

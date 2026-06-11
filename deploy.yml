@@ -54,23 +54,3 @@ apps:
     port: 80
     build_args:
       - VITE_API_URL
-  gallery:
-    subdomain: "gallery"
-    enabled: true
-    port: 80
-    build_args:
-      - VITE_NHOST_SUBDOMAIN
-      - VITE_NHOST_REGION
-      - VITE_GALLERY_API_URL
-  gallery_api:
-    subdomain: "gallery-api"
-    enabled: true
-    port: 80
-    environment:
-      DO_SPACES_ENDPOINT: "${DO_SPACES_ENDPOINT}"
-      DO_SPACES_KEY: "${DO_SPACES_KEY}"
-      DO_SPACES_SECRET: "${DO_SPACES_SECRET}"
-      DO_SPACES_BUCKET: "${DO_SPACES_BUCKET}"
-      DO_SPACES_CDN_URL: "${DO_SPACES_CDN_URL}"
-      NHOST_SUBDOMAIN: "${NHOST_SUBDOMAIN}"
-      NHOST_REGION: "${NHOST_REGION}"
