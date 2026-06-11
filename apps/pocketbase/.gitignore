@@ -1,0 +1,2 @@
+# PocketBase runtime data (lives in the mounted volume, never committed)
+pb_data/

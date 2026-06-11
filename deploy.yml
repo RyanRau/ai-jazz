@@ -6,39 +6,27 @@ registry: ghcr.io/ryanrau/mono
 letsencrypt_email: me@ryanzrau.dev
 
 # Internal services: pulled images on the shared docker network, never routed
-# by Traefik and never exposed to the internet. Apps reach them by service
-# name (e.g. postgres:5432).
-services:
-  postgres:
-    image: postgres:16-alpine
-    enabled: true
-    environment:
-      POSTGRES_USER: mono
-      POSTGRES_DB: mono
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mono -d mono"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+# by Traefik and never exposed to the internet. Apps reach them by service name.
+# (None currently — PocketBase uses embedded SQLite. Add e.g. redis here later.)
+# services:
+#   redis:
+#     image: redis:7-alpine
+#     enabled: true
 
 apps:
-  api:
+  # Shared backend: PocketBase (auth + collections + admin UI + custom hook
+  # routes). Data persists in the pb_data volume.
+  pocketbase:
     subdomain: "api"
     enabled: true
-    port: 80
-    depends_on:
-      postgres: service_healthy
+    port: 8080
+    volumes:
+      - pb_data:/pb/pb_data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-    environment:
-      DATABASE_URL: "${API_DATABASE_URL}"
-      JWT_PRIVATE_KEY: "${API_JWT_PRIVATE_KEY}"
   ryanzrau:
     subdomain: ""
     enabled: true
@@ -48,9 +36,3 @@ apps:
     enabled: true
     port: 80
     path: "packages/bluestar"
-  wally:
-    subdomain: "wally"
-    enabled: true
-    port: 80
-    build_args:
-      - VITE_API_URL

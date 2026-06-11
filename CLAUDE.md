@@ -8,12 +8,10 @@ Personal monorepo for web apps deployed to `ryanzrau.dev` via Docker + Traefik o
 apps/              # Web app deployment artifacts (Dockerfile + nginx.conf per app)
   ryanzrau/       # Portfolio site → ryanzrau.dev
   bluestar/       # Storybook static site → ui.ryanzrau.dev
-  wally/          # Wally app (preferred Walmart products) → wally.ryanzrau.dev
-  api/            # Shared backend API (auth + per-app modules) → api.ryanzrau.dev
+  pocketbase/     # Shared backend: PocketBase (auth + data + admin UI) → api.ryanzrau.dev
   be_mine/        # Valentine card app (not currently deployed)
 packages/         # Shared packages
   bluestar/       # React component library source (used by apps/ryanzrau)
-  api-client/     # Auth/session + fetch client for apps/api (used by apps/wally)
 infra/            # Deployment tooling (generate-compose.py, README)
 deploy.yml        # Source of truth for which apps are deployed and their subdomains
 ```
@@ -39,30 +37,38 @@ All deployment is config-driven via `deploy.yml` at the repo root. The CI pipeli
        port: 80
        # Optional: build args resolved from GitHub secrets at build time
        build_args:
-         - VITE_API_URL
-       # Optional: runtime env vars (for Node.js APIs, not baked into image)
+         - VITE_SOME_URL
+       # Optional: runtime env vars (not baked into image)
        environment:
          SECRET_KEY: "${SECRET_KEY}"
+       # Optional: named/bind volumes (named volumes are auto-registered)
+       volumes:
+         - my_data:/data
        # Optional: wait for an internal service (compose condition)
        depends_on:
-         postgres: service_healthy
+         redis: service_healthy
        # Optional: container healthcheck (compose passthrough)
        healthcheck:
          test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
    ```
 3. Push to `main` — the CI workflow builds **all** enabled apps and deploys automatically (no change detection)
 
-**Static sites** use a two-stage Dockerfile: build with `node:20-alpine`, serve with `nginx:alpine`. See `apps/wally/` for reference.
-
-**Node.js APIs** use a two-stage Dockerfile: build with `node:20-alpine`, run with `node:20-alpine`. Runtime secrets go in `environment` (not `build_args`). See `apps/api/` for reference.
+**Static sites** use a two-stage Dockerfile: build with `node:20-alpine`, serve with `nginx:alpine`. See `apps/ryanzrau/` for reference.
 
 ### Internal Services
 
-A top-level `services:` section in `deploy.yml` declares internal containers (e.g. Postgres) that join the shared docker network but get no Traefik routing and no host ports. Apps reach them by service name (`postgres:5432`). Named volumes are collected automatically. See `infra/README.md` for droplet secrets (`/opt/apps/.env`) and backups.
+A top-level `services:` section in `deploy.yml` can declare internal containers (e.g. Redis) that join the shared docker network but get no Traefik routing and no host ports. Apps reach them by service name. Named volumes are collected automatically. None are configured currently — PocketBase uses embedded SQLite. See `infra/README.md`.
 
-### The Shared API (apps/api)
+### The Shared Backend (apps/pocketbase)
 
-`apps/api` is the backend platform for all apps at `api.ryanzrau.dev`: Hono + TypeScript on Postgres. It owns auth (`/auth/login|refresh|logout|me|jwks` — argon2 passwords, RS256 JWTs, rotating refresh tokens, closed signup via `npm run create-user` / `docker exec api node dist/scripts/create-user.js`) and per-app route modules behind the shared `requireAuth` middleware (e.g. `/wally/*`). To add a backend for a new app: add a SQL migration creating a dedicated Postgres schema, add a route module under `src/<app>/`, and mount it in `src/index.ts`. Frontends consume it via `packages/api-client`. Other services can verify its tokens against `https://api.ryanzrau.dev/auth/jwks`.
+`apps/pocketbase` is the backend for all apps at `api.ryanzrau.dev`: a single **PocketBase** binary providing auth, collections (tables), realtime, file storage, an admin UI at `/_/`, and custom routes — backed by embedded SQLite persisted in the `pb_data` volume.
+
+- **Schema** is version-controlled in `apps/pocketbase/pb_migrations/*.js` (PocketBase applies unapplied migrations automatically on start). You can also design collections in the admin UI in dev and commit the auto-generated migration file.
+- **Custom logic** lives in `apps/pocketbase/pb_hooks/*.pb.js` — `routerAdd(...)` registers REST routes that run computations / call external APIs / query collections, served alongside the generated collection API. See `cart_link.pb.js`.
+- **Auth** is PocketBase's `users` collection. Signup is closed (the init migration sets `createRule = null`); create accounts in the admin UI. Clients/automations authenticate via `POST /api/collections/users/auth-with-password` → a token sent in the `Authorization` header. Create a dedicated least-privilege user for machine/automation (n8n) clients, never the superuser.
+- **First-run setup** (per fresh `pb_data` volume): create a superuser with `docker exec pocketbase /pb/pocketbase superuser upsert <email> <pass>`, then log into `https://api.ryanzrau.dev/_/`.
+
+To add a backend for a new app: add a collection (migration or admin UI) and, if it needs computed endpoints, a `pb_hooks` route. Bespoke admin UI (e.g. receipt processing) would be a separate `apps/admin` React app talking to PocketBase — not built yet.
 
 ### deploy.yml Config Reference
 
@@ -74,7 +80,8 @@ A top-level `services:` section in `deploy.yml` declares internal containers (e.
 | `path`        | No       | Custom build context path (defaults to `apps/<name>`)                                |
 | `build_args`  | No       | List of Docker build arg names, resolved from GitHub secrets at build time           |
 | `environment` | No       | Map of runtime env vars passed to the container (use `${VAR}` to reference host env) |
-| `depends_on`  | No       | Map of internal service → compose condition (e.g. `postgres: service_healthy`)       |
+| `volumes`     | No       | List of volume mounts (`name:/path`); named volumes are auto-registered              |
+| `depends_on`  | No       | Map of internal service → compose condition (e.g. `redis: service_healthy`)          |
 | `healthcheck` | No       | Compose healthcheck passthrough for the container                                    |
 
 **Adding a new build arg or secret:**
@@ -86,7 +93,7 @@ A top-level `services:` section in `deploy.yml` declares internal containers (e.
 **Adding a runtime env var:**
 
 1. Add it to the app's `environment` map in `deploy.yml`
-2. Set the actual value as an environment variable on the droplet (in `/opt/apps/.env` or the deploy user's profile)
+2. Set the actual value in `/opt/apps/.env` on the droplet (loaded automatically by docker compose; must be readable by the `deploy` user — `chown deploy:deploy`, `chmod 600`)
 
 ## Test Subdomain Deployments
 
@@ -102,15 +109,15 @@ Any app (or multiple apps) can be deployed to test subdomains from a feature bra
 
    # Multiple apps
    apps:
-     - api
-     - wally
+     - pocketbase
+     - ryanzrau
    ```
 
    App names must match keys in `deploy.yml`.
 
 2. Push the branch, then go to **Actions > Test Deploy > Run workflow** and select the branch.
 
-3. Apps are deployed to test subdomains (e.g., `test-wally.ryanzrau.dev`). Re-run the workflow to deploy updates.
+3. Apps are deployed to test subdomains (e.g., `test-ui.ryanzrau.dev`). Re-run the workflow to deploy updates.
 
 4. When the PR is merged to main, the **Test Cleanup** workflow automatically removes the test deployment.
 

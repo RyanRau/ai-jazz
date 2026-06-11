@@ -79,8 +79,10 @@ jobs:
             BUILD_ARGS=()
             ARGS=$(yq ".apps.${APP}.build_args // [] | .[]" deploy.yml 2>/dev/null || true)
             for arg in $ARGS; do
+              # Add a case per build arg (test deploys hardcode test values), e.g.:
+              #   VITE_SOME_URL) BUILD_ARGS+=(--build-arg "VITE_SOME_URL=https://test-...") ;;
               case "$arg" in
-                VITE_API_URL) BUILD_ARGS+=(--build-arg "VITE_API_URL=https://test-api.ryanzrau.dev") ;;
+                "") ;;
               esac
             done
 

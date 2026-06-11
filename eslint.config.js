@@ -17,6 +17,9 @@ export default [
       '**/.storybook-static/**',
       '**/*.min.js',
       '**/package-lock.json',
+      // PocketBase hook/migration scripts run in PocketBase's goja VM, not Node — globals
+      // like `routerAdd`, `migrate`, `Collection`, `$apis` are injected by the runtime.
+      'apps/pocketbase/**',
     ],
   },
   // Base ESLint recommended rules
