@@ -134,6 +134,10 @@ for name, app in config.get("apps", {}).items():
     if env_vars:
         service["environment"] = env_vars
 
+    if app.get("volumes"):
+        service["volumes"] = app["volumes"]
+        collect_named_volumes(app["volumes"])
+
     apply_app_extras(service, app)
 
     services[name] = service

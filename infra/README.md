@@ -71,10 +71,10 @@ Keep the private key — you'll add it as a GitHub secret in the next step.
 
 In your GitHub repo, go to **Settings > Secrets and variables > Actions** and add:
 
-| Secret           | Value                                          |
-|------------------|------------------------------------------------|
-| `DROPLET_IP`     | Your droplet's public IP address               |
-| `SSH_PRIVATE_KEY` | Contents of the `deploy_key` private key file  |
+| Secret            | Value                                         |
+| ----------------- | --------------------------------------------- |
+| `DROPLET_IP`      | Your droplet's public IP address              |
+| `SSH_PRIVATE_KEY` | Contents of the `deploy_key` private key file |
 
 `GITHUB_TOKEN` is automatically available — no need to create it.
 
@@ -84,16 +84,16 @@ Point your domain (or subdomains) to the droplet.
 
 **Option A — Wildcard (recommended):**
 
-| Type | Name | Value            |
-|------|------|------------------|
-| A    | *    | YOUR_DROPLET_IP  |
+| Type | Name | Value           |
+| ---- | ---- | --------------- |
+| A    | \*   | YOUR_DROPLET_IP |
 
 **Option B — Per-subdomain:**
 
-| Type | Name     | Value            |
-|------|----------|------------------|
-| A    | @        | YOUR_DROPLET_IP  |
-| A    | subdomain| YOUR_DROPLET_IP  |
+| Type | Name      | Value           |
+| ---- | --------- | --------------- |
+| A    | @         | YOUR_DROPLET_IP |
+| A    | subdomain | YOUR_DROPLET_IP |
 
 _(Use `@` for the root domain, or specific names for subdomains)_
 
@@ -108,7 +108,7 @@ letsencrypt_email: you@yourdomain.com
 
 apps:
   ryanzrau:
-    subdomain: ""  # Empty string for root domain (yourdomain.com)
+    subdomain: "" # Empty string for root domain (yourdomain.com)
     enabled: true
     port: 80
   # Example of a subdomain app (would be at subdomain.yourdomain.com):
@@ -118,55 +118,48 @@ apps:
   #   port: 80
 ```
 
-## 6. Internal Services (Postgres)
+## 6. The Shared Backend (PocketBase)
 
-Besides Traefik-routed `apps`, `deploy.yml` supports a top-level `services:` section for internal containers (databases, caches). These join the shared docker network but get **no Traefik labels and no host ports** — they are unreachable from the internet. Apps connect by service name (e.g. `postgres:5432`).
+`apps/pocketbase` is the backend for all apps at `api.ryanzrau.dev` — a single PocketBase binary (auth, collections, admin UI, custom hook routes) on embedded SQLite. It's a normal Traefik-routed app, with one extra: a named volume for its data.
 
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    enabled: true
-    environment:
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mono -d mono"]
-```
+### Data volume
 
-Named volumes referenced by services are added to the compose file automatically.
+PocketBase stores everything (SQLite DB, uploaded files, settings) under `/pb/pb_data`, mounted from the `pb_data` named volume (declared on the app in `deploy.yml`; named volumes are auto-registered in the generated compose file). The volume survives redeploys; deleting it wipes all data.
 
-Apps can declare `depends_on` (map of service → compose condition, e.g. `postgres: service_healthy`) and a `healthcheck` of their own; both also apply to the app's `-test` variant. Note: test deploys start containers with `--no-deps`, so the dependency condition is skipped there (prod Postgres is already running).
+### First-run setup (once per fresh volume)
 
-### Runtime secrets on the droplet
-
-Put runtime secrets in `/opt/apps/.env` — docker compose loads it automatically for `${VAR}` interpolation in the generated compose file:
+The schema (collections, closed signup) is created automatically by the migrations baked into the image. You only need to create the first superuser:
 
 ```bash
-# /opt/apps/.env (chmod 600, owned by deploy)
-POSTGRES_PASSWORD=...
-API_DATABASE_URL=postgres://mono:<password>@postgres:5432/mono
-API_JWT_PRIVATE_KEY=<base64 PKCS8 key, from apps/api npm run generate-keys>
+ssh deploy@YOUR_DROPLET_IP
+docker exec pocketbase /pb/pocketbase superuser upsert you@email.com 'a-strong-password'
 ```
 
-This keeps manual `docker compose up` on the droplet working without exporting anything, and avoids growing the CI ssh env list for runtime-only secrets.
+Then log in at `https://api.ryanzrau.dev/_/` to manage data. Signup is closed, so create app/automation user accounts in the admin UI (Collections → users → New record). For machine clients (n8n etc.), make a dedicated least-privilege user — never hand out the superuser.
 
-### Postgres backups
+### Backups
 
-Nightly `pg_dump` with a 7-slot day-of-week rotation — add as a cron for the `deploy` user:
+PocketBase has built-in backups: in the admin UI, **Settings → Backups**, enable a schedule (and optionally S3/DigitalOcean Spaces as the backup store). For a belt-and-suspenders volume snapshot, you can also tar the data nightly via cron for the `deploy` user:
 
 ```bash
 mkdir -p /opt/backups
 crontab -e
-# 0 4 * * * docker exec postgres pg_dump -U mono mono | gzip > /opt/backups/mono-$(date +\%u).sql.gz
+# 0 4 * * * docker run --rm -v apps_pb_data:/data -v /opt/backups:/backup alpine tar czf /backup/pb-$(date +\%u).tgz -C /data .
 ```
 
-Restore: `gunzip -c /opt/backups/mono-3.sql.gz | docker exec -i postgres psql -U mono mono`
+(Volume name is the compose project prefix + `pb_data`; confirm with `docker volume ls`.)
 
-### Test deploys and the database
+### Internal services & runtime secrets
 
-A test-deployed `api-test` container inherits the prod `environment`, so it **shares the prod Postgres database**. Migrations are forward-only and idempotent, so a test api running newer migrations is equivalent to deploying them — but do not use test deploys to try destructive migrations.
+A top-level `services:` section in `deploy.yml` can add internal-only containers (e.g. Redis) — un-routed, no host ports, reached by service name. None are configured now (PocketBase uses SQLite). If you later add an app needing runtime secrets (e.g. an admin service calling the Claude API), put them in `/opt/apps/.env` (loaded automatically by docker compose for `${VAR}` interpolation) and **make sure the `deploy` user can read it**:
+
+```bash
+sudo chown deploy:deploy /opt/apps/.env && sudo chmod 600 /opt/apps/.env
+```
+
+### Test deploys
+
+A test-deployed `pocketbase-test` does **not** get the `pb_data` volume (volumes aren't attached to `-test` variants), so it starts with an empty, ephemeral database — safe for testing, and it won't touch prod data.
 
 ## 7. First Deploy
 
@@ -202,11 +195,11 @@ docker compose up -d --remove-orphans
 
 ## Droplet Sizing
 
-| Apps  | Droplet Size    | Monthly Cost |
-|-------|-----------------|--------------|
-| 1–3   | 1 GB / 1 vCPU   | ~$6          |
-| 4–8   | 2 GB / 2 vCPU   | ~$18         |
-| 8–15  | 4 GB / 2 vCPU   | ~$24         |
+| Apps | Droplet Size  | Monthly Cost |
+| ---- | ------------- | ------------ |
+| 1–3  | 1 GB / 1 vCPU | ~$6          |
+| 4–8  | 2 GB / 2 vCPU | ~$18         |
+| 8–15 | 4 GB / 2 vCPU | ~$24         |
 
 Traefik uses ~30MB RAM.
 
@@ -234,11 +227,11 @@ You can deploy any app to a test subdomain from a feature branch without impacti
 
 The test subdomain is derived from the app's prod subdomain:
 
-| App        | Prod URL                | Test URL                     |
-|------------|-------------------------|------------------------------|
-| `ryanzrau` | `ryanzrau.dev`          | `test.ryanzrau.dev`          |
-| `bluestar` | `ui.ryanzrau.dev`       | `test-ui.ryanzrau.dev`       |
-| `be_mine`  | `be-mine.ryanzrau.dev`  | `test-be-mine.ryanzrau.dev`  |
+| App        | Prod URL               | Test URL                    |
+| ---------- | ---------------------- | --------------------------- |
+| `ryanzrau` | `ryanzrau.dev`         | `test.ryanzrau.dev`         |
+| `bluestar` | `ui.ryanzrau.dev`      | `test-ui.ryanzrau.dev`      |
+| `be_mine`  | `be-mine.ryanzrau.dev` | `test-be-mine.ryanzrau.dev` |
 
 No DNS changes are needed — the wildcard `*.ryanzrau.dev` record covers all test subdomains.
 

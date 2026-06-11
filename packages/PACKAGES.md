@@ -6,57 +6,7 @@ All packages live in `packages/` and are consumed by apps via `file:` references
 
 ---
 
-## `api-client` — Typed client for api.ryanzrau.dev
-
-**Location:** `packages/api-client/`
-**Reference in app:** `"api-client": "file:../../packages/api-client"`
-**Dependencies:** none (framework-free; works in any browser app)
-
-Handles the shared auth/session lifecycle against the self-hosted API (`apps/api`) and provides an authenticated fetch wrapper. The access token lives in memory; the refresh token is persisted to `localStorage` and rotated on every refresh.
-
-### Usage
-
-```ts
-import { createApiClient, ApiError, type ApiUser } from "api-client";
-
-const api = createApiClient({ baseUrl: import.meta.env.VITE_API_URL });
-
-await api.restore(); // resume session from stored refresh token
-const user = await api.login(email, password);
-await api.logout();
-
-api.getUser(); // ApiUser | null
-api.isAuthenticated();
-const unsubscribe = api.subscribe((user) => {
-  /* auth-state changes */
-});
-
-// Authenticated fetch — attaches the access token, auto-refreshes once on 401
-const res = await api.request("/wally/products");
-// JSON helper — throws ApiError (with .status and server message) on non-2xx
-const data = await api.requestJson<{ products: Product[] }>("/wally/products");
-```
-
-### API surface
-
-| Member                                              | Description                                                                                                  |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `createApiClient({ baseUrl, storageKey? })`         | Build a client. `storageKey` defaults to `"api.refreshToken"`.                                               |
-| `restore()`                                         | Re-establish a session from the stored refresh token; resolves to `ApiUser \| null`. Call once at app start. |
-| `login(email, password)` / `logout()`               | Session start/end. `logout` revokes the refresh token server-side.                                           |
-| `getUser()` / `isAuthenticated()` / `subscribe(cb)` | Auth state access and change notifications.                                                                  |
-| `request(path, init?)`                              | `fetch` with `Authorization` header + single-flight refresh-and-retry on 401.                                |
-| `requestJson<T>(path, init?)`                       | `request` + JSON body/`Content-Type` handling; throws `ApiError` on failure.                                 |
-
-For React apps, wrap this in a context provider — see `apps/wally/web/src/AuthContext.tsx` for the reference pattern.
-
-### Development
-
-```bash
-cd packages/api-client
-npm install        # prepare script builds dist/
-npm run build      # rebuild after changes (required before consuming app can use it)
-```
+> The backend at `api.ryanzrau.dev` is **PocketBase** (`apps/pocketbase`). Frontend apps talk to it with the official [`pocketbase` JS SDK](https://github.com/pocketbase/js-sdk) (`npm i pocketbase`), not a local package: `const pb = new PocketBase("https://api.ryanzrau.dev")`, then `pb.collection("users").authWithPassword(...)` and `pb.collection("preferred_products").getFullList()`. There is no local API-client package.
 
 ---
 

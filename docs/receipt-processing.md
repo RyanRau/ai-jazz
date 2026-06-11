@@ -1,6 +1,6 @@
 # Design: Walmart Receipt Processing for Wally
 
-Status: **design only** — not implemented. Goal: photograph a Walmart receipt, extract the line items, and map them to walmart.com products so they can be added to `wally.preferred_products` (and later, to generated cart links).
+Status: **design only** — not implemented. Goal: photograph a Walmart receipt, extract the line items, and map them to walmart.com products so they can be added to the `preferred_products` collection in PocketBase (and later, to generated cart links).
 
 ## 1. What's actually on a Walmart receipt
 
@@ -44,35 +44,47 @@ Alternative (rejected): tesseract via node bindings — free but materially wors
 3. **Third-party UPC databases** (upcitemdb.com, barcodespider.com) — free tiers exist, coverage is inconsistent for Walmart store brands; not a foundation, possibly a fallback.
 4. **Give up gracefully** — keep the line with `upc` + extracted name and let fuzzy matching (Stage C) handle it; the UPC can be resolved later.
 
-### Stage C — Matching: reuse the existing fuzzy search
+### Stage C — Matching: coarse filter, then AI selection
 
-For each extracted line, call the existing `GET /wally/products/search?q=<extracted name>` (pg_trgm). Receipt abbreviations are exactly the kind of noisy input it tolerates (`HNZ TOM KETC` → "Heinz Tomato Ketchup 32oz" scores well on `word_similarity`). Results classify into:
+The backend is now PocketBase, so there's no pg_trgm ranked search. Matching is two-step and leans on an AI step rather than a clever query:
 
-- **Known product** (search hit above a threshold, or exact `walmart_product_id` match after Stage B) → already in the database; optionally bump usage stats later.
-- **New product** → prefill the existing Add Product modal with the extracted name as label, UPC in notes, and resolved item ID if Stage B succeeded.
+1. **Coarse narrow** — for each extracted line, pull a candidate subset with a PocketBase list filter, e.g. `GET /api/collections/preferred_products/records?filter=label~"ketc"` (`~` is contains/LIKE). At personal scale you can also just fetch the full list once and skip filtering.
+2. **AI selects** — hand the extracted line (`HNZ TOM KETC`) plus the candidate subset to the Claude API and let it pick the matching `preferred_products` record (or decide it's new). Receipt abbreviations are exactly the kind of noisy input an LLM disambiguates well, and it sidesteps tuning similarity thresholds.
 
-## 3. Proposed API surface (future)
+Results classify into:
+
+- **Known product** (AI matched a record, or exact `walmart_product_id` match after Stage B) → already tracked.
+- **New product** → create a `preferred_products` record (label = cleaned name, UPC in notes, resolved item ID if Stage B succeeded), or queue it for review in the admin app.
+
+## 3. Where this runs (future)
+
+Two viable homes, both talking to PocketBase:
+
+- **A PocketBase hook route** — `routerAdd("POST", "/api/custom/receipt", ...)` in `apps/pocketbase/pb_hooks/`. The goja runtime can call the Claude API via `$http.send()` and read/write collections directly. Self-contained, no extra service. Heavier multi-step logic is more awkward in goja than Node, so this fits a thin pipeline.
+- **The future `apps/admin` app or an n8n flow** — a Node service / flow that authenticates to PocketBase (dedicated user, `auth-with-password`), runs the extract → resolve → AI-match pipeline, and writes results back via the collection API. Better for an interactive "review the matches" UI or complex orchestration.
+
+Shape of the result either way:
 
 ```
-POST /wally/receipts            multipart photo upload
+POST /api/custom/receipt        (multipart photo upload)
   → { lines: [{ name, upc, price, quantity,
-                resolved: { item_id?, product_name? },        # Stage B result
-                match: { product_id?, label?, rank? } }] }    # Stage C result
+                resolved: { item_id?, product_name? },     # Stage B
+                match: { record_id?, label? } }] }         # Stage C (AI)
 ```
 
-Stateless first version: no receipts table, no storage of photos — the response drives an interactive review UI in wally. Persisting receipts/purchase history is a separate later decision.
+Stateless first version: no receipts collection, no photo storage — the response drives a review step. Persisting purchase history is a later decision.
 
-New schema/config needed when implemented: none for the database; `ANTHROPIC_API_KEY` (and optionally `WALMART_IO_*` credentials) added to the api's `environment` in `deploy.yml` + droplet `.env`.
+Config needed when implemented: `ANTHROPIC_API_KEY` (and optionally `WALMART_IO_*`) as runtime env on whichever container runs it (PocketBase `environment` in `deploy.yml` + `/opt/apps/.env`, or the admin app).
 
-## 4. Cart-link generation (closes the loop)
+## 4. Cart-link generation (closes the loop) — already built
 
-The end goal — generating a shopping cart from preferred products — works off item IDs directly, no receipt needed:
+The end goal, generating a shopping cart from tracked products, works off item IDs directly, no receipt needed:
 
 ```
 https://affil.walmart.com/cart/buynow?items=<itemId1>,<itemId2>,...
 ```
 
-(Quantity syntax `items=<itemId>_<qty>` is supported by the affiliate cart endpoint; verify current behavior at implementation time.) Since `preferred_products.walmart_product_id` already stores item IDs, a first `GET /wally/cart-link?ids=...` endpoint is trivial and independent of receipt processing — it could ship first.
+(Quantity syntax `items=<itemId>_<qty>` is supported by the affiliate cart endpoint; verify current behavior at implementation time.) This already ships as a PocketBase hook route — `GET /api/custom/cart-link?ids=...` (see `apps/pocketbase/pb_hooks/cart_link.pb.js`) — which resolves `preferred_products` record ids to their `walmart_product_id` and returns the cart URL. It's the template for further custom endpoints.
 
 ## 5. Open questions for implementation time
 

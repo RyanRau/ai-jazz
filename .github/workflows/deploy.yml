@@ -44,9 +44,10 @@ jobs:
             BUILD_ARGS=()
             ARGS=$(yq ".apps.${app}.build_args // [] | .[]" deploy.yml 2>/dev/null || true)
             for arg in $ARGS; do
-              # Map arg name to secret value
+              # Map arg name to secret value. Add a case per build arg, e.g.:
+              #   VITE_SOME_URL) BUILD_ARGS+=(--build-arg "VITE_SOME_URL=${{ secrets.VITE_SOME_URL }}") ;;
               case "$arg" in
-                VITE_API_URL) BUILD_ARGS+=(--build-arg "VITE_API_URL=${{ secrets.VITE_API_URL }}") ;;
+                "") ;;
               esac
             done
 
