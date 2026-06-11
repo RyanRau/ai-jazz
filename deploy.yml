@@ -25,6 +25,20 @@ services:
       retries: 10
 
 apps:
+  api:
+    subdomain: "api"
+    enabled: true
+    port: 80
+    depends_on:
+      postgres: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    environment:
+      DATABASE_URL: "${API_DATABASE_URL}"
+      JWT_PRIVATE_KEY: "${API_JWT_PRIVATE_KEY}"
   ryanzrau:
     subdomain: ""
     enabled: true
