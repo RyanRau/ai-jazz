@@ -1,0 +1,26 @@
+{
+  "name": "api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "create-user": "tsx --env-file=.env src/scripts/create-user.ts",
+    "generate-keys": "tsx src/scripts/generate-keys.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "argon2": "^0.41.1",
+    "hono": "^4.6.0",
+    "jose": "^6.0.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3"
+  }
+}

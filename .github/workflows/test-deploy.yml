@@ -32,8 +32,8 @@ jobs:
           fi
 
           # Support both single app and multi-app formats
-          # Single: app: gallery
-          # Multi:  apps: [gallery, gallery_api]
+          # Single: app: wally
+          # Multi:  apps: [api, wally]
           APPS=$(yq '.apps // [.app] | .[]' test-deploy.yml)
           if [ -z "$APPS" ]; then
             echo "::error::No apps found in test-deploy.yml"
@@ -80,9 +80,7 @@ jobs:
             ARGS=$(yq ".apps.${APP}.build_args // [] | .[]" deploy.yml 2>/dev/null || true)
             for arg in $ARGS; do
               case "$arg" in
-                VITE_NHOST_SUBDOMAIN) BUILD_ARGS+=(--build-arg "VITE_NHOST_SUBDOMAIN=${{ secrets.VITE_NHOST_SUBDOMAIN }}") ;;
-                VITE_NHOST_REGION) BUILD_ARGS+=(--build-arg "VITE_NHOST_REGION=${{ secrets.VITE_NHOST_REGION }}") ;;
-                VITE_GALLERY_API_URL) BUILD_ARGS+=(--build-arg "VITE_GALLERY_API_URL=https://test-gallery-api.ryanzrau.dev") ;;
+                VITE_API_URL) BUILD_ARGS+=(--build-arg "VITE_API_URL=https://test-api.ryanzrau.dev") ;;
               esac
             done
 
@@ -104,19 +102,10 @@ jobs:
 
       - name: Deploy to droplet
         uses: appleboy/ssh-action@v1
-        env:
-          NHOST_SUBDOMAIN: ${{ secrets.NHOST_SUBDOMAIN }}
-          NHOST_REGION: ${{ secrets.NHOST_REGION }}
-          DO_SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
-          DO_SPACES_KEY: ${{ secrets.DO_SPACES_KEY }}
-          DO_SPACES_SECRET: ${{ secrets.DO_SPACES_SECRET }}
-          DO_SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
-          DO_SPACES_CDN_URL: ${{ secrets.DO_SPACES_CDN_URL }}
         with:
           host: ${{ secrets.DROPLET_IP }}
           username: deploy
           key: ${{ secrets.DROPLET_SSH_KEY }}
-          envs: NHOST_SUBDOMAIN,NHOST_REGION,DO_SPACES_ENDPOINT,DO_SPACES_KEY,DO_SPACES_SECRET,DO_SPACES_BUCKET,DO_SPACES_CDN_URL
           script: |
             set -e
             cd /opt/apps

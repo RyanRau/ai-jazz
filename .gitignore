@@ -215,3 +215,6 @@ docker-compose.yml
 
 # Active test deployment state (written by CI to the droplet)
 test-deploy.active.yml
+
+# TypeScript incremental build state
+*.tsbuildinfo

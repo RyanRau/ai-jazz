@@ -5,7 +5,40 @@ domain: ryanzrau.dev
 registry: ghcr.io/ryanrau/mono
 letsencrypt_email: me@ryanzrau.dev
 
+# Internal services: pulled images on the shared docker network, never routed
+# by Traefik and never exposed to the internet. Apps reach them by service
+# name (e.g. postgres:5432).
+services:
+  postgres:
+    image: postgres:16-alpine
+    enabled: true
+    environment:
+      POSTGRES_USER: mono
+      POSTGRES_DB: mono
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mono -d mono"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 apps:
+  api:
+    subdomain: "api"
+    enabled: true
+    port: 80
+    depends_on:
+      postgres: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    environment:
+      DATABASE_URL: "${API_DATABASE_URL}"
+      JWT_PRIVATE_KEY: "${API_JWT_PRIVATE_KEY}"
   ryanzrau:
     subdomain: ""
     enabled: true
@@ -20,25 +53,4 @@ apps:
     enabled: true
     port: 80
     build_args:
-      - VITE_NHOST_SUBDOMAIN
-      - VITE_NHOST_REGION
-  gallery:
-    subdomain: "gallery"
-    enabled: true
-    port: 80
-    build_args:
-      - VITE_NHOST_SUBDOMAIN
-      - VITE_NHOST_REGION
-      - VITE_GALLERY_API_URL
-  gallery_api:
-    subdomain: "gallery-api"
-    enabled: true
-    port: 80
-    environment:
-      DO_SPACES_ENDPOINT: "${DO_SPACES_ENDPOINT}"
-      DO_SPACES_KEY: "${DO_SPACES_KEY}"
-      DO_SPACES_SECRET: "${DO_SPACES_SECRET}"
-      DO_SPACES_BUCKET: "${DO_SPACES_BUCKET}"
-      DO_SPACES_CDN_URL: "${DO_SPACES_CDN_URL}"
-      NHOST_SUBDOMAIN: "${NHOST_SUBDOMAIN}"
-      NHOST_REGION: "${NHOST_REGION}"
+      - VITE_API_URL

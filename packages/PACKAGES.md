@@ -6,6 +6,60 @@ All packages live in `packages/` and are consumed by apps via `file:` references
 
 ---
 
+## `api-client` — Typed client for api.ryanzrau.dev
+
+**Location:** `packages/api-client/`
+**Reference in app:** `"api-client": "file:../../packages/api-client"`
+**Dependencies:** none (framework-free; works in any browser app)
+
+Handles the shared auth/session lifecycle against the self-hosted API (`apps/api`) and provides an authenticated fetch wrapper. The access token lives in memory; the refresh token is persisted to `localStorage` and rotated on every refresh.
+
+### Usage
+
+```ts
+import { createApiClient, ApiError, type ApiUser } from "api-client";
+
+const api = createApiClient({ baseUrl: import.meta.env.VITE_API_URL });
+
+await api.restore(); // resume session from stored refresh token
+const user = await api.login(email, password);
+await api.logout();
+
+api.getUser(); // ApiUser | null
+api.isAuthenticated();
+const unsubscribe = api.subscribe((user) => {
+  /* auth-state changes */
+});
+
+// Authenticated fetch — attaches the access token, auto-refreshes once on 401
+const res = await api.request("/wally/products");
+// JSON helper — throws ApiError (with .status and server message) on non-2xx
+const data = await api.requestJson<{ products: Product[] }>("/wally/products");
+```
+
+### API surface
+
+| Member                                              | Description                                                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `createApiClient({ baseUrl, storageKey? })`         | Build a client. `storageKey` defaults to `"api.refreshToken"`.                                               |
+| `restore()`                                         | Re-establish a session from the stored refresh token; resolves to `ApiUser \| null`. Call once at app start. |
+| `login(email, password)` / `logout()`               | Session start/end. `logout` revokes the refresh token server-side.                                           |
+| `getUser()` / `isAuthenticated()` / `subscribe(cb)` | Auth state access and change notifications.                                                                  |
+| `request(path, init?)`                              | `fetch` with `Authorization` header + single-flight refresh-and-retry on 401.                                |
+| `requestJson<T>(path, init?)`                       | `request` + JSON body/`Content-Type` handling; throws `ApiError` on failure.                                 |
+
+For React apps, wrap this in a context provider — see `apps/wally/web/src/AuthContext.tsx` for the reference pattern.
+
+### Development
+
+```bash
+cd packages/api-client
+npm install        # prepare script builds dist/
+npm run build      # rebuild after changes (required before consuming app can use it)
+```
+
+---
+
 ## `bluestar` — React Component Library
 
 **Location:** `packages/bluestar/`
@@ -23,16 +77,22 @@ import { ThemeProvider } from "bluestar";
 
 <ThemeProvider theme={{ colors: { primary: "#ff6b6b" } }}>
   <App />
-</ThemeProvider>
+</ThemeProvider>;
 ```
 
 ### Exports
 
 ```ts
 import {
-  ThemeProvider, useTheme, defaultTheme,
-  Button, AsyncButton, Spinner,
-  Header, Text, Card,
+  ThemeProvider,
+  useTheme,
+  defaultTheme,
+  Button,
+  AsyncButton,
+  Spinner,
+  Header,
+  Text,
+  Card,
   Flexbox,
 } from "bluestar";
 ```
@@ -49,10 +109,10 @@ Provides theme values to all bluestar components. All fields are optional — un
 </ThemeProvider>
 ```
 
-| Prop | Type | Default |
-|------|------|---------|
-| `theme` | `DeepPartial<Theme>` | `defaultTheme` |
-| `children` | `React.ReactNode` | — |
+| Prop       | Type                 | Default        |
+| ---------- | -------------------- | -------------- |
+| `theme`    | `DeepPartial<Theme>` | `defaultTheme` |
+| `children` | `React.ReactNode`    | —              |
 
 #### `useTheme`
 
@@ -67,16 +127,23 @@ const theme = useTheme();
 ```ts
 type Theme = {
   colors: {
-    primary, primaryHover, secondary,
-    background, surface,
-    text, textMuted, border,
-    error, success, warning
+    primary;
+    primaryHover;
+    secondary;
+    background;
+    surface;
+    text;
+    textMuted;
+    border;
+    error;
+    success;
+    warning;
   };
-  fonts: { body, heading, mono };
-  fontSizes: { xs, sm, md, lg, xl, "2xl", "3xl", "4xl" };
-  radius: { none, sm, md, lg, full };
-  spacing: { xs, sm, md, lg, xl, "2xl" };
-  shadows: { none, sm, md, lg };
+  fonts: { body; heading; mono };
+  fontSizes: { xs; sm; md; lg; xl; "2xl"; "3xl"; "4xl" };
+  radius: { none; sm; md; lg; full };
+  spacing: { xs; sm; md; lg; xl; "2xl" };
+  shadows: { none; sm; md; lg };
 };
 ```
 
@@ -90,10 +157,10 @@ A styled clickable button.
 <Button label="Click me" onClick={() => {}} />
 ```
 
-| Prop | Type | Required |
-|------|------|----------|
-| `label` | `string` | yes |
-| `onClick` | `() => void` | yes |
+| Prop      | Type         | Required |
+| --------- | ------------ | -------- |
+| `label`   | `string`     | yes      |
+| `onClick` | `() => void` | yes      |
 
 ---
 
@@ -102,13 +169,18 @@ A styled clickable button.
 Button that accepts an async `onClick`. Shows a spinner and disables itself while the promise is pending.
 
 ```tsx
-<AsyncButton label="Submit" onClick={async () => { await submitForm(); }} />
+<AsyncButton
+  label="Submit"
+  onClick={async () => {
+    await submitForm();
+  }}
+/>
 ```
 
-| Prop | Type | Required |
-|------|------|----------|
-| `label` | `string` | yes |
-| `onClick` | `() => Promise<void>` | yes |
+| Prop      | Type                  | Required |
+| --------- | --------------------- | -------- |
+| `label`   | `string`              | yes      |
+| `onClick` | `() => Promise<void>` | yes      |
 
 ---
 
@@ -121,9 +193,9 @@ A circular loading indicator.
 <Spinner size={32} color="#e53e3e" />
 ```
 
-| Prop | Type | Default |
-|------|------|---------|
-| `size` | `number` | `20` |
+| Prop    | Type     | Default                |
+| ------- | -------- | ---------------------- |
+| `size`  | `number` | `20`                   |
 | `color` | `string` | `theme.colors.primary` |
 
 ---
@@ -136,10 +208,10 @@ Heading text with h1–h6 variants.
 <Header variant="h2">Section Title</Header>
 ```
 
-| Prop | Type | Default |
-|------|------|---------|
-| `children` | `React.ReactNode` | — |
-| `variant` | `"h1" \| "h2" \| "h3" \| "h4" \| "h5" \| "h6"` | `"h1"` |
+| Prop       | Type                                           | Default |
+| ---------- | ---------------------------------------------- | ------- |
+| `children` | `React.ReactNode`                              | —       |
+| `variant`  | `"h1" \| "h2" \| "h3" \| "h4" \| "h5" \| "h6"` | `"h1"`  |
 
 ---
 
@@ -152,14 +224,14 @@ Body text with style variants.
 <Text as="span">Inline text</Text>
 ```
 
-| Prop | Type | Default |
-|------|------|---------|
-| `children` | `React.ReactNode` | — |
-| `bold` | `boolean` | `false` |
-| `italic` | `boolean` | `false` |
-| `muted` | `boolean` | `false` |
-| `size` | `keyof Theme["fontSizes"]` | `"md"` |
-| `as` | `"p" \| "span" \| "label"` | `"p"` |
+| Prop       | Type                       | Default |
+| ---------- | -------------------------- | ------- |
+| `children` | `React.ReactNode`          | —       |
+| `bold`     | `boolean`                  | `false` |
+| `italic`   | `boolean`                  | `false` |
+| `muted`    | `boolean`                  | `false` |
+| `size`     | `keyof Theme["fontSizes"]` | `"md"`  |
+| `as`       | `"p" \| "span" \| "label"` | `"p"`   |
 
 ---
 
@@ -174,11 +246,11 @@ A surface container with border, background, and shadow.
 </Card>
 ```
 
-| Prop | Type | Default |
-|------|------|---------|
-| `children` | `React.ReactNode` | — |
-| `padding` | `keyof Theme["spacing"]` | `"lg"` |
-| `shadow` | `keyof Theme["shadows"]` | `"md"` |
+| Prop       | Type                     | Default |
+| ---------- | ------------------------ | ------- |
+| `children` | `React.ReactNode`        | —       |
+| `padding`  | `keyof Theme["spacing"]` | `"lg"`  |
+| `shadow`   | `keyof Theme["shadows"]` | `"md"`  |
 
 ---
 
@@ -192,20 +264,20 @@ A layout wrapper that maps props directly to CSS flexbox properties.
 </Flexbox>
 ```
 
-| Prop | Type | Default |
-|------|------|---------|
-| `children` | `React.ReactNode` | — |
-| `direction` | `"row" \| "column"` | `"row"` |
-| `gap` | `8 \| 12 \| 16 \| 20 \| 24` | — |
-| `grow` | `number` | — |
-| `shrink` | `number` | — |
-| `flexWrap` | `"wrap" \| "nowrap"` | — |
-| `justifyContent` | `"flex-start" \| "flex-end" \| "center" \| "space-between" \| "space-around" \| "space-evenly"` | — |
-| `alignContent` | `"flex-start" \| "flex-end" \| "center" \| "stretch" \| "space-between" \| "space-around"` | — |
-| `alignItems` | `"flex-start" \| "flex-end" \| "center" \| "stretch" \| "baseline"` | — |
-| `width` | `number \| string` | — |
-| `height` | `number \| string` | — |
-| `style` | `object` | — |
+| Prop             | Type                                                                                            | Default |
+| ---------------- | ----------------------------------------------------------------------------------------------- | ------- |
+| `children`       | `React.ReactNode`                                                                               | —       |
+| `direction`      | `"row" \| "column"`                                                                             | `"row"` |
+| `gap`            | `8 \| 12 \| 16 \| 20 \| 24`                                                                     | —       |
+| `grow`           | `number`                                                                                        | —       |
+| `shrink`         | `number`                                                                                        | —       |
+| `flexWrap`       | `"wrap" \| "nowrap"`                                                                            | —       |
+| `justifyContent` | `"flex-start" \| "flex-end" \| "center" \| "space-between" \| "space-around" \| "space-evenly"` | —       |
+| `alignContent`   | `"flex-start" \| "flex-end" \| "center" \| "stretch" \| "space-between" \| "space-around"`      | —       |
+| `alignItems`     | `"flex-start" \| "flex-end" \| "center" \| "stretch" \| "baseline"`                             | —       |
+| `width`          | `number \| string`                                                                              | —       |
+| `height`         | `number \| string`                                                                              | —       |
+| `style`          | `object`                                                                                        | —       |
 
 ---
 

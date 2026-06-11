@@ -1,10 +1,10 @@
-import { useAuthenticationStatus } from "@nhost/react";
 import { ThemeProvider, Spinner, Flexbox } from "bluestar";
+import { useAuth } from "./AuthContext";
 import Login from "./Login";
 import Dashboard from "./Dashboard";
 
 export default function App() {
-  const { isAuthenticated, isLoading } = useAuthenticationStatus();
+  const { isAuthenticated, isLoading } = useAuth();
 
   return (
     <ThemeProvider>
