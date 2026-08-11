@@ -21,9 +21,7 @@ export default function Divider({ direction = "horizontal", length = 100 }: Divi
       className={css`
         flex-shrink: 0;
         background-color: ${theme.colors.border};
-        ${isHorizontal
-          ? `width: ${length}%; height: 1px;`
-          : `height: ${length}%; width: 1px;`}
+        ${isHorizontal ? `width: ${length}%; height: 1px;` : `height: ${length}%; width: 1px;`}
       `}
     />
   );

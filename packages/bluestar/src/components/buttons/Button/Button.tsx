@@ -29,14 +29,25 @@ export type ButtonProps = Omit<ComponentPropsWithoutRef<"button">, "disabled" | 
 
 function getColors(type: ButtonType, theme: Theme) {
   switch (type) {
-    case "secondary":   return { bg: theme.colors.secondaryButton,  hover: theme.colors.secondaryButtonHover };
-    case "creation":    return { bg: theme.colors.success,         hover: theme.colors.successHover };
-    case "destructive": return { bg: theme.colors.error,           hover: theme.colors.errorHover };
-    default:            return { bg: theme.colors.primary,         hover: theme.colors.primaryHover };
+    case "secondary":
+      return { bg: theme.colors.secondaryButton, hover: theme.colors.secondaryButtonHover };
+    case "creation":
+      return { bg: theme.colors.success, hover: theme.colors.successHover };
+    case "destructive":
+      return { bg: theme.colors.error, hover: theme.colors.errorHover };
+    default:
+      return { bg: theme.colors.primary, hover: theme.colors.primaryHover };
   }
 }
 
-export default function Button({ label, children, isDisabled, type = "primary", density = "normal", ...props }: ButtonProps) {
+export default function Button({
+  label,
+  children,
+  isDisabled,
+  type = "primary",
+  density = "normal",
+  ...props
+}: ButtonProps) {
   const theme = useTheme();
   const { bg, hover } = getColors(type, theme);
   const padding = density === "dense" ? "4px 10px" : "8px 16px";
@@ -56,7 +67,9 @@ export default function Button({ label, children, isDisabled, type = "primary", 
         gap: 8px;
         background-color: ${bg};
         cursor: pointer;
-        transition: box-shadow 0.15s ease, background-color 0.15s ease;
+        transition:
+          box-shadow 0.15s ease,
+          background-color 0.15s ease;
 
         &:hover:not(:disabled) {
           box-shadow: ${theme.shadow};
@@ -71,7 +84,9 @@ export default function Button({ label, children, isDisabled, type = "primary", 
       {...props}
     >
       {children ?? (
-        <Text variant="label" color={theme.colors.light}>{label}</Text>
+        <Text variant="label" color={theme.colors.light}>
+          {label}
+        </Text>
       )}
     </button>
   );

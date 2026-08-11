@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      build_all:
+        description: "Rebuild every enabled app instead of only the changed ones"
+        type: boolean
+        default: true
 
 env:
   REGISTRY: ghcr.io
@@ -19,6 +24,76 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history so change detection can diff against the previous commit.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate deploy.yml
+        run: |
+          pip install pyyaml
+          python3 infra/validate_deploy.py
+
+      - name: Select apps to build
+        id: select
+        run: |
+          set -euo pipefail
+          ENABLED=$(yq '.apps | to_entries[] | select(.value.enabled == true) | .key' deploy.yml)
+
+          # Anything shared — the component library, the deploy tooling, the
+          # config, the workflows — invalidates every image, so rebuild all.
+          SHARED_RE='^(packages/|infra/|deploy\.yml$|package(-lock)?\.json$|\.github/workflows/)'
+
+          CHANGED=""
+          BUILD_ALL=false
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BASE="${{ github.event.before }}"
+          elif [ "${{ inputs.build_all }}" = "false" ]; then
+            BASE="${{ github.sha }}^"   # manual run, changed-only: diff the last commit
+          else
+            BASE=""                     # manual run, default: rebuild everything
+            echo "Manual run with build_all — building all enabled apps."
+            BUILD_ALL=true
+          fi
+
+          if [ "$BUILD_ALL" = "false" ]; then
+            if [ -z "$BASE" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+              BUILD_ALL=true
+              echo "No usable base commit — building all enabled apps."
+            else
+              CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
+              echo "Changed files:"; echo "$CHANGED" | sed 's/^/  /'
+              if echo "$CHANGED" | grep -qE "$SHARED_RE"; then
+                BUILD_ALL=true
+                echo "Shared path changed — building all enabled apps."
+              fi
+            fi
+          fi
+
+          SELECTED=""
+          for app in $ENABLED; do
+            if [ "$BUILD_ALL" = "true" ]; then
+              SELECTED="${SELECTED} ${app}"
+              continue
+            fi
+            APP_PATH=$(yq ".apps.${app}.path // \"apps/${app}\"" deploy.yml)
+            if echo "$CHANGED" | grep -qE "^${APP_PATH}/"; then
+              SELECTED="${SELECTED} ${app}"
+            fi
+          done
+
+          SELECTED=$(echo "$SELECTED" | xargs || true)
+          echo "Building: ${SELECTED:-<none>}"
+          echo "apps=${SELECTED}" >> "$GITHUB_OUTPUT"
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -27,36 +102,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+      - name: Set up Buildx
+        if: steps.select.outputs.apps != ''
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build and push all enabled apps
+      - name: Build and push selected apps
+        if: steps.select.outputs.apps != ''
+        env:
+          # Build args are resolved by name from the repo's secrets — adding a
+          # new one means adding the secret and listing it in deploy.yml, with
+          # no workflow edit. GitHub masks the values in logs.
+          ALL_SECRETS: ${{ toJSON(secrets) }}
         run: |
-          ENABLED=$(yq '.apps | to_entries[] | select(.value.enabled == true) | .key' deploy.yml)
-          for app in $ENABLED; do
+          set -euo pipefail
+          for app in ${{ steps.select.outputs.apps }}; do
             echo "=== Building $app ==="
             IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.REPO }}/${app}:latest" | tr '[:upper:]' '[:lower:]')
             APP_PATH=$(yq ".apps.${app}.path // \"apps/${app}\"" deploy.yml)
 
-            # Resolve build args from deploy.yml build_args + secrets
             BUILD_ARGS=()
-            ARGS=$(yq ".apps.${app}.build_args // [] | .[]" deploy.yml 2>/dev/null || true)
-            for arg in $ARGS; do
-              # Map arg name to secret value. Add a case per build arg, e.g.:
-              #   VITE_SOME_URL) BUILD_ARGS+=(--build-arg "VITE_SOME_URL=${{ secrets.VITE_SOME_URL }}") ;;
-              case "$arg" in
-                "") ;;
-              esac
+            for arg in $(yq ".apps.${app}.build_args // [] | .[]" deploy.yml); do
+              value=$(jq -r --arg k "$arg" '.[$k] // empty' <<< "$ALL_SECRETS")
+              if [ -z "$value" ]; then
+                echo "::error::build arg '${arg}' for '${app}' has no matching GitHub secret"
+                exit 1
+              fi
+              BUILD_ARGS+=(--build-arg "${arg}=${value}")
             done
 
-            docker build "${BUILD_ARGS[@]}" -t "$IMAGE" -f "./${APP_PATH}/Dockerfile" .
-            docker push "$IMAGE"
+            docker buildx build "${BUILD_ARGS[@]}" \
+              --cache-from "type=gha,scope=${app}" \
+              --cache-to "type=gha,scope=${app},mode=max" \
+              --tag "$IMAGE" \
+              --file "./${APP_PATH}/Dockerfile" \
+              --push .
             echo "=== Pushed $IMAGE ==="
           done
 
+      # Nothing selected means nothing that reaches the droplet changed (a
+      # docs-only push), so skip the deploy rather than restart every container.
       - name: Deploy to droplet
+        if: steps.select.outputs.apps != ''
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DROPLET_IP }}
@@ -66,7 +152,8 @@ jobs:
             set -e
             cd /opt/apps
 
-            # Pull latest repo changes
+            # Discard anything a test deploy scp'd over, then take main.
+            git checkout -- deploy.yml infra/ 2>/dev/null || true
             git pull origin main
 
             # Clean up any active test deployment
@@ -75,7 +162,6 @@ jobs:
               rm test-deploy.active.yml
             fi
 
-            # Login to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # Generate fresh docker-compose.yml from config
@@ -85,7 +171,48 @@ jobs:
             docker compose pull
             docker compose up -d --force-recreate --remove-orphans
 
-            # Clean up old images
             docker image prune -f
-
             echo "=== Deployment complete ==="
+
+      - name: Verify containers came up
+        if: steps.select.outputs.apps != ''
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd /opt/apps
+
+            # `compose up` returns success even for a container that crashes on
+            # boot, so poll actual state before calling the deploy good.
+            for attempt in $(seq 1 18); do
+              BAD=""
+              for service in $(docker compose ps --services); do
+                cid=$(docker compose ps -q "$service")
+                if [ -z "$cid" ]; then
+                  BAD="${BAD} ${service}(missing)"
+                  continue
+                fi
+                status=$(docker inspect -f '{{.State.Status}}' "$cid")
+                health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid")
+                if [ "$status" != "running" ]; then
+                  BAD="${BAD} ${service}(${status})"
+                elif [ "$health" != "none" ] && [ "$health" != "healthy" ]; then
+                  BAD="${BAD} ${service}(${health})"
+                fi
+              done
+
+              if [ -z "$BAD" ]; then
+                echo "=== All containers running and healthy ==="
+                exit 0
+              fi
+              echo "attempt ${attempt}/18 — not ready:${BAD}"
+              sleep 5
+            done
+
+            echo "::error::containers not healthy after 90s:${BAD}"
+            for service in $BAD; do
+              docker compose logs --tail 50 "${service%%(*}" || true
+            done
+            exit 1

@@ -46,8 +46,12 @@ export default function TextAreaInput({
           box-sizing: border-box;
           resize: vertical;
           line-height: 1.5;
-          transition: border-color 0.15s ease, box-shadow 0.15s ease;
-          &::placeholder { color: ${theme.colors.textMuted}; }
+          transition:
+            border-color 0.15s ease,
+            box-shadow 0.15s ease;
+          &::placeholder {
+            color: ${theme.colors.textMuted};
+          }
           &:focus {
             border-color: ${theme.colors.primary};
             box-shadow: 0 0 0 2px ${theme.colors.primary}33;

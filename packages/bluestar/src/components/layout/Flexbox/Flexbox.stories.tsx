@@ -78,7 +78,9 @@ export const SpaceBetween: Story = {
     ]),
   parameters: {
     docs: {
-      description: { story: "Items pushed to opposite ends with `justify-content: space-between`." },
+      description: {
+        story: "Items pushed to opposite ends with `justify-content: space-between`.",
+      },
     },
   },
 };
@@ -91,27 +93,23 @@ export const CenterAligned: Story = {
     height: 120,
   },
   render: (args) =>
-    React.createElement(
-      Flexbox,
-      { ...args, style: { border: "1px dashed #ccc" } },
-      [
-        React.createElement(Box, { key: "1" }, "Short"),
-        React.createElement(
-          "div",
-          {
-            key: "2",
-            style: {
-              padding: "32px 24px",
-              background: "#7da7d9",
-              color: "#fff",
-              borderRadius: "4px",
-            },
+    React.createElement(Flexbox, { ...args, style: { border: "1px dashed #ccc" } }, [
+      React.createElement(Box, { key: "1" }, "Short"),
+      React.createElement(
+        "div",
+        {
+          key: "2",
+          style: {
+            padding: "32px 24px",
+            background: "#7da7d9",
+            color: "#fff",
+            borderRadius: "4px",
           },
-          "Tall"
-        ),
-        React.createElement(Box, { key: "3" }, "Short"),
-      ]
-    ),
+        },
+        "Tall"
+      ),
+      React.createElement(Box, { key: "3" }, "Short"),
+    ]),
   parameters: {
     docs: {
       description: {

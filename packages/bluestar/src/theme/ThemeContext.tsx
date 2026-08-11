@@ -21,10 +21,10 @@ function mergeTextType(
   override: DeepPartial<TextTypeStyle> | undefined
 ): TextTypeStyle {
   return {
-    size:   override?.size   ?? base.size,
-    bold:   override?.bold   ?? base.bold,
+    size: override?.size ?? base.size,
+    bold: override?.bold ?? base.bold,
     italic: override?.italic ?? base.italic,
-    muted:  override?.muted  ?? base.muted,
+    muted: override?.muted ?? base.muted,
   };
 }
 
@@ -33,7 +33,7 @@ function mergeHeading(
   override: DeepPartial<HeadingStyle> | undefined
 ): HeadingStyle {
   return {
-    size:   override?.size   ?? base.size,
+    size: override?.size ?? base.size,
     weight: override?.weight ?? base.weight,
   };
 }
@@ -42,13 +42,13 @@ export function ThemeProvider({ theme, children }: ThemeProviderProps) {
   const merged: Theme = theme
     ? {
         colors: { ...defaultTheme.colors, ...theme.colors },
-        fonts:  { ...defaultTheme.fonts,  ...theme.fonts  },
+        fonts: { ...defaultTheme.fonts, ...theme.fonts },
         textTypes: {
-          caption:  mergeTextType(defaultTheme.textTypes.caption,  theme.textTypes?.caption),
-          body:     mergeTextType(defaultTheme.textTypes.body,      theme.textTypes?.body),
-          subtitle: mergeTextType(defaultTheme.textTypes.subtitle,  theme.textTypes?.subtitle),
-          display:  mergeTextType(defaultTheme.textTypes.display,   theme.textTypes?.display),
-          label:    mergeTextType(defaultTheme.textTypes.label,     theme.textTypes?.label),
+          caption: mergeTextType(defaultTheme.textTypes.caption, theme.textTypes?.caption),
+          body: mergeTextType(defaultTheme.textTypes.body, theme.textTypes?.body),
+          subtitle: mergeTextType(defaultTheme.textTypes.subtitle, theme.textTypes?.subtitle),
+          display: mergeTextType(defaultTheme.textTypes.display, theme.textTypes?.display),
+          label: mergeTextType(defaultTheme.textTypes.label, theme.textTypes?.label),
         },
         headings: {
           h1: mergeHeading(defaultTheme.headings.h1, theme.headings?.h1),
@@ -60,9 +60,7 @@ export function ThemeProvider({ theme, children }: ThemeProviderProps) {
       }
     : defaultTheme;
 
-  return (
-    <ThemeContext.Provider value={merged}>{children}</ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={merged}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): Theme {

@@ -12,8 +12,7 @@ type TextProps = {
    * - `"caption"` — smallest, muted; for labels and timestamps
    * - `"body"` — compact body copy
    * - `"subtitle"` — default body size
-   * - `"title"` — larger, bold; for section titles
-   * - `"heading"` — prominent, bold; for headings
+   * - `"label"` — body size, for form labels and button text
    * - `"display"` — largest, bold; for hero text
    */
   variant?: TextType;

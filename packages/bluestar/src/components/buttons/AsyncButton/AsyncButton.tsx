@@ -26,12 +26,10 @@ export default function AsyncButton({ label, onClick }: AsyncButtonProps) {
   }
 
   return (
-    <Button
-      label={label}
-      onClick={handleClick}
-      isDisabled={loading}
-    >
-      <Text variant="label" color={theme.colors.light}>{label}</Text>
+    <Button label={label} onClick={handleClick} isDisabled={loading}>
+      <Text variant="label" color={theme.colors.light}>
+        {label}
+      </Text>
       {loading && <Spinner size={14} color={theme.colors.light} />}
     </Button>
   );

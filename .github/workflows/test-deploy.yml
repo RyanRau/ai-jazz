@@ -18,10 +18,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate deploy.yml
+        run: |
+          pip install pyyaml
+          python3 infra/validate_deploy.py
 
       - name: Read test config
         id: config
@@ -32,8 +41,8 @@ jobs:
           fi
 
           # Support both single app and multi-app formats
-          # Single: app: wally
-          # Multi:  apps: [api, wally]
+          # Single: app: bluestar
+          # Multi:  apps: [pocketbase, ryanzrau]
           APPS=$(yq '.apps // [.app] | .[]' test-deploy.yml)
           if [ -z "$APPS" ]; then
             echo "::error::No apps found in test-deploy.yml"
@@ -69,26 +78,39 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push test images
+        env:
+          # Same name-based resolution as the prod workflow, but a TEST_<ARG>
+          # secret wins when present, so test builds can point at test backends.
+          ALL_SECRETS: ${{ toJSON(secrets) }}
         run: |
+          set -euo pipefail
           for APP in ${{ steps.config.outputs.app_list }}; do
             IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.REPO }}/${APP}:test" | tr '[:upper:]' '[:lower:]')
             APP_PATH=$(yq ".apps.${APP}.path // \"apps/${APP}\"" deploy.yml)
 
-            # Resolve build args from deploy.yml build_args + secrets
             BUILD_ARGS=()
-            ARGS=$(yq ".apps.${APP}.build_args // [] | .[]" deploy.yml 2>/dev/null || true)
-            for arg in $ARGS; do
-              # Add a case per build arg (test deploys hardcode test values), e.g.:
-              #   VITE_SOME_URL) BUILD_ARGS+=(--build-arg "VITE_SOME_URL=https://test-...") ;;
-              case "$arg" in
-                "") ;;
-              esac
+            for arg in $(yq ".apps.${APP}.build_args // [] | .[]" deploy.yml); do
+              value=$(jq -r --arg k "TEST_$arg" '.[$k] // empty' <<< "$ALL_SECRETS")
+              if [ -z "$value" ]; then
+                value=$(jq -r --arg k "$arg" '.[$k] // empty' <<< "$ALL_SECRETS")
+              fi
+              if [ -z "$value" ]; then
+                echo "::error::build arg '${arg}' for '${APP}' has no matching GitHub secret (tried TEST_${arg} and ${arg})"
+                exit 1
+              fi
+              BUILD_ARGS+=(--build-arg "${arg}=${value}")
             done
 
             echo "=== Building ${APP} (test) ==="
-            docker build "${BUILD_ARGS[@]}" -t "$IMAGE" -f "./${APP_PATH}/Dockerfile" .
-            docker push "$IMAGE"
+            docker buildx build "${BUILD_ARGS[@]}" \
+              --cache-from "type=gha,scope=${APP}" \
+              --tag "$IMAGE" \
+              --file "./${APP_PATH}/Dockerfile" \
+              --push .
             echo "=== Pushed $IMAGE ==="
           done
 
@@ -117,7 +139,6 @@ jobs:
             ${{ steps.config.outputs.test_apps }}
             ACTIVEEOF
 
-            # Login to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # Generate docker-compose.yml from branch's deploy.yml + test config
@@ -134,7 +155,23 @@ jobs:
             done
             docker compose up -d --no-deps $TEST_SERVICES
 
-            # Clean up old images
             docker image prune -f
+
+            # A test container that crashes on boot should fail the run, not sit
+            # there silently behind a 502.
+            sleep 10
+            FAILED=""
+            for app in ${{ steps.config.outputs.app_list }}; do
+              cid=$(docker compose ps -q "${app}-test")
+              status=$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo missing)
+              if [ "$status" != "running" ]; then
+                FAILED="${FAILED} ${app}-test(${status})"
+                docker compose logs --tail 50 "${app}-test" || true
+              fi
+            done
+            if [ -n "$FAILED" ]; then
+              echo "::error::test containers not running:${FAILED}"
+              exit 1
+            fi
 
             echo "=== Test deployment complete ==="

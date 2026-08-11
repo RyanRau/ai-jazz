@@ -33,15 +33,14 @@ type Props = {
   /** CSS `align-items` — aligns children along the cross axis. */
   alignItems?: "flex-start" | "flex-end" | "center" | "stretch" | "baseline";
   /** Width of the container. */
-  width?: number | string,
+  width?: number | string;
   /** Height of the container. */
-  height?: number | string,
+  height?: number | string;
   /** Additional inline styles merged onto the container. */
   style?: object;
-}
+};
 
-export default function Flexbox(
-{
+export default function Flexbox({
   children,
   direction = "row",
   grow,
@@ -54,8 +53,7 @@ export default function Flexbox(
   width,
   height,
   style,
-}: Props
-): React.ReactElement {
+}: Props): React.ReactElement {
   const styles = useMemo(() => {
     return {
       flexBox: {
@@ -73,7 +71,19 @@ export default function Flexbox(
         ...style,
       },
     };
-  }, [alignContent, alignItems, direction, flexWrap, gap, grow, height, justifyContent, shrink, style, width]);
+  }, [
+    alignContent,
+    alignItems,
+    direction,
+    flexWrap,
+    gap,
+    grow,
+    height,
+    justifyContent,
+    shrink,
+    style,
+    width,
+  ]);
 
   return <div style={styles.flexBox}>{children}</div>;
 }

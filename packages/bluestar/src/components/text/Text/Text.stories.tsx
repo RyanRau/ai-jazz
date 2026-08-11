@@ -28,7 +28,9 @@ export const Subtitle: Story = {
 export const Caption: Story = {
   args: { variant: "caption", children: "Caption — small and muted (10px)." },
   parameters: {
-    docs: { description: { story: "Smallest type. Muted color. Use for labels, timestamps, and hints." } },
+    docs: {
+      description: { story: "Smallest type. Muted color. Use for labels, timestamps, and hints." },
+    },
   },
 };
 

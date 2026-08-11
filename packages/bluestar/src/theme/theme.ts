@@ -26,11 +26,11 @@ export type Theme = {
     mono: string;
   };
   textTypes: {
-    caption:  { size: string; bold: boolean; italic: boolean; muted: boolean };
-    body:     { size: string; bold: boolean; italic: boolean; muted: boolean };
+    caption: { size: string; bold: boolean; italic: boolean; muted: boolean };
+    body: { size: string; bold: boolean; italic: boolean; muted: boolean };
     subtitle: { size: string; bold: boolean; italic: boolean; muted: boolean };
-    display:  { size: string; bold: boolean; italic: boolean; muted: boolean };
-    label:    { size: string; bold: boolean; italic: boolean; muted: boolean };
+    display: { size: string; bold: boolean; italic: boolean; muted: boolean };
+    label: { size: string; bold: boolean; italic: boolean; muted: boolean };
   };
   headings: {
     h1: { size: string; weight: string };
@@ -63,16 +63,15 @@ export const defaultTheme: Theme = {
   },
   fonts: {
     body: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    heading:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    heading: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
     mono: '"SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   },
   textTypes: {
-    caption:  { size: "10px", bold: false, italic: false, muted: true  },
-    body:     { size: "12px", bold: false, italic: false, muted: false },
+    caption: { size: "10px", bold: false, italic: false, muted: true },
+    body: { size: "12px", bold: false, italic: false, muted: false },
     subtitle: { size: "14px", bold: false, italic: false, muted: false },
-    display:  { size: "18px", bold: true,  italic: false, muted: false },
-    label:    { size: "14px", bold: false, italic: false, muted: false },
+    display: { size: "18px", bold: true, italic: false, muted: false },
+    label: { size: "14px", bold: false, italic: false, muted: false },
   },
   headings: {
     h1: { size: "28px", weight: "800" },

@@ -9,7 +9,8 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: "Multi-line text area with label, description, and warning support. Vertically resizable by the user.",
+        component:
+          "Multi-line text area with label, description, and warning support. Vertically resizable by the user.",
       },
     },
   },

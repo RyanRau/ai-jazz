@@ -16,7 +16,8 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: "Group of checkboxes for multi-value selection. `value` is an array of selected option values.",
+        component:
+          "Group of checkboxes for multi-value selection. `value` is an array of selected option values.",
       },
     },
   },

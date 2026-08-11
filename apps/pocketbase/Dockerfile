@@ -1,5 +1,6 @@
-FROM alpine:latest
+FROM alpine:3.21
 
+# PocketBase is pre-1.0 — pin it, read release notes before bumping, back up first.
 ARG PB_VERSION=0.39.3
 
 RUN apk add --no-cache unzip ca-certificates

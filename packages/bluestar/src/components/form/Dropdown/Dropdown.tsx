@@ -46,7 +46,9 @@ export default function Dropdown(props: DropdownProps) {
     outline: none;
     box-sizing: border-box;
     cursor: pointer;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
     &:focus {
       border-color: ${theme.colors.primary};
       box-shadow: 0 0 0 2px ${theme.colors.primary}33;
@@ -73,7 +75,10 @@ export default function Dropdown(props: DropdownProps) {
             ${selectClass}
             min-height: 100px;
             padding: 4px;
-            & option { padding: 4px 8px; border-radius: 4px; }
+            & option {
+              padding: 4px 8px;
+              border-radius: 4px;
+            }
           `}
         >
           {options.map((opt) => (

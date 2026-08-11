@@ -71,10 +71,7 @@ function ThemePlayground(args: PlaygroundArgs) {
           <Button label="Secondary" type="secondary" onClick={() => {}} />
           <Button label="Creation" type="creation" onClick={() => {}} />
           <Button label="Destructive" type="destructive" onClick={() => {}} />
-          <AsyncButton
-            label="Async"
-            onClick={() => new Promise((r) => setTimeout(r, 2000))}
-          />
+          <AsyncButton label="Async" onClick={() => new Promise((r) => setTimeout(r, 2000))} />
           <Spinner />
         </Flexbox>
 
