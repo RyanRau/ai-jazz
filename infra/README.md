@@ -9,6 +9,7 @@ reach it, and how to debug it when they don't.
 | --------------------- | ------------------------------------------------------------------------- |
 | `generate-compose.py` | Renders `deploy.yml` (+ optional test overlay) into `docker-compose.yml`  |
 | `validate_deploy.py`  | Validates `deploy.yml` — run in CI and before pushing config changes      |
+| `select_apps.py`      | Decides which apps a change set affects; shared by deploy and PR checks   |
 | `new_app.py`          | Scaffolds a new app from `templates/app` and registers it in `deploy.yml` |
 | `templates/app/`      | The app template (`.tpl` files, placeholders substituted by `new_app.py`) |
 | `AUDIT.md`            | Architecture assessment, known weaknesses, deliberate omissions           |
@@ -170,6 +171,25 @@ Common cases:
 - **A deploy "succeeded" but the site is broken** — the workflow's verification
   step polls container health, so check its output first; a container that is
   `running` but serving errors is an app bug, not a deploy bug
+
+## Workflows
+
+Four, each with a distinct job:
+
+| Workflow            | Trigger                | Does                                                                 |
+| ------------------- | ---------------------- | -------------------------------------------------------------------- |
+| `pr-validation.yml` | PR opened/updated      | Config, lint, format, and Docker builds for the apps the PR touches  |
+| `deploy.yml`        | Push to `main`, manual | Builds affected apps, deploys, verifies containers are healthy       |
+| `test-deploy.yml`   | Manual                 | Builds a branch's apps to `test-*` subdomains                        |
+| `test-cleanup.yml`  | PR merged              | Removes the test deployment and any `test-deploy.yml` left on `main` |
+
+The three that touch the droplet share a `concurrency: droplet` group so they
+queue instead of interleaving `docker compose` runs — a merge fires both
+**Build and Deploy** and **Test Cleanup** at the same moment.
+
+Test Cleanup overlaps with Build and Deploy on purpose: the deploy step is
+skipped when a push touches no app, so Test Cleanup is what guarantees a merged
+branch never leaves a test container running.
 
 ## Test deployments
 

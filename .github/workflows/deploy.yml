@@ -14,6 +14,14 @@ env:
   REGISTRY: ghcr.io
   REPO: ${{ github.repository }}
 
+# Deploy, Test Deploy and Test Cleanup all run `docker compose` against the same
+# project on the same droplet. Without a shared group they can interleave — a
+# merge fires this workflow and Test Cleanup simultaneously. Queue, never cancel:
+# aborting a half-finished deploy is worse than waiting.
+concurrency:
+  group: droplet
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -46,52 +54,15 @@ jobs:
         id: select
         run: |
           set -euo pipefail
-          ENABLED=$(yq '.apps | to_entries[] | select(.value.enabled == true) | .key' deploy.yml)
-
-          # Anything shared — the component library, the deploy tooling, the
-          # config, the workflows — invalidates every image, so rebuild all.
-          SHARED_RE='^(packages/|infra/|deploy\.yml$|package(-lock)?\.json$|\.github/workflows/)'
-
-          CHANGED=""
-          BUILD_ALL=false
-
-          if [ "${{ github.event_name }}" = "push" ]; then
-            BASE="${{ github.event.before }}"
-          elif [ "${{ inputs.build_all }}" = "false" ]; then
-            BASE="${{ github.sha }}^"   # manual run, changed-only: diff the last commit
+          # Selection rules live in infra/select_apps.py so they are shared with
+          # PR validation and testable outside CI.
+          if [ "${{ github.event_name }}" != "push" ] && [ "${{ inputs.build_all }}" != "false" ]; then
+            SELECTED=$(python3 infra/select_apps.py --all)
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            SELECTED=$(python3 infra/select_apps.py --base "${{ github.event.before }}" --head "${{ github.sha }}")
           else
-            BASE=""                     # manual run, default: rebuild everything
-            echo "Manual run with build_all — building all enabled apps."
-            BUILD_ALL=true
+            SELECTED=$(python3 infra/select_apps.py --base "${{ github.sha }}^" --head "${{ github.sha }}")
           fi
-
-          if [ "$BUILD_ALL" = "false" ]; then
-            if [ -z "$BASE" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-              BUILD_ALL=true
-              echo "No usable base commit — building all enabled apps."
-            else
-              CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
-              echo "Changed files:"; echo "$CHANGED" | sed 's/^/  /'
-              if echo "$CHANGED" | grep -qE "$SHARED_RE"; then
-                BUILD_ALL=true
-                echo "Shared path changed — building all enabled apps."
-              fi
-            fi
-          fi
-
-          SELECTED=""
-          for app in $ENABLED; do
-            if [ "$BUILD_ALL" = "true" ]; then
-              SELECTED="${SELECTED} ${app}"
-              continue
-            fi
-            APP_PATH=$(yq ".apps.${app}.path // \"apps/${app}\"" deploy.yml)
-            if echo "$CHANGED" | grep -qE "^${APP_PATH}/"; then
-              SELECTED="${SELECTED} ${app}"
-            fi
-          done
-
-          SELECTED=$(echo "$SELECTED" | xargs || true)
           echo "Building: ${SELECTED:-<none>}"
           echo "apps=${SELECTED}" >> "$GITHUB_OUTPUT"
 

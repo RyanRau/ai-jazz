@@ -5,7 +5,15 @@ on:
     types: [closed]
     branches: [main]
 
+# Shared with Build and Deploy / Test Deploy — see the note there.
+concurrency:
+  group: droplet
+  cancel-in-progress: false
+
 jobs:
+  # Build and Deploy also clears test state, but only when it actually deploys.
+  # A merge that touches no app (docs, workflows) skips that step, so this job
+  # is the guarantee that a merged branch never leaves a test container running.
   cleanup:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
@@ -48,13 +56,6 @@ jobs:
             docker image prune -f
 
             echo "=== Test cleanup complete ==="
-
-      - name: Delete test image from registry
-        continue-on-error: true
-        run: |
-          # Best-effort cleanup of the :test tag from GHCR
-          # This is non-critical — old tags get cleaned up naturally
-          echo "Test image cleanup skipped (manual GHCR cleanup if needed)"
 
   remove-test-deploy-file:
     if: github.event.pull_request.merged == true

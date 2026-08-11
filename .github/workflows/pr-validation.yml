@@ -3,6 +3,12 @@ name: PR Validation
 on:
   pull_request:
 
+# Superseded runs on the same PR are pointless. Safe to cancel: the autofix job
+# pushes with GITHUB_TOKEN, which by design does not trigger another run.
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -10,6 +16,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the app selection can diff against the PR base.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -48,16 +57,26 @@ jobs:
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
+      # Same rules the deploy workflow uses, so a PR builds exactly what the
+      # merge would — no more (a docs PR built all three images before).
+      - name: Select apps to build
+        id: select
+        run: |
+          set -euo pipefail
+          SELECTED=$(python3 infra/select_apps.py \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.sha }}")
+          echo "apps=${SELECTED}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Buildx
+        if: steps.select.outputs.apps != ''
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker images
+        if: steps.select.outputs.apps != ''
         run: |
           set -euo pipefail
-          ENABLED=$(yq '.apps | to_entries[] | select(.value.enabled == true) | .key' deploy.yml)
-          echo "Building Docker images for enabled apps: $ENABLED"
-
-          for app in $ENABLED; do
+          for app in ${{ steps.select.outputs.apps }}; do
             APP_PATH=$(yq ".apps.${app}.path // \"apps/${app}\"" deploy.yml)
             echo "Building ${app}..."
             docker buildx build \
@@ -68,7 +87,7 @@ jobs:
               --load .
           done
 
-          echo "✅ All Docker images built successfully"
+          echo "✅ Docker images built successfully"
 
   autofix:
     needs: validate

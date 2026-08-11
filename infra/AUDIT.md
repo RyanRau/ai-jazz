@@ -60,6 +60,28 @@ that no longer existed.
   which had no Python dependencies to scan — were dropped.
 - Added Dependabot for GitHub Actions and npm.
 
+**Workflow audit**
+
+All four workflows earn their place — but they had three problems:
+
+- **No concurrency control anywhere.** A merge fires Build and Deploy _and_ Test
+  Cleanup simultaneously, and both SSH in to run `docker compose up` against the
+  same project; two quick pushes to `main` raced each other the same way. All
+  three droplet-touching workflows now share a `concurrency: droplet` group that
+  queues rather than cancels. This was a latent bug, not a new one.
+- **PR validation rebuilt every app on every PR**, so a README typo cost three
+  Docker builds. It now uses the same selection rules as the deploy.
+- **A dead step** in Test Cleanup that only echoed "skipped" — removed.
+
+Test Cleanup _looks_ redundant with Build and Deploy, which also clears test
+state, but it isn't: the deploy step is skipped when a push touches no app, so
+Test Cleanup is the guarantee that a merged branch leaves nothing running. That
+relationship is now documented in both workflows rather than implied.
+
+Change selection moved out of inline workflow bash into `infra/select_apps.py`,
+shared by both workflows and unit-testable outside CI — which matters, since CI
+shell logic is otherwise only exercised in production.
+
 **Documentation**
 
 - Rewrote the root `README.md`, `CLAUDE.md`, and `infra/README.md`, all of which
