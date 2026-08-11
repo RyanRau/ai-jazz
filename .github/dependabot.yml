@@ -1,0 +1,25 @@
+version: 2
+
+updates:
+  # Third-party actions run with access to the droplet SSH key — keeping them
+  # current is the cheapest supply-chain hygiene available.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directories:
+      - "/"
+      - "/packages/bluestar"
+      - "/apps/ryanzrau"
+    schedule:
+      interval: monthly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+      production-dependencies:
+        dependency-type: production

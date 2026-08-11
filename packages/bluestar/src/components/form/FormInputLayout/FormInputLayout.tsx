@@ -26,7 +26,11 @@ export default function FormInputLayout({
       {label && <Text variant="label">{label}</Text>}
       {description && <Text variant="caption">{description}</Text>}
       {children}
-      {warning && <Text variant="caption" color={theme.colors.warning}>{warning}</Text>}
+      {warning && (
+        <Text variant="caption" color={theme.colors.warning}>
+          {warning}
+        </Text>
+      )}
     </Flexbox>
   );
 }

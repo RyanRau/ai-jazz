@@ -35,7 +35,11 @@ export const Vertical: Story = {
   ],
   args: { direction: "vertical", length: 100 },
   parameters: {
-    docs: { description: { story: "Full-height vertical rule. Wrap in a flex container to give it height." } },
+    docs: {
+      description: {
+        story: "Full-height vertical rule. Wrap in a flex container to give it height.",
+      },
+    },
   },
 };
 

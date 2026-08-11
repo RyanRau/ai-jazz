@@ -3,7 +3,17 @@
 **/node_modules
 **/dist
 **/build
-*.md
+**/storybook-static
+**/*.md
 .DS_Store
 infra
-local-event-digest
+
+# Never let a local secrets file end up in a build context — a build arg or a
+# stray COPY would bake it into a published image layer.
+**/.env
+**/.env.*
+!**/.env.example
+
+# PocketBase reads only *.pb.js from pb_hooks, but the directory must be
+# non-empty for the image's COPY to succeed.
+!apps/pocketbase/pb_hooks/README.md

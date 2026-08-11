@@ -81,7 +81,19 @@ for name, svc in config.get("services", {}).items():
     services[name] = service
 
 
-def make_service_labels(name, fqdn, port):
+# Requests/second per source IP, applied to every router. Generous enough that
+# a human never notices, low enough to blunt credential stuffing and scraping.
+DEFAULT_RATE_LIMIT = {"average": 100, "burst": 50}
+
+# X-Frame-Options. SAMEORIGIN still allows same-origin iframes (Storybook's
+# preview pane), while denying other sites the ability to frame these apps.
+DEFAULT_FRAME_OPTIONS = "SAMEORIGIN"
+
+
+def make_service_labels(name, fqdn, port, frame_options=None, rate_limit=None):
+    frame_options = frame_options or DEFAULT_FRAME_OPTIONS
+    limits = dict(DEFAULT_RATE_LIMIT, **(rate_limit or {}))
+
     return [
         "traefik.enable=true",
         f"traefik.http.routers.{name}.rule=Host(`{fqdn}`)",
@@ -91,11 +103,13 @@ def make_service_labels(name, fqdn, port):
         f"traefik.http.middlewares.{name}-security.headers.stsSeconds=31536000",
         f"traefik.http.middlewares.{name}-security.headers.stsIncludeSubdomains=true",
         f"traefik.http.middlewares.{name}-security.headers.stsPreload=true",
-        f"traefik.http.middlewares.{name}-security.headers.customFrameOptionsValue=ALLOWALL",
+        f"traefik.http.middlewares.{name}-security.headers.customFrameOptionsValue={frame_options}",
         f"traefik.http.middlewares.{name}-security.headers.contentTypeNosniff=true",
         f"traefik.http.middlewares.{name}-security.headers.browserXssFilter=true",
         f"traefik.http.middlewares.{name}-security.headers.referrerPolicy=strict-origin-when-cross-origin",
-        f"traefik.http.routers.{name}.middlewares={name}-security",
+        f"traefik.http.middlewares.{name}-ratelimit.rateLimit.average={limits['average']}",
+        f"traefik.http.middlewares.{name}-ratelimit.rateLimit.burst={limits['burst']}",
+        f"traefik.http.routers.{name}.middlewares={name}-security,{name}-ratelimit",
     ]
 
 
@@ -125,7 +139,9 @@ for name, app in config.get("apps", {}).items():
         "image": f"{registry}/{name}:latest",
         "container_name": name,
         "restart": "unless-stopped",
-        "labels": make_service_labels(name, fqdn, port),
+        "labels": make_service_labels(
+            name, fqdn, port, app.get("frame_options"), app.get("rate_limit")
+        ),
         "networks": ["web"],
     }
 
@@ -189,11 +205,19 @@ if os.path.exists(TEST_CONFIG_PATH):
         test_fqdn = f"test-{subdomain}.{domain}" if subdomain else f"test.{domain}"
         test_name = f"{app_name}-test"
 
+        app_config = config.get("apps", {}).get(app_name, {})
+
         test_service = {
             "image": f"{registry}/{app_name}:test",
             "container_name": test_name,
             "restart": "unless-stopped",
-            "labels": make_service_labels(test_name, test_fqdn, port),
+            "labels": make_service_labels(
+                test_name,
+                test_fqdn,
+                port,
+                app_config.get("frame_options"),
+                app_config.get("rate_limit"),
+            ),
             "networks": ["web"],
         }
 

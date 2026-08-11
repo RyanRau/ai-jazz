@@ -1,9 +1,16 @@
 # deploy.yml — The control plane for deployments
-# Set enabled: true to deploy an app, false to take it offline
+# Set enabled: true to deploy an app, false to take it offline.
+# Validate changes with: python3 infra/validate_deploy.py
 
 domain: ryanzrau.dev
 registry: ghcr.io/ryanrau/mono
 letsencrypt_email: me@ryanzrau.dev
+
+# Subdomains owned by apps deployed from *other* repos onto the same droplet
+# (see "External App Deployments" in CLAUDE.md). Listed here so validation
+# rejects a monorepo app that would collide with one.
+reserved_subdomains:
+  - drinkz
 
 # Internal services: pulled images on the shared docker network, never routed
 # by Traefik and never exposed to the internet. Apps reach them by service name.
@@ -27,6 +34,10 @@ apps:
       interval: 30s
       timeout: 5s
       retries: 3
+    # Tighter than the default: this is the auth endpoint and the admin UI.
+    rate_limit:
+      average: 30
+      burst: 15
   ryanzrau:
     subdomain: ""
     enabled: true

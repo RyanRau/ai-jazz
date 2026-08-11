@@ -11,11 +11,7 @@ type CardProps = {
   shadow?: string;
 };
 
-export default function Card({
-  children,
-  padding = 16,
-  shadow,
-}: CardProps) {
+export default function Card({ children, padding = 16, shadow }: CardProps) {
   const theme = useTheme();
 
   return (

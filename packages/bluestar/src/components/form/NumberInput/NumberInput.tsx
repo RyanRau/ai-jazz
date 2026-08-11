@@ -54,8 +54,12 @@ export default function NumberInput({
           font-size: ${theme.textTypes.subtitle.size};
           outline: none;
           box-sizing: border-box;
-          transition: border-color 0.15s ease, box-shadow 0.15s ease;
-          &::placeholder { color: ${theme.colors.textMuted}; }
+          transition:
+            border-color 0.15s ease,
+            box-shadow 0.15s ease;
+          &::placeholder {
+            color: ${theme.colors.textMuted};
+          }
           &:focus {
             border-color: ${theme.colors.primary};
             box-shadow: 0 0 0 2px ${theme.colors.primary}33;

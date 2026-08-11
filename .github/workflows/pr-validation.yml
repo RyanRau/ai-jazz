@@ -19,28 +19,13 @@ jobs:
         with:
           node-version: "20"
 
-      # Security checks (informational only)
-      - name: Run bandit security scan
+      # Config first — a broken deploy.yml fails the whole deploy, so catch it
+      # before spending CI minutes on Docker builds.
+      - name: Validate deploy.yml
         run: |
-          pip install bandit
-          bandit -r . -x './.venv,./node_modules,./.git' --severity-level medium
-        continue-on-error: true
+          pip install pyyaml
+          python3 infra/validate_deploy.py
 
-      - name: Audit dependencies
-        run: |
-          pip install pip-audit
-          found=false
-          for req in $(find . -name 'requirements*.txt' -not -path './.venv/*'); do
-            echo "Auditing $req"
-            pip-audit -r "$req" || true
-            found=true
-          done
-          if [ "$found" = false ]; then
-            echo "No requirements files found, skipping"
-          fi
-        continue-on-error: true
-
-      # Lint and format checks (read-only, no auto-fixing)
       - name: Lint check (Python)
         uses: astral-sh/ruff-action@v3
 
@@ -58,27 +43,29 @@ jobs:
       - name: Lint check (TS/TSX/JS/JSX)
         run: npm run lint
 
-      # Validate Docker builds
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker images
         run: |
-          # Get list of enabled apps from deploy.yml
+          set -euo pipefail
           ENABLED=$(yq '.apps | to_entries[] | select(.value.enabled == true) | .key' deploy.yml)
-
           echo "Building Docker images for enabled apps: $ENABLED"
 
           for app in $ENABLED; do
             APP_PATH=$(yq ".apps.${app}.path // \"apps/${app}\"" deploy.yml)
-            if [ -f "${APP_PATH}/Dockerfile" ]; then
-              echo "Building ${app} Docker image..."
-              docker build -t ${app}:pr-test -f "./${APP_PATH}/Dockerfile" .
-            else
-              echo "⚠️  Skipping ${app} (no Dockerfile found)"
-            fi
+            echo "Building ${app}..."
+            docker buildx build \
+              --cache-from "type=gha,scope=${app}" \
+              --cache-to "type=gha,scope=${app},mode=max" \
+              --tag "${app}:pr-test" \
+              --file "./${APP_PATH}/Dockerfile" \
+              --load .
           done
 
           echo "✅ All Docker images built successfully"

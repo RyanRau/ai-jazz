@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "eslint 'apps/**/*.{ts,tsx,js,jsx}'",
-    "lint:fix": "eslint --fix 'apps/**/*.{ts,tsx,js,jsx}'",
-    "format": "prettier --write 'apps/**/*.{ts,tsx,js,jsx,json,css,md}' '*.md'",
-    "format:check": "prettier --check 'apps/**/*.{ts,tsx,js,jsx,json,css,md}' '*.md'"
+    "bootstrap": "npm --prefix packages/bluestar install",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate": "python3 infra/validate_deploy.py",
+    "new-app": "python3 infra/new_app.py"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
