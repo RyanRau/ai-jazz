@@ -16,12 +16,14 @@ packages/
   bluestar/            # React component library     → ui.ryanzrau.dev (Storybook)
   PACKAGES.md          # Component + prop reference
 infra/
-  generate-compose.py  # deploy.yml → docker-compose.yml
-  validate_deploy.py   # config checks, run in CI
-  new_app.py           # scaffolds a new app
-  templates/app/       # the app template it renders
-  README.md            # droplet setup and operations
-  AUDIT.md             # architecture assessment and known trade-offs
+  generate-compose.py   # deploy.yml → docker-compose.yml (production or test)
+  validate_deploy.py    # config checks, first step of every deploy
+  select_apps.py        # which apps a change set affects
+  new_app.py            # scaffolds a new app
+  retire_test_apps.sh   # removes the test project from the droplet
+  templates/app/        # the app template new_app.py renders
+  README.md             # droplet setup and operations
+  AUDIT.md              # architecture assessment and known trade-offs
 deploy.yml             # source of truth: which apps are live, and where
 ```
 

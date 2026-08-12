@@ -14,7 +14,8 @@ apps/              # Deployable apps (Dockerfile + nginx.conf per app)
 packages/
   bluestar/        # React component library (also deployed as Storybook → ui.ryanzrau.dev)
   PACKAGES.md      # Component + prop reference — read before writing UI
-infra/             # generate-compose.py, validate_deploy.py, new_app.py, templates/, README, AUDIT
+infra/             # deploy tooling: generate-compose, validate_deploy, select_apps,
+                   # new_app, retire_test_apps, templates/, README, AUDIT
 deploy.yml         # Source of truth for which apps are deployed and their subdomains
 ```
 
