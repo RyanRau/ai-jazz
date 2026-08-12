@@ -16,7 +16,7 @@ const meta = {
 } satisfies Meta<typeof Text>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof Text>;
 
 export const Subtitle: Story = {
   args: { variant: "subtitle", children: "Subtitle — default body size (14px)." },

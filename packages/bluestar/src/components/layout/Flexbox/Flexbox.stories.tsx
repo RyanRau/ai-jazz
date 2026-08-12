@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import React from "react";
+import type { ReactNode } from "react";
+import { css } from "goober";
 import Flexbox from "./Flexbox";
 
 const meta = {
@@ -17,104 +18,83 @@ const meta = {
 } satisfies Meta<typeof Flexbox>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof Flexbox>;
 
-const Box = ({ children }: { children: React.ReactNode }) =>
-  React.createElement(
-    "div",
-    {
-      style: {
-        padding: "16px 24px",
-        background: "#7da7d9",
-        color: "#fff",
-        borderRadius: "4px",
-      },
-    },
-    children
-  );
+const Box = ({ children }: { children: ReactNode }) => (
+  <div
+    className={css`
+      padding: 16px 24px;
+      background: var(--bs-color-primary);
+      color: var(--bs-color-text-on-accent);
+      border-radius: var(--bs-radius-sm);
+    `}
+  >
+    {children}
+  </div>
+);
+
+const boxes = (
+  <>
+    <Box>One</Box>
+    <Box>Two</Box>
+    <Box>Three</Box>
+  </>
+);
 
 export const Row: Story = {
-  args: {
-    direction: "row",
-    gap: 16,
-  },
-  render: (args) =>
-    React.createElement(Flexbox, args, [
-      React.createElement(Box, { key: "1" }, "One"),
-      React.createElement(Box, { key: "2" }, "Two"),
-      React.createElement(Box, { key: "3" }, "Three"),
-    ]),
+  render: () => (
+    <Flexbox direction="row" gap={16}>
+      {boxes}
+    </Flexbox>
+  ),
   parameters: {
     docs: { description: { story: "Horizontal layout with a 16px gap between items." } },
   },
 };
 
 export const Column: Story = {
-  args: {
-    direction: "column",
-    gap: 12,
-  },
-  render: (args) =>
-    React.createElement(Flexbox, args, [
-      React.createElement(Box, { key: "1" }, "One"),
-      React.createElement(Box, { key: "2" }, "Two"),
-      React.createElement(Box, { key: "3" }, "Three"),
-    ]),
+  render: () => (
+    <Flexbox direction="column" gap={12}>
+      {boxes}
+    </Flexbox>
+  ),
   parameters: {
-    docs: { description: { story: "Vertical stack with a 12px gap." } },
+    docs: { description: { story: "Vertical layout with a 12px gap between items." } },
   },
 };
 
 export const SpaceBetween: Story = {
-  args: {
-    direction: "row",
-    justifyContent: "space-between",
-    width: "100%",
-  },
-  render: (args) =>
-    React.createElement(Flexbox, args, [
-      React.createElement(Box, { key: "1" }, "Left"),
-      React.createElement(Box, { key: "2" }, "Right"),
-    ]),
+  render: () => (
+    <Flexbox direction="row" justifyContent="space-between" width="100%">
+      {boxes}
+    </Flexbox>
+  ),
   parameters: {
     docs: {
-      description: {
-        story: "Items pushed to opposite ends with `justify-content: space-between`.",
-      },
+      description: { story: "Items pushed to the edges with the space distributed between." },
     },
   },
 };
 
-export const CenterAligned: Story = {
-  args: {
-    direction: "row",
-    gap: 16,
-    alignItems: "center",
-    height: 120,
-  },
-  render: (args) =>
-    React.createElement(Flexbox, { ...args, style: { border: "1px dashed #ccc" } }, [
-      React.createElement(Box, { key: "1" }, "Short"),
-      React.createElement(
-        "div",
-        {
-          key: "2",
-          style: {
-            padding: "32px 24px",
-            background: "#7da7d9",
-            color: "#fff",
-            borderRadius: "4px",
-          },
-        },
-        "Tall"
-      ),
-      React.createElement(Box, { key: "3" }, "Short"),
-    ]),
+export const Centered: Story = {
+  render: () => (
+    <Flexbox direction="row" justifyContent="center" alignItems="center" gap={8} height={160}>
+      {boxes}
+    </Flexbox>
+  ),
   parameters: {
-    docs: {
-      description: {
-        story: "Items of different heights vertically centered via `align-items: center`.",
-      },
-    },
+    docs: { description: { story: "Centred on both axes inside a fixed-height container." } },
+  },
+};
+
+export const Wrapping: Story = {
+  render: () => (
+    <Flexbox direction="row" gap={8} flexWrap="wrap" width={280}>
+      {boxes}
+      {boxes}
+    </Flexbox>
+  ),
+  parameters: {
+    docs: { description: { story: "Wraps onto a new line when the container runs out of room." } },
   },
 };

@@ -1,4 +1,5 @@
-import React, { useMemo } from "react";
+import { css } from "goober";
+import React from "react";
 import type { Spacing } from "../../../theme";
 
 type Props = {
@@ -37,8 +38,11 @@ type Props = {
   /** Height of the container. */
   height?: number | string;
   /** Additional inline styles merged onto the container. */
-  style?: object;
+  style?: React.CSSProperties;
 };
+
+const size = (value: number | string | undefined) =>
+  typeof value === "number" ? `${value}px` : value;
 
 export default function Flexbox({
   children,
@@ -54,36 +58,25 @@ export default function Flexbox({
   height,
   style,
 }: Props): React.ReactElement {
-  const styles = useMemo(() => {
-    return {
-      flexBox: {
-        display: "flex",
-        flexDirection: direction,
-        flexGrow: grow,
-        flexShrink: shrink,
-        gap,
-        flexWrap,
-        justifyContent,
-        alignContent,
-        alignItems,
-        width,
-        height,
-        ...style,
-      },
-    };
-  }, [
-    alignContent,
-    alignItems,
-    direction,
-    flexWrap,
-    gap,
-    grow,
-    height,
-    justifyContent,
-    shrink,
-    style,
-    width,
-  ]);
+  // goober rather than inline styles, so Flexbox composes with the rest of the
+  // library (and could grow pseudo-selectors or media queries later).
+  const className = css`
+    display: flex;
+    flex-direction: ${direction};
+    ${grow !== undefined ? `flex-grow: ${grow};` : ""}
+    ${shrink !== undefined ? `flex-shrink: ${shrink};` : ""}
+    ${gap !== undefined ? `gap: ${gap}px;` : ""}
+    ${flexWrap ? `flex-wrap: ${flexWrap};` : ""}
+    ${justifyContent ? `justify-content: ${justifyContent};` : ""}
+    ${alignContent ? `align-content: ${alignContent};` : ""}
+    ${alignItems ? `align-items: ${alignItems};` : ""}
+    ${width !== undefined ? `width: ${size(width)};` : ""}
+    ${height !== undefined ? `height: ${size(height)};` : ""}
+  `;
 
-  return <div style={styles.flexBox}>{children}</div>;
+  return (
+    <div className={className} style={style}>
+      {children}
+    </div>
+  );
 }

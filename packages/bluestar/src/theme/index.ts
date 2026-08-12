@@ -1,3 +1,10 @@
-export { ThemeProvider, useTheme } from "./ThemeContext";
-export { defaultTheme } from "./theme";
-export type { Theme, Spacing } from "./theme";
+export { ThemeProvider, useTheme, useColorScheme, deepMerge } from "./ThemeContext";
+export type {
+  ThemeProviderProps,
+  ColorScheme,
+  ResolvedColorScheme,
+  DeepPartial,
+} from "./ThemeContext";
+export { defaultTheme, darkTheme } from "./theme";
+export type { Theme, Spacing, TextStyle, HeadingStyle } from "./theme";
+export { themeToVars, varRefs, VAR_PREFIX } from "./cssVars";

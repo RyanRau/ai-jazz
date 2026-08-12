@@ -45,5 +45,8 @@ apps:
   bluestar:
     subdomain: "ui"
     enabled: true
+    # Storybook is being reworked — run the test target to reach it at
+    # test-ui.ryanzrau.dev. Delete this line to promote it back to ui.ryanzrau.dev.
+    development: true
     port: 80
     path: "packages/bluestar"

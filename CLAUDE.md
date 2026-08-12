@@ -33,7 +33,10 @@ which defeats the purpose of the repo.
    If a component is missing, **add it to bluestar** — do not write a one-off
    component inside an app. See `packages/PACKAGES.md` for the real prop APIs
    (they are theme-driven and differ from typical component libraries: `Text`
-   takes a `variant`, spacing is a numeric union, buttons take `isDisabled`).
+   takes a `variant`, spacing is a numeric pixel union, buttons take `isDisabled`
+   and `variant` — `type` is the native HTML attribute). Forms use `useForm` +
+   `field(name)` rather than a `useState` per field, and the theme ships dark
+   mode via `colorScheme` / `useColorScheme`.
 3. **PocketBase** (`apps/pocketbase`) for auth, data, and file storage. One
    shared instance for every app; a new app gets a collection, not a new
    database. See `apps/pocketbase/README.md`.
@@ -164,10 +167,17 @@ Full detail in `apps/pocketbase/README.md`.
 
 One workflow, two targets, decided by `development: true` in `deploy.yml`:
 
-| Target         | Trigger                 | Deploys                                                               |
-| -------------- | ----------------------- | --------------------------------------------------------------------- |
-| **production** | Push to `main` / manual | Apps **without** the flag → real subdomains, `:latest`                |
-| **test**       | Manual, any branch      | Apps **with** the flag → `test-<subdomain>`, `:test` from that branch |
+| Target         | Trigger                              | Deploys                                                               |
+| -------------- | ------------------------------------ | --------------------------------------------------------------------- |
+| **production** | Push to `main` / manual on `main`    | Apps **without** the flag → real subdomains, `:latest`                |
+| **test**       | Manual, any branch (**the default**) | Apps **with** the flag → `test-<subdomain>`, `:test` from that branch |
+
+A manual run defaults to `target: test`, and a manual `target: production` is
+**rejected from any branch but `main`**. The droplet renders `docker-compose.yml`
+from main's `deploy.yml` (it git-pulls main) while images come from the dispatched
+ref, so a production run off a branch would wire branch-built `:latest` images
+into main's config. The run's title in the Actions list shows the resolved target
+and ref, so a mis-picked dropdown is visible without opening the run.
 
 ```yaml
 recipe_box:

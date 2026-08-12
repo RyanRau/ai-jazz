@@ -4,9 +4,9 @@ import type { Theme } from "../../../theme";
 import type { ComponentPropsWithoutRef } from "react";
 import Text from "../../text/Text/Text";
 
-export type ButtonType = "primary" | "secondary" | "creation" | "destructive";
+export type ButtonVariant = "primary" | "secondary" | "creation" | "destructive";
 
-export type ButtonProps = Omit<ComponentPropsWithoutRef<"button">, "disabled" | "type"> & {
+export type ButtonProps = Omit<ComponentPropsWithoutRef<"button">, "disabled"> & {
   /** The text label. Used as content when no children are provided. */
   label: string;
   /**
@@ -16,7 +16,7 @@ export type ButtonProps = Omit<ComponentPropsWithoutRef<"button">, "disabled" | 
    * - `"creation"` — green, confirms creation or success
    * - `"destructive"` — red, warns of irreversible actions
    */
-  type?: ButtonType;
+  variant?: ButtonVariant;
   /** Disables the button — applies reduced opacity and a not-allowed cursor. */
   isDisabled?: boolean;
   /**
@@ -27,10 +27,10 @@ export type ButtonProps = Omit<ComponentPropsWithoutRef<"button">, "disabled" | 
   density?: "normal" | "dense";
 };
 
-function getColors(type: ButtonType, theme: Theme) {
-  switch (type) {
+function getColors(variant: ButtonVariant, theme: Theme) {
+  switch (variant) {
     case "secondary":
-      return { bg: theme.colors.secondaryButton, hover: theme.colors.secondaryButtonHover };
+      return { bg: theme.colors.secondary, hover: theme.colors.secondaryHover };
     case "creation":
       return { bg: theme.colors.success, hover: theme.colors.successHover };
     case "destructive":
@@ -44,22 +44,27 @@ export default function Button({
   label,
   children,
   isDisabled,
-  type = "primary",
+  variant = "primary",
   density = "normal",
+  // Native button semantics. Defaults to "button" so a button inside a form
+  // doesn't submit it by accident; pass "submit" deliberately (or use
+  // SubmitButton, which does it for you).
+  type = "button",
   ...props
 }: ButtonProps) {
   const theme = useTheme();
-  const { bg, hover } = getColors(type, theme);
+  const { bg, hover } = getColors(variant, theme);
   const padding = density === "dense" ? "4px 10px" : "8px 16px";
 
   return (
     <button
+      type={type}
       disabled={isDisabled}
       className={css`
-        border-radius: ${theme.radius};
+        border-radius: ${theme.radius.md};
         border: none;
         font-family: ${theme.fonts.body};
-        color: ${theme.colors.light};
+        color: ${theme.colors.textOnAccent};
         padding: ${padding};
         display: inline-flex;
         align-items: center;
@@ -72,8 +77,13 @@ export default function Button({
           background-color 0.15s ease;
 
         &:hover:not(:disabled) {
-          box-shadow: ${theme.shadow};
+          box-shadow: ${theme.shadow.md};
           background-color: ${hover};
+        }
+
+        &:focus-visible {
+          outline: 2px solid ${theme.colors.focusRing};
+          outline-offset: 2px;
         }
 
         &:disabled {
@@ -84,7 +94,7 @@ export default function Button({
       {...props}
     >
       {children ?? (
-        <Text variant="label" color={theme.colors.light}>
+        <Text variant="label" color={theme.colors.textOnAccent}>
           {label}
         </Text>
       )}

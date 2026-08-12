@@ -24,7 +24,7 @@ const meta = {
 } satisfies Meta<typeof Dropdown>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof Dropdown>;
 
 export const Single: Story = {
   render: () => {

@@ -26,21 +26,24 @@ peer dependency — must be installed by the consuming app)
 
 Every app in the monorepo builds its UI from bluestar. When something is missing,
 **add it to bluestar** rather than writing a one-off component in the app — that
-is the whole point of the library.
+is the whole point of the library. `packages/bluestar/AUDIT.md` records what is
+deliberately not built yet.
 
 ### Setup
 
-The library calls `setup(React.createElement)` on import, so no extra
-configuration is needed. Wrap the app in `ThemeProvider` to override theme
-values; without it, components fall back to `defaultTheme`.
-
 ```tsx
-import { ThemeProvider } from "bluestar";
+import { ThemeProvider, ToastProvider } from "bluestar";
 
-<ThemeProvider theme={{ colors: { primary: "#ff6b6b" } }}>
-  <App />
+<ThemeProvider colorScheme="auto">
+  <ToastProvider>
+    <App />
+  </ToastProvider>
 </ThemeProvider>;
 ```
+
+`ThemeProvider` emits the theme as CSS variables, applies a small baseline reset,
+and follows the OS light/dark preference. `ToastProvider` is only needed if the
+app calls `useToast()`.
 
 ### Building
 
@@ -48,52 +51,69 @@ bluestar ships compiled output from `dist/`, so it must be built before a
 consuming app can resolve it:
 
 ```bash
-npm --prefix packages/bluestar install   # installs deps and runs the build
+npm run bootstrap        # from the repo root — installs and builds bluestar
 ```
 
-`npm install` inside an app runs bluestar's `prepare` script but does **not**
-install bluestar's own devDependencies, so a fresh clone must install
-`packages/bluestar` first (`npm run bootstrap` at the repo root does exactly
-this). The Dockerfiles follow the same order.
-
-### Exports
-
-```ts
-import {
-  // theme
-  ThemeProvider,
-  useTheme,
-  defaultTheme,
-  // layout
-  Flexbox,
-  Card,
-  Divider,
-  // buttons
-  Button,
-  AsyncButton,
-  // feedback
-  Spinner,
-  // text
-  Header,
-  Text,
-  TextPairing,
-  // form
-  FormInputLayout,
-  TextInput,
-  NumberInput,
-  TextAreaInput,
-  CheckboxList,
-  Dropdown,
-} from "bluestar";
-
-import type { Theme, Spacing, ButtonType, TextType, HeaderVariant } from "bluestar";
-```
+`npm install` inside an app runs bluestar's `prepare` but does **not** install
+bluestar's own devDependencies, so a fresh clone must install `packages/bluestar`
+first. The Dockerfiles follow the same order.
 
 ---
 
-## Theme
+## Theming
 
-### `Theme` type
+### How it works
+
+Tokens are emitted as CSS custom properties (`--bs-color-primary`,
+`--bs-radius-md`, `--bs-text-body-size`, …). `useTheme()` returns a theme-shaped
+object whose leaves are `var(--bs-…)` **references**, not literals:
+
+```tsx
+const theme = useTheme();
+theme.colors.primary; // "var(--bs-color-primary)"
+
+css`
+  background: ${theme.colors.primary};
+`; // follows light/dark automatically
+```
+
+Because the values are variables, switching schemes repaints without re-rendering.
+
+### Colour scheme
+
+```tsx
+<ThemeProvider colorScheme="auto">   // follow the OS (default)
+<ThemeProvider colorScheme="dark">   // pin it
+```
+
+```tsx
+const { scheme, resolved, setScheme } = useColorScheme();
+// scheme:   "auto" | "light" | "dark"  — what was asked for
+// resolved: "light" | "dark"           — what is actually showing
+setScheme("dark"); // persisted to localStorage
+```
+
+### `ThemeProvider` props
+
+| Prop          | Type                            | Default                   |
+| ------------- | ------------------------------- | ------------------------- |
+| `theme`       | `DeepPartial<Theme>`            | —                         |
+| `darkTheme`   | `DeepPartial<Theme>`            | —                         |
+| `colorScheme` | `"auto" \| "light" \| "dark"`   | `"auto"`                  |
+| `baseline`    | `boolean` (reset + body styles) | `true`                    |
+| `storageKey`  | `string \| null`                | `"bluestar-color-scheme"` |
+
+Overrides are deep-merged over `defaultTheme` / `darkTheme`:
+
+```tsx
+<ThemeProvider theme={{ colors: { primary: "#ff6b6b" } }}>
+```
+
+A **nested** `ThemeProvider` scopes its variables to its own subtree rather than
+the document — useful for a themed section, and why the theme playground story
+doesn't leak into other stories.
+
+### `Theme` shape
 
 ```ts
 type Spacing = 4 | 8 | 12 | 16 | 20 | 24 | 32;
@@ -101,269 +121,296 @@ type Spacing = 4 | 8 | 12 | 16 | 20 | 24 | 32;
 type Theme = {
   colors: {
     primary; primaryHover;
-    secondary;
-    background; surface;
-    text; textMuted; border;
-    error; errorHover;
+    secondary; secondaryHover;
     success; successHover;
-    warning;
-    secondaryButton; secondaryButtonHover;
-    light; dark;
+    error; errorHover;
+    warning; warningHover;
+    background; surface; surfaceHover;
+    text; textMuted; textOnAccent;
+    border; borderStrong;
+    focusRing; overlay;
   };
   fonts: { body; heading; mono };
   textTypes: {
-    caption | body | subtitle | display | label:
-      { size: string; bold: boolean; italic: boolean; muted: boolean };
+    caption | body | subtitle | label | display:
+      { size: string; weight: string; style: string; color: string };
   };
   headings: { h1 | h2 | h3: { size: string; weight: string } };
-  radius: string; // single value, not a scale
-  shadow: string; // single value, not a scale
+  radius: { none; sm; md; lg; full };
+  shadow: { none; sm; md; lg };
 };
 ```
 
-Note the shape: spacing is a **numeric union used directly as pixels**
-(`gap={16}`, `padding={24}`), and `radius`/`shadow` are single strings — there is
-no `spacing`, `fontSizes`, `radius.md`, or `shadows.lg` map.
+Notes that catch people out:
 
-### `ThemeProvider`
+- **Spacing is a raw pixel union**, not a token: `gap={16}`, `padding={24}`.
+- `radius` and `shadow` are **scales** — `theme.radius.md`, not `theme.radius`.
+- `textOnAccent` is the text colour for a filled accent (a primary button). It is
+  near-white in light mode and near-black in dark mode.
 
-All fields are optional and deep-merged over `defaultTheme`.
-
-| Prop       | Type                 | Default        |
-| ---------- | -------------------- | -------------- |
-| `theme`    | `DeepPartial<Theme>` | `defaultTheme` |
-| `children` | `React.ReactNode`    | —              |
-
-### `useTheme`
-
-```tsx
-const theme = useTheme(); // full resolved Theme
-```
+Also exported: `defaultTheme`, `darkTheme`, `themeToVars(theme)`,
+`varRefs(theme)`, `VAR_PREFIX`, `deepMerge`.
 
 ---
 
-## Layout
+## Forms
 
-### `Flexbox`
-
-Flexbox wrapper mapping props to CSS. Applies styles inline (no goober class).
+`useForm` is the reason apps don't hand-roll a `useState` per field.
 
 ```tsx
-<Flexbox direction="column" gap={16} alignItems="center" justifyContent="space-between">
-  {children}
-</Flexbox>
+import { useForm, Form, SubmitButton, TextInput, NumberInput, Switch } from "bluestar";
+import { pb } from "./pb";
+
+function NewRecipe() {
+  const form = useForm({
+    initialValues: { title: "", servings: 4 as number | null, published: false },
+    validate: (v) => (v.title.trim() ? {} : { title: "Title is required" }),
+    onSubmit: async (v) => {
+      await pb.collection("recipes_entries").create(v);
+    },
+  });
+
+  return (
+    <Form form={form}>
+      <TextInput {...form.field("title")} label="Title" required />
+      <NumberInput {...form.field("servings")} label="Servings" min={1} />
+      <Switch {...form.field("published")} label="Published" />
+      <SubmitButton label="Save" />
+    </Form>
+  );
+}
 ```
 
-| Prop             | Type                                                                                            | Default |
-| ---------------- | ----------------------------------------------------------------------------------------------- | ------- |
-| `children`       | `React.ReactNode`                                                                               | —       |
-| `direction`      | `"row" \| "column"`                                                                             | `"row"` |
-| `gap`            | `Spacing`                                                                                       | —       |
-| `grow`           | `number`                                                                                        | —       |
-| `shrink`         | `number`                                                                                        | —       |
-| `flexWrap`       | `"wrap" \| "nowrap"`                                                                            | —       |
-| `justifyContent` | `"flex-start" \| "flex-end" \| "center" \| "space-between" \| "space-around" \| "space-evenly"` | —       |
-| `alignContent`   | `"flex-start" \| "flex-end" \| "center" \| "stretch" \| "space-between" \| "space-around"`      | —       |
-| `alignItems`     | `"flex-start" \| "flex-end" \| "center" \| "stretch" \| "baseline"`                             | —       |
-| `width`          | `number \| string`                                                                              | —       |
-| `height`         | `number \| string`                                                                              | —       |
-| `style`          | `object`                                                                                        | —       |
+`field(name)` is generic over the values object: a misspelled name is a **compile
+error** listing the valid keys, and the value type flows through to `onChange`.
 
-### `Card`
+### `useForm(options)`
 
-Surface container with border, background, and shadow.
+| Option          | Type                                              | Notes                            |
+| --------------- | ------------------------------------------------- | -------------------------------- |
+| `initialValues` | `T`                                               | required; shapes everything else |
+| `validate`      | `(values: T) => Partial<Record<keyof T, string>>` | pure; runs on every change       |
+| `onSubmit`      | `(values: T) => void \| Promise<void>`            | only runs when validation passes |
 
-```tsx
-<Card padding={24}>
-  <Header variant="h3">Title</Header>
-</Card>
-```
+Returns `{ values, errors, touched, isValid, isDirty, isSubmitting, submitError,
+field, setValue, setValues, setError, reset, handleSubmit }`.
 
-| Prop       | Type              | Default        |
-| ---------- | ----------------- | -------------- |
-| `children` | `React.ReactNode` | —              |
-| `padding`  | `Spacing`         | `16`           |
-| `shadow`   | `string`          | `theme.shadow` |
+- Errors are withheld until a field is touched or a submit is attempted.
+- A rejected async `onSubmit` becomes `submitError`, which `<Form>` renders as an
+  `Alert` above the fields.
+- `setError(name, message)` is for failures only the server knows about
+  ("email already taken"); editing that field clears it.
+- `useForm` works standalone — `<Form>` is only needed for a real `<form>`
+  element and `SubmitButton`.
 
-### `Divider`
+### `Form`
 
-```tsx
-<Divider />
-<Divider direction="vertical" length={80} />
-```
+| Prop              | Type         | Default  |
+| ----------------- | ------------ | -------- |
+| `form`            | `FormApi<T>` | required |
+| `gap`             | `Spacing`    | `16`     |
+| `showSubmitError` | `boolean`    | `true`   |
 
-| Prop        | Type                           | Default        |
-| ----------- | ------------------------------ | -------------- |
-| `direction` | `"horizontal" \| "vertical"`   | `"horizontal"` |
-| `length`    | `number` (percent of the axis) | `100`          |
+### `SubmitButton`
+
+Takes `Button`'s props minus `type`/`onClick`. Disables and shows a spinner while
+`isSubmitting`. `disableWhenInvalid` (default `false`) also disables it while
+validation is failing.
 
 ---
 
-## Buttons
+## Components
 
-### `Button`
+Every form control shares these props: `label`, `description`, `warning` (amber),
+`error` (red, sets `aria-invalid`), `required`, `name`, `isDisabled`. They are
+**controlled**: pass `value`, handle `onChange(parsedValue)` — which receives the
+value, not an event.
 
-Accepts all native `<button>` props except `disabled` and `type` (both are
-repurposed below). Renders `children` when given, otherwise `label`.
+### Layout
 
-```tsx
-<Button label="Save" onClick={save} />
-<Button label="Delete" type="destructive" density="dense" onClick={remove} />
-```
+#### `Flexbox`
+
+| Prop               | Type                                                                                            | Default |
+| ------------------ | ----------------------------------------------------------------------------------------------- | ------- |
+| `direction`        | `"row" \| "column"`                                                                             | `"row"` |
+| `gap`              | `Spacing`                                                                                       | —       |
+| `grow` / `shrink`  | `number`                                                                                        | —       |
+| `flexWrap`         | `"wrap" \| "nowrap"`                                                                            | —       |
+| `justifyContent`   | `"flex-start" \| "flex-end" \| "center" \| "space-between" \| "space-around" \| "space-evenly"` | —       |
+| `alignContent`     | `"flex-start" \| "flex-end" \| "center" \| "stretch" \| "space-between" \| "space-around"`      | —       |
+| `alignItems`       | `"flex-start" \| "flex-end" \| "center" \| "stretch" \| "baseline"`                             | —       |
+| `width` / `height` | `number \| string`                                                                              | —       |
+| `style`            | `React.CSSProperties`                                                                           | —       |
+
+#### `Card`
+
+| Prop      | Type      | Default           |
+| --------- | --------- | ----------------- |
+| `padding` | `Spacing` | `16`              |
+| `shadow`  | `string`  | `theme.shadow.md` |
+
+#### `Divider`
+
+| Prop        | Type                         | Default        |
+| ----------- | ---------------------------- | -------------- |
+| `direction` | `"horizontal" \| "vertical"` | `"horizontal"` |
+| `length`    | `number` (percent)           | `100`          |
+
+### Text
+
+#### `Header`
+
+`variant`: `"h1" | "h2" | "h3"` (default `"h1"`). Renders the matching element.
+
+#### `Text`
+
+| Prop      | Type                                                        | Default      |
+| --------- | ----------------------------------------------------------- | ------------ |
+| `variant` | `"caption" \| "body" \| "subtitle" \| "label" \| "display"` | `"subtitle"` |
+| `color`   | `string`                                                    | —            |
+| `as`      | `"p" \| "span" \| "label"`                                  | `"p"`        |
+
+There are no `bold` / `italic` / `muted` / `size` props — the variant carries all
+of that.
+
+#### `TextPairing`
+
+`title`, `subtitle`, `titleVariant` (default `"h2"`), `subtitleVariant`
+(default `"caption"`).
+
+### Buttons
+
+#### `Button`
+
+Accepts all native `<button>` props except `disabled`.
 
 | Prop         | Type                                                      | Default     |
 | ------------ | --------------------------------------------------------- | ----------- |
 | `label`      | `string`                                                  | required    |
-| `type`       | `"primary" \| "secondary" \| "creation" \| "destructive"` | `"primary"` |
+| `variant`    | `"primary" \| "secondary" \| "creation" \| "destructive"` | `"primary"` |
 | `isDisabled` | `boolean`                                                 | `false`     |
 | `density`    | `"normal" \| "dense"`                                     | `"normal"`  |
-| …rest        | native button props (`onClick`, `aria-*`, …)              | —           |
+| `type`       | `"button" \| "submit" \| "reset"`                         | `"button"`  |
 
-> `type` is the **visual intent**, not the HTML button type.
-> Disable with `isDisabled`, not `disabled`.
+> Visual intent is **`variant`**. `type` is the real HTML attribute — use
+> `SubmitButton` inside a `<Form>` rather than setting it by hand. Disable with
+> `isDisabled`, not `disabled`.
 
-### `AsyncButton`
+#### `AsyncButton`
 
-Runs an async `onClick`, disabling itself and showing a spinner until the promise
-settles.
+`Button`'s props, but `onClick: () => Promise<void>`. Disables and spins until the
+promise settles, including on rejection.
 
-| Prop      | Type                  | Required |
-| --------- | --------------------- | -------- |
-| `label`   | `string`              | yes      |
-| `onClick` | `() => Promise<void>` | yes      |
+### Form controls
 
----
+| Component       | Value type                                   | Extra props                                               |
+| --------------- | -------------------------------------------- | --------------------------------------------------------- |
+| `TextInput`     | `string`                                     | `placeholder`, `type` (`text\|email\|password\|url\|tel`) |
+| `NumberInput`   | `number \| null`                             | `min`, `max`, `step`, `placeholder`                       |
+| `TextAreaInput` | `string`                                     | `rows` (default `4`), `placeholder`                       |
+| `Checkbox`      | `boolean`                                    | `label` is the text beside the box                        |
+| `Switch`        | `boolean`                                    | same shape as `Checkbox`, toggle UI                       |
+| `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                             |
+| `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`               |
+| `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                  |
 
-## Feedback
+An empty `NumberInput` yields `null`, never `NaN`.
 
-### `Spinner`
+`FormInputLayout` is exported for wrapping a custom control so it matches the
+rest; it takes a render function receiving `{ id, describedBy, invalid }`.
 
-| Prop    | Type     | Default                |
-| ------- | -------- | ---------------------- |
-| `size`  | `number` | `20`                   |
-| `color` | `string` | `theme.colors.primary` |
+### Feedback
 
----
+#### `Alert`
 
-## Text
+| Prop        | Type                                          | Default                                 |
+| ----------- | --------------------------------------------- | --------------------------------------- |
+| `variant`   | `"info" \| "success" \| "warning" \| "error"` | `"info"`                                |
+| `title`     | `string`                                      | —                                       |
+| `onDismiss` | `() => void`                                  | — (renders the close button when given) |
 
-### `Header`
-
-Renders the matching `h1`/`h2`/`h3` element, sized from `theme.headings`.
-
-| Prop       | Type                   | Default |
-| ---------- | ---------------------- | ------- |
-| `children` | `React.ReactNode`      | —       |
-| `variant`  | `"h1" \| "h2" \| "h3"` | `"h1"`  |
-
-### `Text`
-
-Renders a `<p>`. Size, weight, style, and muting all come from the variant —
-there are no `bold` / `italic` / `muted` / `size` props.
+#### `Toast`
 
 ```tsx
-<Text>Default body copy</Text>
-<Text variant="caption">Timestamp</Text>
-<Text variant="display" color={theme.colors.light}>Hero</Text>
+const toast = useToast();
+toast.success("Recipe saved");
+toast.error("Couldn't reach the server");
+toast.show("Sync started", { title: "Heads up", duration: 0 }); // 0 = sticky
 ```
 
-| Prop       | Type                                                        | Default      |
-| ---------- | ----------------------------------------------------------- | ------------ |
-| `children` | `React.ReactNode`                                           | —            |
-| `variant`  | `"caption" \| "body" \| "subtitle" \| "display" \| "label"` | `"subtitle"` |
-| `color`    | `string` (overrides the theme color)                        | —            |
+`ToastProvider` takes `position`: `"top-right" | "bottom-right" | "top-center"`
+(default `"bottom-right"`). `show`/`success`/`error` return an id for
+`toast.dismiss(id)`.
 
-### `TextPairing`
+#### `Spinner`
 
-Title over subtitle in a column.
+`size` (default `20`), `color` (default `theme.colors.primary`).
 
-| Prop              | Type            | Default     |
-| ----------------- | --------------- | ----------- |
-| `title`           | `string`        | required    |
-| `subtitle`        | `string`        | required    |
-| `titleVariant`    | `HeaderVariant` | `"h2"`      |
-| `subtitleVariant` | `TextType`      | `"caption"` |
+#### `Skeleton`
 
----
+`width` (default `"100%"`), `height` (default `16`), `circle`, `lines`
+(default `1`; the last line is shortened so a block reads as text).
 
-## Form
+#### `EmptyState`
 
-Every form control wraps `FormInputLayout`, so they all share `label`,
-`description`, `warning`, and `isDisabled`. They are **controlled** components:
-pass `value` and handle `onChange`, which receives the parsed value (not an
-event).
+`title`, `description`, `icon`, `action`.
 
-### `FormInputLayout`
+### Display
 
-Label + description above, warning below. Use it directly when wrapping a custom
-control so it matches the rest of the form.
+#### `Badge`
 
-| Prop          | Type              | Notes                            |
-| ------------- | ----------------- | -------------------------------- |
-| `label`       | `string`          | —                                |
-| `description` | `string`          | helper text under the label      |
-| `warning`     | `string`          | shown below in the warning color |
-| `children`    | `React.ReactNode` | the control itself               |
+`variant`: `"neutral" | "primary" | "success" | "warning" | "error"` (default
+`"neutral"`); `emphasis`: `"subtle" | "solid"` (default `"subtle"`).
 
-### `TextInput`
+#### `Table`
 
-| Prop                                | Type                      | Notes    |
-| ----------------------------------- | ------------------------- | -------- |
-| `value`                             | `string`                  | required |
-| `onChange`                          | `(value: string) => void` | required |
-| `placeholder`                       | `string`                  | —        |
-| `isDisabled`                        | `boolean`                 | —        |
-| `label` / `description` / `warning` | `string`                  | —        |
-
-### `NumberInput`
-
-Empty input yields `null`, not `NaN`.
-
-| Prop                                | Type                              | Notes    |
-| ----------------------------------- | --------------------------------- | -------- |
-| `value`                             | `number \| null`                  | required |
-| `onChange`                          | `(value: number \| null) => void` | required |
-| `min` / `max` / `step`              | `number`                          | —        |
-| `placeholder`                       | `string`                          | —        |
-| `isDisabled`                        | `boolean`                         | —        |
-| `label` / `description` / `warning` | `string`                          | —        |
-
-### `TextAreaInput`
-
-| Prop          | Type                      | Default  |
-| ------------- | ------------------------- | -------- |
-| `value`       | `string`                  | required |
-| `onChange`    | `(value: string) => void` | required |
-| `rows`        | `number`                  | `4`      |
-| `placeholder` | `string`                  | —        |
-| `isDisabled`  | `boolean`                 | —        |
-
-### `CheckboxList`
-
-| Prop         | Type                        | Notes              |
-| ------------ | --------------------------- | ------------------ |
-| `options`    | `CheckboxOption[]`          | `{ label, value }` |
-| `value`      | `string[]`                  | selected values    |
-| `onChange`   | `(value: string[]) => void` | required           |
-| `isDisabled` | `boolean`                   | —                  |
-
-### `Dropdown`
-
-Single-select and multi-select are one component, discriminated by `multi`.
+Generic over the row type, so `cell` receives a typed row.
 
 ```tsx
-<Dropdown options={opts} value={selected} onChange={setSelected} placeholder="Pick one" />
-<Dropdown multi options={opts} value={selectedMany} onChange={setSelectedMany} />
+<Table
+  rows={recipes}
+  rowKey={(r) => r.id}
+  columns={[
+    { header: "Title", cell: (r) => r.title },
+    { header: "Serves", cell: (r) => r.servings, width: "90px", align: "right" },
+    { header: "Status", cell: (r) => <Badge>{r.status}</Badge> },
+  ]}
+  empty={<EmptyState title="No recipes yet" />}
+  onRowClick={(r) => open(r)}
+/>
 ```
 
-| Prop          | Type                                                    | Notes                             |
-| ------------- | ------------------------------------------------------- | --------------------------------- |
-| `options`     | `DropdownOption[]`                                      | `{ label, value }`                |
-| `multi`       | `boolean`                                               | switches the value/onChange types |
-| `value`       | `string \| null` (single) / `string[]` (multi)          | required                          |
-| `onChange`    | `(v: string \| null) => void` / `(v: string[]) => void` | required                          |
-| `placeholder` | `string`                                                | single-select only                |
-| `isDisabled`  | `boolean`                                               | —                                 |
+### Overlay
+
+#### `Modal`
+
+| Prop              | Type               | Default  |
+| ----------------- | ------------------ | -------- |
+| `isOpen`          | `boolean`          | required |
+| `onClose`         | `() => void`       | required |
+| `title`           | `string`           | required |
+| `footer`          | `ReactNode`        | —        |
+| `width`           | `number \| string` | `480`    |
+| `closeOnBackdrop` | `boolean`          | `true`   |
+
+Built on native `<dialog>`, so focus trapping and Esc-to-close come for free.
+
+#### `ConfirmDialog`
+
+`isOpen`, `onClose`, `onConfirm` (may be async), `title`, `message`,
+`confirmLabel`, `cancelLabel`, `confirmVariant` (default `"destructive"`).
+
+### Navigation
+
+#### `Link`
+
+Native anchor props plus `variant` (`"primary" | "muted"`) and `external` (adds
+`target="_blank"` **and** `rel="noopener noreferrer"`).
+
+#### `AppShell`
+
+`title`, `nav`, `children`, `footer`, `maxWidth` (default `960`). Header, centred
+content column, optional footer.
 
 ---
 
@@ -373,13 +420,16 @@ Single-select and multi-select are one component, discriminated by `multi`.
 cd packages/bluestar
 npm install              # installs deps and builds dist/
 npm run storybook        # component workbench at http://localhost:6006
-npm run build            # compile to dist/ (apps resolve this)
+npm run typecheck        # tsc over all of src, including stories
+npm run build            # typecheck + compile to dist/
 npm run build-storybook  # static Storybook (deployed to ui.ryanzrau.dev)
 ```
 
 After changing the library, rebuild it before running a consuming app — apps
 import `dist/`, not `src/`.
 
-Adding a component: create `src/components/<category>/<Name>/` with `Name.tsx`,
-`index.ts` (`export { default as Name }` plus any prop types), and
-`Name.stories.tsx`; re-export it from `src/index.ts`; then update this file.
+Adding a component: create
+`src/components/<category>/<Name>/{Name.tsx, index.ts, Name.stories.tsx}`,
+re-export it from `src/index.ts`, then document it here. Read colours through
+`useTheme()` rather than hardcoding — `AUDIT.md` explains why, and what the two
+non-obvious constraints on the theme engine are.

@@ -16,7 +16,7 @@ const meta = {
 } satisfies Meta<typeof NumberInput>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof NumberInput>;
 
 export const Default: Story = {
   render: () => {
