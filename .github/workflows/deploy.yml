@@ -53,8 +53,8 @@ jobs:
         id: select
         run: |
           set -euo pipefail
-          # Selection rules live in infra/select_apps.py so they are shared with
-          # PR validation and testable outside CI.
+          # Selection rules live in infra/select_apps.py so they are testable
+          # outside CI rather than only ever exercised in production.
           if [ "${{ github.event_name }}" != "push" ] && [ "${{ inputs.build_all }}" != "false" ]; then
             SELECTED=$(python3 infra/select_apps.py --all)
           elif [ "${{ github.event_name }}" = "push" ]; then

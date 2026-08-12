@@ -2,8 +2,8 @@
 """
 Decide which enabled apps a change set affects.
 
-Used by both the deploy and PR-validation workflows so the rule lives in one
-place and can be tested without running CI:
+Used by the deploy workflow. Kept out of the workflow YAML so the rule can be
+tested without running CI:
 
     python3 infra/select_apps.py --base <ref> --head <ref>
     python3 infra/select_apps.py --all

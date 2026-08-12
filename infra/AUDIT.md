@@ -46,13 +46,13 @@ that no longer existed.
   type-checks, and builds.
 - `infra/validate_deploy.py` enforces config invariants (duplicate subdomains,
   missing Dockerfiles, reserved-subdomain collisions, malformed fields) and runs
-  in both workflows.
+  as the deploy's first step.
 - Build args now resolve from same-named GitHub secrets automatically, removing
   the hardcoded `case` statements that had to be edited in two workflows for
   every new secret.
 - Change detection: a push rebuilds only affected apps; changes to shared paths
   (`packages/`, `infra/`, `deploy.yml`, workflows) still rebuild everything.
-- Buildx layer caching (`type=gha`) in both workflows.
+- Buildx layer caching (`type=gha`) on every image build.
 - Post-deploy verification polls container status and health, so a container that
   crashes on boot fails the deploy instead of quietly serving 502s.
 - Lint and format now cover `packages/` (previously only `apps/` was checked, so
@@ -62,8 +62,9 @@ that no longer existed.
 
 **Workflow simplification**
 
-Went from four workflows to two. The typical flow is build-and-deploy; the rest
-was machinery serving a preview path that was rarely used in practice.
+Went from four workflows to one. The typical flow is build-and-deploy; the rest
+was machinery serving a preview path that was rarely used in practice, and a PR
+gate that was never waited on.
 
 - **Deleted `test-deploy.yml` and `test-cleanup.yml`**, and with them the whole
   test-overlay system: the `test-deploy.yml` branch config, the
@@ -76,12 +77,15 @@ was machinery serving a preview path that was rarely used in practice.
   rejects a hand-written `test-*` subdomain so the namespace stays derived, and
   allows a development app and a production app to share a `subdomain` value,
   which is what makes promotion a one-line change rather than a cutover.
-- **Dropped the PR autofix job.** It fired on any validation failure including
-  ones it couldn't fix, and because it pushed with `GITHUB_TOKEN` — which by
-  design doesn't trigger workflows — you had to re-run the checks manually
-  regardless. `npm run format` locally is faster.
+- **Deleted `pr-validation.yml` too.** It was never waited on, so it was a
+  runner cost and a red X rather than a gate. What it uniquely enforced —
+  ESLint, Prettier, Ruff — is now local-only (`npm run lint`, `format:check`,
+  `validate`). What actually protects the site it did not uniquely provide: the
+  deploy validates `deploy.yml` and builds every affected image _before_ it
+  touches the droplet, so a bad config or a broken build fails the run without
+  deploying.
 
-Two problems found and fixed along the way:
+Problems found along the way:
 
 - **No concurrency control anywhere.** A merge fired Build and Deploy _and_ Test
   Cleanup simultaneously, both SSHing in to run `docker compose up` against the
@@ -90,11 +94,12 @@ Two problems found and fixed along the way:
   Cleanup removes the merge-time race entirely, but the rapid-push race was real
   on its own.)
 - **PR validation rebuilt every app on every PR**, so a README typo cost three
-  Docker builds. It now selects the same apps the deploy would.
+  Docker builds — moot now that the workflow is gone, but the same fix applies
+  to the deploy, which builds only what a push affected.
 
-Change selection lives in `infra/select_apps.py`, shared by both workflows and
-unit-testable outside CI — which matters, since workflow shell is otherwise only
-ever exercised in production.
+Change selection lives in `infra/select_apps.py` rather than workflow YAML, so it
+is unit-testable outside CI — which matters, since workflow shell is otherwise
+only ever exercised in production.
 
 **What this trades away:** previewing an _unmerged_ branch on a real URL. The
 `development` flag covers "this app isn't ready for its real subdomain," not

@@ -8,8 +8,8 @@ reach it, and how to debug it when they don't.
 | File                  | What it does                                                              |
 | --------------------- | ------------------------------------------------------------------------- |
 | `generate-compose.py` | Renders `deploy.yml` into `docker-compose.yml`                            |
-| `validate_deploy.py`  | Validates `deploy.yml` — run in CI and before pushing config changes      |
-| `select_apps.py`      | Decides which apps a change set affects; shared by deploy and PR checks   |
+| `validate_deploy.py`  | Validates `deploy.yml` — first step of the deploy, and runnable locally   |
+| `select_apps.py`      | Decides which apps a change set affects; used by the deploy               |
 | `new_app.py`          | Scaffolds a new app from `templates/app` and registers it in `deploy.yml` |
 | `templates/app/`      | The app template (`.tpl` files, placeholders substituted by `new_app.py`) |
 | `AUDIT.md`            | Architecture assessment, known weaknesses, deliberate omissions           |
@@ -171,22 +171,27 @@ Common cases:
   step polls container health, so check its output first; a container that is
   `running` but serving errors is an app bug, not a deploy bug
 
-## Workflows
+## The workflow
 
-Two. That's the whole pipeline.
+One: `deploy.yml`, on push to `main` (or manually). There is no PR gate — merge
+and it ships.
 
-| Workflow            | Trigger                | Does                                                                |
-| ------------------- | ---------------------- | ------------------------------------------------------------------- |
-| `pr-validation.yml` | PR opened/updated      | Config, lint, format, and Docker builds for the apps the PR touches |
-| `deploy.yml`        | Push to `main`, manual | Builds affected apps, deploys, verifies containers are healthy      |
+It validates `deploy.yml`, selects the apps the push affected, builds and pushes
+their images, regenerates the compose file on the droplet, brings containers up,
+and polls until they're healthy. A failed config check or a failed image build
+stops the run **before** the droplet is touched, so a broken build can't take
+the site down — it just doesn't deploy.
 
-`deploy.yml` holds a `concurrency: droplet` group so two pushes in quick
-succession queue instead of running `docker compose` against the same project at
-the same time. It never cancels — aborting a half-finished deploy is worse than
-waiting.
+A `concurrency: droplet` group means two pushes in quick succession queue instead
+of running `docker compose` against the same project at once. It never cancels —
+aborting a half-finished deploy is worse than waiting.
 
 Manual runs (**Actions → Build and Deploy → Run workflow**) default to rebuilding
 everything; untick `build_all` to rebuild only what the last commit touched.
+
+Lint and formatting are **not** checked anywhere automatically. Run
+`npm run lint && npm run format:check && npm run validate` before pushing if you
+care to keep them clean.
 
 ### Previewing work before it's public
 

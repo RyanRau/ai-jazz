@@ -4,7 +4,7 @@ Validate deploy.yml before it reaches the droplet.
 
 Catches the mistakes that otherwise surface as a broken deploy: a subdomain
 claimed twice, an app with no Dockerfile, a collision with an externally-hosted
-subdomain, a typo'd field name. Run locally or in PR validation:
+subdomain, a typo'd field name. Runs first in the deploy, and locally:
 
     python3 infra/validate_deploy.py
 

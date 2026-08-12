@@ -81,7 +81,7 @@ cd apps/<name> && npm install && npm run dev
 through a `file:` reference and import its built `dist/`, and npm will not
 install bluestar's own build tooling on their behalf.
 
-Repo-wide checks (all run in PR validation):
+Repo-wide checks. There is no PR gate — run these before you push:
 
 ```bash
 npm run lint             # eslint across apps/ and packages/

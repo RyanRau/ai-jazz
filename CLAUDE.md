@@ -73,7 +73,7 @@ cd apps/<name> && npm install && npm run dev
 install bluestar's devDependencies, so bluestar must be installed first. After
 changing bluestar, rebuild it — apps import `dist/`, not `src/`.
 
-Checks, all enforced by PR validation:
+Checks. Nothing runs them on a PR — run them before pushing:
 
 ```bash
 npm run lint && npm run format:check    # eslint + prettier across apps/ and packages/
@@ -190,9 +190,12 @@ data. Point it at throwaway PocketBase collections if that matters.
 ## Code Quality
 
 ESLint + Prettier (JS/TS across `apps/` and `packages/`) and Ruff (Python in
-`infra/`) are enforced by PR validation, which also validates `deploy.yml` and
-builds every enabled app's image. The workflow auto-fixes lint/format issues and
-commits them back to the PR.
+`infra/`) are **not enforced by CI** — there is no PR gate. Run them locally
+before pushing.
+
+The deploy does gate on the two things that would actually break the site: it
+validates `deploy.yml` and builds each affected app's image, both before the
+droplet is touched.
 
 ## Security Expectations
 
