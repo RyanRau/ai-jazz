@@ -111,7 +111,7 @@ manually with `build_all` to force a full rebuild.
 | `volumes`       | No       | `name:/path` mounts; named volumes are auto-registered               |
 | `depends_on`    | No       | Internal service → compose condition (e.g. `redis: service_healthy`) |
 | `healthcheck`   | No       | Compose healthcheck passthrough                                      |
-| `development`   | No       | `true` routes at `test-<subdomain>` instead of `<subdomain>`         |
+| `development`   | No       | `true` moves the app to the test target at `test-<subdomain>`        |
 | `frame_options` | No       | `X-Frame-Options` value (default `SAMEORIGIN`)                       |
 | `rate_limit`    | No       | `{average, burst}` requests/sec per source IP (default 100/50)       |
 
@@ -161,31 +161,44 @@ Full detail in `apps/pocketbase/README.md`.
 
 ## Apps Still In Development
 
-There is no separate test-deploy pipeline. An app that shouldn't own its real URL
-yet sets `development: true` in `deploy.yml`:
+One workflow, two targets, decided by `development: true` in `deploy.yml`:
+
+| Target         | Trigger                 | Deploys                                                               |
+| -------------- | ----------------------- | --------------------------------------------------------------------- |
+| **production** | Push to `main` / manual | Apps **without** the flag → real subdomains, `:latest`                |
+| **test**       | Manual, any branch      | Apps **with** the flag → `test-<subdomain>`, `:test` from that branch |
 
 ```yaml
 recipe_box:
   subdomain: "recipe-box"
   enabled: true
-  development: true # → test-recipe-box.ryanzrau.dev
+  development: true # → test-recipe-box.ryanzrau.dev, via the test target
   port: 80
 ```
 
-- It builds and deploys from `main` exactly like any other app — only the Traefik
-  `Host()` rule differs.
+Run the test target from **Actions → Build and Deploy → Run workflow**, selecting
+the branch and setting `target: test`.
+
+- **They cannot clobber each other.** The targets deploy separate Compose
+  projects (`apps` and `mono-test`), and `--remove-orphans` is project-scoped, so
+  a production deploy never sees a test container or vice versa. The app sets are
+  disjoint by construction, container names differ by a `-test` suffix, image tags
+  differ, and named volumes are project-prefixed — a test PocketBase gets its own
+  empty volume, not production's data.
+- The test compose file is rendered in CI from the branch's `deploy.yml` and
+  copied over as one artifact; the droplet's checkout stays on `main`.
+- The test project joins the Traefik network as `external`, so production must
+  have been deployed at least once first.
+- **Promoting is deleting one line.** The app joins the production deploy on the
+  next push to `main`; run the test target once more (with nothing marked) to
+  tear the leftover test container down.
 - Root-domain apps (`subdomain: ""`) become `test.ryanzrau.dev`.
-- **Promoting is deleting one line.** The next deploy regenerates the compose
-  file and `--remove-orphans` retires the old route.
-- The `test-` namespace is derived from this flag. Validation rejects a
+- The `test-` namespace is derived from the flag. Validation rejects a
   hand-written `test-*` subdomain so a URL can't be reachable two ways.
-- A development app and a production app may share a `subdomain` value — that's
-  what makes promotion a one-line change instead of a cutover.
+- A development app and a production app may share a `subdomain` value, so a new
+  version can run at `test-recipe-box` while the old one serves `recipe-box`.
 
 Scaffold directly into this mode: `python3 infra/new_app.py <name> --development`.
-
-Because a development app is a normal deployed app, it keeps its volumes and
-data. Point it at throwaway PocketBase collections if that matters.
 
 ## Code Quality
 

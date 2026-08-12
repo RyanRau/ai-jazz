@@ -5,21 +5,27 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      target:
+        description: "production = the real subdomains from main; test = the development apps from this branch"
+        type: choice
+        options: [production, test]
+        default: production
       build_all:
-        description: "Rebuild every enabled app instead of only the changed ones"
+        description: "Production only: rebuild every app instead of only the changed ones"
         type: boolean
         default: true
+
+# Two runs would otherwise drive `docker compose` on the same droplet at once.
+# Queue, never cancel: aborting a half-finished deploy is worse than waiting.
+concurrency:
+  group: droplet
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
   REPO: ${{ github.repository }}
-
-# Two pushes in quick succession would otherwise run `docker compose` against
-# the same project concurrently. Queue, never cancel: aborting a half-finished
-# deploy is worse than waiting.
-concurrency:
-  group: droplet
-  cancel-in-progress: false
+  # A push to main is always a production deploy; the test target is manual only.
+  TARGET: ${{ github.event_name == 'push' && 'production' || inputs.target }}
 
 jobs:
   deploy:
@@ -55,15 +61,31 @@ jobs:
           set -euo pipefail
           # Selection rules live in infra/select_apps.py so they are testable
           # outside CI rather than only ever exercised in production.
-          if [ "${{ github.event_name }}" != "push" ] && [ "${{ inputs.build_all }}" != "false" ]; then
+          if [ "$TARGET" = "test" ]; then
+            # A manual, deliberate action — build every development app on this
+            # branch rather than guessing from a diff.
+            SELECTED=$(python3 infra/select_apps.py --test --all)
+            TAG=test
+          elif [ "${{ github.event_name }}" != "push" ] && [ "${{ inputs.build_all }}" != "false" ]; then
             SELECTED=$(python3 infra/select_apps.py --all)
+            TAG=latest
           elif [ "${{ github.event_name }}" = "push" ]; then
             SELECTED=$(python3 infra/select_apps.py --base "${{ github.event.before }}" --head "${{ github.sha }}")
+            TAG=latest
           else
             SELECTED=$(python3 infra/select_apps.py --base "${{ github.sha }}^" --head "${{ github.sha }}")
+            TAG=latest
           fi
-          echo "Building: ${SELECTED:-<none>}"
+
+          if [ "$TARGET" = "test" ] && [ -z "$SELECTED" ]; then
+            echo "No apps marked 'development: true' on this branch — the test"
+            echo "project will be torn down."
+          fi
+
+          echo "Target: ${TARGET}"
+          echo "Building (:${TAG}): ${SELECTED:-<none>}"
           echo "apps=${SELECTED}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -87,7 +109,7 @@ jobs:
           set -euo pipefail
           for app in ${{ steps.select.outputs.apps }}; do
             echo "=== Building $app ==="
-            IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.REPO }}/${app}:latest" | tr '[:upper:]' '[:lower:]')
+            IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.REPO }}/${app}:${{ steps.select.outputs.tag }}" | tr '[:upper:]' '[:lower:]')
             APP_PATH=$(yq ".apps.${app}.path // \"apps/${app}\"" deploy.yml)
 
             BUILD_ARGS=()
@@ -112,7 +134,7 @@ jobs:
       # Nothing selected means nothing that reaches the droplet changed (a
       # docs-only push), so skip the deploy rather than restart every container.
       - name: Deploy to droplet
-        if: steps.select.outputs.apps != ''
+        if: env.TARGET == 'production' && steps.select.outputs.apps != ''
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DROPLET_IP }}
@@ -137,7 +159,7 @@ jobs:
             echo "=== Deployment complete ==="
 
       - name: Verify containers came up
-        if: steps.select.outputs.apps != ''
+        if: env.TARGET == 'production' && steps.select.outputs.apps != ''
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DROPLET_IP }}
@@ -178,3 +200,110 @@ jobs:
               docker compose logs --tail 50 "${service%%(*}" || true
             done
             exit 1
+
+      # ---------------------------------------------------------------------
+      # Test target: a separate Compose project, so nothing here can touch a
+      # production container. The compose file is rendered here from this
+      # branch's deploy.yml and copied over as a single artifact — the droplet's
+      # own checkout stays on main and is never disturbed.
+      # ---------------------------------------------------------------------
+      - name: Render test compose file
+        if: env.TARGET == 'test' && steps.select.outputs.apps != ''
+        run: |
+          set -euo pipefail
+          python3 infra/generate-compose.py --test --output docker-compose.test.yml
+          cat docker-compose.test.yml
+
+      - name: Copy test compose file to droplet
+        if: env.TARGET == 'test' && steps.select.outputs.apps != ''
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          source: "docker-compose.test.yml"
+          target: "/opt/apps"
+          overwrite: true
+
+      - name: Deploy test apps to droplet
+        if: env.TARGET == 'test' && steps.select.outputs.apps != ''
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/apps
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # -p keeps this in its own project. --remove-orphans therefore only
+            # retires test containers, never production ones.
+            docker compose -p mono-test -f docker-compose.test.yml pull
+            docker compose -p mono-test -f docker-compose.test.yml up -d --force-recreate --remove-orphans
+
+            docker image prune -f
+            echo "=== Test deployment complete ==="
+
+      - name: Verify test containers came up
+        if: env.TARGET == 'test' && steps.select.outputs.apps != ''
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd /opt/apps
+            COMPOSE="docker compose -p mono-test -f docker-compose.test.yml"
+
+            for attempt in $(seq 1 18); do
+              BAD=""
+              for service in $($COMPOSE ps --services); do
+                cid=$($COMPOSE ps -q "$service")
+                if [ -z "$cid" ]; then
+                  BAD="${BAD} ${service}(missing)"
+                  continue
+                fi
+                status=$(docker inspect -f '{{.State.Status}}' "$cid")
+                health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid")
+                if [ "$status" != "running" ]; then
+                  BAD="${BAD} ${service}(${status})"
+                elif [ "$health" != "none" ] && [ "$health" != "healthy" ]; then
+                  BAD="${BAD} ${service}(${health})"
+                fi
+              done
+
+              if [ -z "$BAD" ]; then
+                echo "=== Test containers running and healthy ==="
+                exit 0
+              fi
+              echo "attempt ${attempt}/18 — not ready:${BAD}"
+              sleep 5
+            done
+
+            echo "::error::test containers not healthy after 90s:${BAD}"
+            for service in $BAD; do
+              $COMPOSE logs --tail 50 "${service%%(*}" || true
+            done
+            exit 1
+
+      # Promoting the last development app (or unsetting the flags) leaves its
+      # test containers with nothing to describe them. Running the test target
+      # with nothing marked is how you retire them.
+      - name: Tear down test project
+        if: env.TARGET == 'test' && steps.select.outputs.apps == ''
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/apps
+            if [ -f docker-compose.test.yml ]; then
+              docker compose -p mono-test -f docker-compose.test.yml down --remove-orphans
+              rm -f docker-compose.test.yml
+            fi
+            docker image prune -f
+            echo "=== Test project torn down ==="

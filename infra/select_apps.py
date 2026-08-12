@@ -34,12 +34,18 @@ SHARED_PATHS = re.compile(
 )
 
 
-def enabled_apps(config):
-    """App name → build context path, for every enabled app."""
+def enabled_apps(config, test_mode=False):
+    """App name → build context path, for the enabled apps in one deploy target.
+
+    The `development` flag partitions them: production deploys the apps without
+    it, the test project deploys the apps with it. Nothing is in both.
+    """
     return {
         name: app.get("path", f"apps/{name}")
         for name, app in (config.get("apps") or {}).items()
-        if isinstance(app, dict) and app.get("enabled") is True
+        if isinstance(app, dict)
+        and app.get("enabled") is True
+        and bool(app.get("development", False)) == test_mode
     }
 
 
@@ -90,11 +96,16 @@ def main():
     )
     parser.add_argument("--all", action="store_true", help="select every enabled app")
     parser.add_argument(
+        "--test",
+        action="store_true",
+        help="select the development apps instead of the production ones",
+    )
+    parser.add_argument(
         "--stdin", action="store_true", help="read changed paths from stdin"
     )
     args = parser.parse_args()
 
-    apps = enabled_apps(yaml.safe_load(CONFIG_PATH.read_text()))
+    apps = enabled_apps(yaml.safe_load(CONFIG_PATH.read_text()), test_mode=args.test)
 
     if args.all:
         selected, reason = list(apps), "explicitly requested"

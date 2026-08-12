@@ -114,7 +114,7 @@ apps:
 | `depends_on`          | No       | Internal service → compose condition (e.g. `redis: service_healthy`)   |
 | `healthcheck`         | No       | Compose healthcheck passthrough                                        |
 | `frame_options`       | No       | `X-Frame-Options` value (default `SAMEORIGIN`)                         |
-| `development`         | No       | `true` routes the app at `test-<subdomain>` instead of `<subdomain>`   |
+| `development`         | No       | `true` moves the app to the test target at `test-<subdomain>`          |
 | `rate_limit`          | No       | `{average, burst}` requests/sec per IP (default 100/50)                |
 | `reserved_subdomains` | —        | Top-level list of subdomains owned by apps deployed from other repos   |
 
@@ -127,11 +127,14 @@ Runtime env vars need their values in `/opt/apps/.env` on the droplet
 
 ## Deployment
 
-Pushing to `main` runs the **Build and Deploy** workflow: it validates
-`deploy.yml`, builds the apps affected by the push (any change under
-`packages/`, `infra/`, `deploy.yml`, or the workflows rebuilds everything),
-pushes images to GHCR, regenerates `docker-compose.yml` on the droplet, brings
-containers up, and fails the run if anything doesn't reach a healthy state.
+Pushing to `main` runs the **Build and Deploy** workflow against the production
+target: it validates `deploy.yml`, builds the affected apps (any change under
+`packages/`, `infra/`, `deploy.yml`, or the workflow rebuilds everything), pushes
+images to GHCR, regenerates `docker-compose.yml` on the droplet, brings containers
+up, and fails the run if anything doesn't reach a healthy state.
+
+The same workflow has a **test** target for apps still in development — see
+below. A config or build failure stops a run before the droplet is touched.
 
 Traefik terminates TLS with auto-provisioned Let's Encrypt certificates and
 routes by `Host()`, so a wildcard `*.ryanzrau.dev` DNS record means new
@@ -152,19 +155,30 @@ apps:
     port: 80
 ```
 
-It deploys from `main` like everything else, but Traefik routes it at
-`test-recipe-box.ryanzrau.dev` instead of `recipe-box.ryanzrau.dev`. Iterate
-there for as long as you like; when it's ready, delete the one line and the next
-deploy moves it to the real subdomain.
+That moves it out of the production deploy entirely and into the **test target**,
+which you run by hand against any branch:
 
-Root-domain apps (`subdomain: ""`) land at `test.ryanzrau.dev`.
+**Actions → Build and Deploy → Run workflow** → pick the branch → `target: test`
 
-Scaffold straight into this mode with `python3 infra/new_app.py <name> --development`.
+It goes live at `test-recipe-box.ryanzrau.dev`, built from that branch. Push to
+the branch and re-run to update it. Production is untouched throughout — the two
+targets deploy separate Docker Compose projects, so neither can stop or remove
+the other's containers, and a test app gets its own empty volumes rather than
+production's data.
 
-The `test-` namespace is _derived_ from this flag — validation rejects a
+When it's ready, delete the `development` line: the app joins the production
+deploy at `recipe-box.ryanzrau.dev` on the next push to `main`. Run the test
+target once more to retire the leftover test container (with nothing marked
+`development`, the run tears the test project down).
+
+Root-domain apps (`subdomain: ""`) land at `test.ryanzrau.dev`. Scaffold straight
+into this mode with `python3 infra/new_app.py <name> --development`.
+
+The `test-` namespace is _derived_ from the flag — validation rejects a
 hand-written `test-*` subdomain, so two apps can never reach the same URL by two
-different routes. A development app and a production app may share a subdomain,
-which is what makes a promotion a one-line change rather than a cutover.
+different routes. A development app and a production app may share a `subdomain`
+value, so you can run the new version at `test-recipe-box` while the old one
+keeps serving `recipe-box`.
 
 ## Conventions
 

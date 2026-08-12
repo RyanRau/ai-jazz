@@ -173,38 +173,66 @@ Common cases:
 
 ## The workflow
 
-One: `deploy.yml`, on push to `main` (or manually). There is no PR gate — merge
-and it ships.
+One workflow, `deploy.yml`, with two targets. There is no PR gate — merge and it
+ships.
 
-It validates `deploy.yml`, selects the apps the push affected, builds and pushes
-their images, regenerates the compose file on the droplet, brings containers up,
-and polls until they're healthy. A failed config check or a failed image build
-stops the run **before** the droplet is touched, so a broken build can't take
-the site down — it just doesn't deploy.
+| Target         | How it runs               | Deploys                                                                                              |
+| -------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **production** | Push to `main`, or manual | Enabled apps **without** `development: true`, at their real subdomains, from `:latest`               |
+| **test**       | Manual, on any branch     | Enabled apps **with** `development: true`, at `test-<subdomain>`, from `:test` built off that branch |
 
-A `concurrency: droplet` group means two pushes in quick succession queue instead
-of running `docker compose` against the same project at once. It never cancels —
-aborting a half-finished deploy is worse than waiting.
+Run the test target from **Actions → Build and Deploy → Run workflow**: pick the
+branch, set `target` to `test`.
 
-Manual runs (**Actions → Build and Deploy → Run workflow**) default to rebuilding
-everything; untick `build_all` to rebuild only what the last commit touched.
+### Why they can't clobber each other
+
+The two targets deploy **different Compose projects**:
+
+- production → project `apps`, `/opt/apps/docker-compose.yml`
+- test → project `mono-test`, `/opt/apps/docker-compose.test.yml`
+
+`docker compose --remove-orphans` is project-scoped, so a production deploy never
+sees a test container and a test deploy never sees a production one. It's the same
+isolation that lets apps from other repos share this droplet. On top of that the
+two sets are disjoint by construction — the `development` flag decides which
+project an app belongs to, so no app is ever in both — container names differ by a
+`-test` suffix, image tags differ (`:latest` vs `:test`), and named volumes are
+project-prefixed, so a test PocketBase gets its own empty volume rather than
+production's data.
+
+The test project joins the Traefik network as `external`, since production owns
+both Traefik and the network. Production therefore has to have been deployed at
+least once before a test deploy can work.
+
+### Test compose lives in CI, not on the droplet
+
+The test compose file is rendered in the workflow from the branch's `deploy.yml`
+and copied over as a single artifact. The droplet's own checkout stays on `main`
+and is never touched — no config SCP'd over the working tree, no `git checkout`
+to undo it afterwards.
+
+### Retiring a test deployment
+
+Promote the app (delete its `development: true`) or unset the flags, then run the
+test target again. With nothing marked, the run tears the `mono-test` project down
+instead of deploying it.
+
+### Everything else
+
+A `concurrency: droplet` group means two runs queue rather than driving
+`docker compose` on the same droplet at once. It never cancels — aborting a
+half-finished deploy is worse than waiting.
+
+A failed config check or image build stops a run **before** the droplet is
+touched, so a broken build can't take the site down — it just doesn't deploy.
+
+Production manual runs default to rebuilding everything; untick `build_all` to
+rebuild only what the last commit touched. The test target always rebuilds every
+development app — it's a deliberate action, not a diff.
 
 Lint and formatting are **not** checked anywhere automatically. Run
 `npm run lint && npm run format:check && npm run validate` before pushing if you
 care to keep them clean.
-
-### Previewing work before it's public
-
-There is no separate test-deploy workflow. An app that isn't ready for its real
-URL carries `development: true` in `deploy.yml` and is routed at
-`test-<subdomain>` instead. It ships through the same pipeline as everything
-else; promoting it means deleting that line.
-
-This trades away previewing an _unmerged_ branch on a real URL. If that becomes
-necessary, the shape to add back is a manual workflow that builds a branch to a
-`:test` tag — but the droplet needs to know about the extra service, which is
-what made the old machinery (a state file, an SCP'd config, a `git checkout`
-restore) as involved as it was.
 
 ## Droplet sizing
 
