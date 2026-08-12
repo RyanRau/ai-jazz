@@ -114,12 +114,13 @@ apps:
 | `depends_on`          | No       | Internal service → compose condition (e.g. `redis: service_healthy`)   |
 | `healthcheck`         | No       | Compose healthcheck passthrough                                        |
 | `frame_options`       | No       | `X-Frame-Options` value (default `SAMEORIGIN`)                         |
+| `development`         | No       | `true` routes the app at `test-<subdomain>` instead of `<subdomain>`   |
 | `rate_limit`          | No       | `{average, burst}` requests/sec per IP (default 100/50)                |
 | `reserved_subdomains` | —        | Top-level list of subdomains owned by apps deployed from other repos   |
 
 Adding a build arg is one step: list it under `build_args` and add a GitHub
-secret **of the same name**. The workflows resolve them by name — no workflow
-edit. Test deploys prefer a `TEST_<NAME>` secret when one exists.
+secret **of the same name**. The deploy resolves them by name — no workflow
+edit.
 
 Runtime env vars need their values in `/opt/apps/.env` on the droplet
 (`chown deploy:deploy`, `chmod 600`).
@@ -138,24 +139,32 @@ subdomains need no DNS or certificate work.
 
 Droplet setup, backups, and debugging live in [`infra/README.md`](infra/README.md).
 
-## Test deployments
+## Apps still in development
 
-Preview a branch on a real URL without touching production.
+An app that isn't ready to claim its real URL gets `development: true`:
 
-1. Add `test-deploy.yml` to the branch:
+```yaml
+apps:
+  recipe_box:
+    subdomain: "recipe-box"
+    enabled: true
+    development: true # → test-recipe-box.ryanzrau.dev
+    port: 80
+```
 
-   ```yaml
-   app: bluestar # or: apps: [pocketbase, ryanzrau]
-   ```
+It deploys from `main` like everything else, but Traefik routes it at
+`test-recipe-box.ryanzrau.dev` instead of `recipe-box.ryanzrau.dev`. Iterate
+there for as long as you like; when it's ready, delete the one line and the next
+deploy moves it to the real subdomain.
 
-2. **Actions → Test Deploy → Run workflow**, selecting the branch.
-3. The app appears at its test subdomain: root-domain apps at
-   `test.ryanzrau.dev`, others at `test-<subdomain>.ryanzrau.dev`.
-4. Re-run the workflow to push updates; merging the PR cleans the test
-   deployment up automatically.
+Root-domain apps (`subdomain: ""`) land at `test.ryanzrau.dev`.
 
-Test containers get no volumes, so a test PocketBase starts with an empty,
-throwaway database and cannot touch production data.
+Scaffold straight into this mode with `python3 infra/new_app.py <name> --development`.
+
+The `test-` namespace is _derived_ from this flag — validation rejects a
+hand-written `test-*` subdomain, so two apps can never reach the same URL by two
+different routes. A development app and a production app may share a subdomain,
+which is what makes a promotion a one-line change rather than a cutover.
 
 ## Conventions
 
@@ -163,7 +172,7 @@ throwaway database and cannot touch production data.
 - Each app owns its `Dockerfile` and `nginx.conf`; static sites use a two-stage
   build (`node:20-alpine` → `nginx:alpine`)
 - No shared build tooling — apps build independently in Docker
-- Images: `ghcr.io/ryanrau/mono/<app>:latest` (prod), `:test` (test deploys)
+- Images: `ghcr.io/ryanrau/mono/<app>:latest`
 - Documentation lives next to what it documents
 
 ## External app deployments

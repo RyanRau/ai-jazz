@@ -3,8 +3,7 @@ name: PR Validation
 on:
   pull_request:
 
-# Superseded runs on the same PR are pointless. Safe to cancel: the autofix job
-# pushes with GITHUB_TOKEN, which by design does not trigger another run.
+# Superseded runs on the same PR are pointless — cancel them when you push again.
 concurrency:
   group: pr-${{ github.ref }}
   cancel-in-progress: true
@@ -88,58 +87,3 @@ jobs:
           done
 
           echo "✅ Docker images built successfully"
-
-  autofix:
-    needs: validate
-    if: failure()
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Apply ruff formatting (Python)
-        uses: astral-sh/ruff-action@v3
-        with:
-          args: "format"
-        continue-on-error: true
-
-      - name: Apply ruff lint fixes (Python)
-        uses: astral-sh/ruff-action@v3
-        with:
-          args: "check --fix"
-        continue-on-error: true
-
-      - name: Install Node dependencies
-        run: npm install
-
-      - name: Apply Prettier formatting (JS/TS/CSS/JSON/MD)
-        run: npm run format || true
-
-      - name: Apply ESLint fixes (TS/TSX/JS/JSX)
-        run: npm run lint:fix || true
-
-      - name: Commit fixes to PR
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          if [ -n "$(git status --porcelain)" ]; then
-            git add -A
-            git commit -m "style: auto-fix lint and formatting issues"
-            git push
-            echo "✅ Auto-fixes committed to PR — please re-run checks"
-          else
-            echo "⚠️ No auto-fixable changes found — manual fixes may be needed"
-          fi

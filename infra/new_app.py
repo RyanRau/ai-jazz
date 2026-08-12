@@ -60,19 +60,19 @@ def scaffold_files(app_dir, substitutions):
     return created
 
 
-def deploy_entry(app_name, subdomain, port, enabled):
-    return "\n".join(
-        [
-            f"  {app_name}:",
-            f'    subdomain: "{subdomain}"',
-            f"    enabled: {str(enabled).lower()}",
-            f"    port: {port}",
-            "",
-        ]
-    )
+def deploy_entry(app_name, subdomain, port, enabled, development):
+    lines = [
+        f"  {app_name}:",
+        f'    subdomain: "{subdomain}"',
+        f"    enabled: {str(enabled).lower()}",
+    ]
+    if development:
+        lines.append("    development: true # serves at test-<subdomain> until flipped")
+    lines += [f"    port: {port}", ""]
+    return "\n".join(lines)
 
 
-def register_in_deploy_yml(app_name, subdomain, port, enabled):
+def register_in_deploy_yml(app_name, subdomain, port, enabled, development):
     """Append the app to the `apps:` block, preserving the file's comments.
 
     Done as text rather than a YAML round-trip because PyYAML drops every
@@ -104,7 +104,7 @@ def register_in_deploy_yml(app_name, subdomain, port, enabled):
     if end > apps_index + 1 and not lines[end - 1].endswith("\n"):
         lines[end - 1] += "\n"
 
-    lines.insert(end, deploy_entry(app_name, subdomain, port, enabled))
+    lines.insert(end, deploy_entry(app_name, subdomain, port, enabled, development))
     DEPLOY_YML.write_text("".join(lines))
 
 
@@ -155,6 +155,11 @@ def main():
         action="store_true",
         help="register in deploy.yml with enabled: false (default: enabled)",
     )
+    parser.add_argument(
+        "--development",
+        action="store_true",
+        help="deploy to test-<subdomain> until the flag is flipped in deploy.yml",
+    )
     parser.add_argument("--no-install", action="store_true", help="skip npm install")
     args = parser.parse_args()
 
@@ -170,7 +175,10 @@ def main():
             f"'{subdomain}' is not a valid subdomain — use kebab-case (e.g. recipe-box)"
         )
     if subdomain.startswith("test-") or subdomain == "test":
-        fail("the 'test' / 'test-*' namespace is reserved for test deployments")
+        fail(
+            "the 'test' / 'test-*' namespace comes from --development, "
+            "not from naming the subdomain"
+        )
 
     app_dir = REPO_ROOT / "apps" / app_name
     if app_dir.exists():
@@ -180,7 +188,10 @@ def main():
 
     title = args.title or default_title(app_name)
     domain = "ryanzrau.dev"
-    fqdn = f"{subdomain}.{domain}" if subdomain else domain
+    if args.development:
+        fqdn = f"test-{subdomain}.{domain}" if subdomain else f"test.{domain}"
+    else:
+        fqdn = f"{subdomain}.{domain}" if subdomain else domain
 
     created = scaffold_files(
         app_dir,
@@ -191,7 +202,9 @@ def main():
             "__FQDN__": fqdn,
         },
     )
-    register_in_deploy_yml(app_name, subdomain, args.port, not args.disabled)
+    register_in_deploy_yml(
+        app_name, subdomain, args.port, not args.disabled, args.development
+    )
 
     print(f"\nCreated apps/{app_name}:")
     for path in created:

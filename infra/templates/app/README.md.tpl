@@ -35,5 +35,8 @@ After changing `packages/bluestar`, rebuild it (`npm run build` in
 ## Deployment
 
 Registered in the repo-root `deploy.yml`; pushing to `main` builds and ships it.
-Set `enabled: false` there to take it offline. Nginx and container config live in
-this directory (`Dockerfile`, `nginx.conf`).
+Nginx and container config live in this directory (`Dockerfile`, `nginx.conf`).
+
+- `enabled: false` takes it offline.
+- `development: true` routes it at `test-__SUBDOMAIN__` instead of the real
+  subdomain — delete that line to promote it.

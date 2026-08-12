@@ -15,8 +15,8 @@ that no longer existed.
   and inspectable, avoiding heavyweight orchestration.
 - **Traefik + Let's Encrypt + wildcard DNS** — a new subdomain needs zero DNS or
   TLS work, and security headers are applied uniformly to every app.
-- **Test subdomain deployments** — feature branches preview on real URLs without
-  touching prod, cleaned up automatically on merge.
+- **A single deploy path** — every app, including ones still in development,
+  ships through the same build-and-deploy; nothing has a bespoke pipeline.
 - **External app isolation** — separate Compose projects on the shared
   `traefik_web` network can't be touched by mono deploys.
 - **Multi-stage Dockerfiles** — small runtime images with a clean split between
@@ -46,13 +46,13 @@ that no longer existed.
   type-checks, and builds.
 - `infra/validate_deploy.py` enforces config invariants (duplicate subdomains,
   missing Dockerfiles, reserved-subdomain collisions, malformed fields) and runs
-  in all three workflows.
+  in both workflows.
 - Build args now resolve from same-named GitHub secrets automatically, removing
   the hardcoded `case` statements that had to be edited in two workflows for
   every new secret.
 - Change detection: a push rebuilds only affected apps; changes to shared paths
   (`packages/`, `infra/`, `deploy.yml`, workflows) still rebuild everything.
-- Buildx layer caching (`type=gha`) across all three workflows.
+- Buildx layer caching (`type=gha`) in both workflows.
 - Post-deploy verification polls container status and health, so a container that
   crashes on boot fails the deploy instead of quietly serving 502s.
 - Lint and format now cover `packages/` (previously only `apps/` was checked, so
@@ -60,27 +60,47 @@ that no longer existed.
   which had no Python dependencies to scan — were dropped.
 - Added Dependabot for GitHub Actions and npm.
 
-**Workflow audit**
+**Workflow simplification**
 
-All four workflows earn their place — but they had three problems:
+Went from four workflows to two. The typical flow is build-and-deploy; the rest
+was machinery serving a preview path that was rarely used in practice.
 
-- **No concurrency control anywhere.** A merge fires Build and Deploy _and_ Test
-  Cleanup simultaneously, and both SSH in to run `docker compose up` against the
-  same project; two quick pushes to `main` raced each other the same way. All
-  three droplet-touching workflows now share a `concurrency: droplet` group that
-  queues rather than cancels. This was a latent bug, not a new one.
+- **Deleted `test-deploy.yml` and `test-cleanup.yml`**, and with them the whole
+  test-overlay system: the `test-deploy.yml` branch config, the
+  `test-deploy.active.yml` droplet state file, the `:test` image tag, the SCP of
+  branch config onto the droplet, and the `git checkout` restore afterwards.
+- **Replaced it with `development: true` on an app in `deploy.yml`**, which
+  routes that app at `test-<subdomain>` instead of `<subdomain>`. It deploys
+  through the normal pipeline; promoting is deleting one line, and the
+  regenerated compose plus `--remove-orphans` handles the transition. Validation
+  rejects a hand-written `test-*` subdomain so the namespace stays derived, and
+  allows a development app and a production app to share a `subdomain` value,
+  which is what makes promotion a one-line change rather than a cutover.
+- **Dropped the PR autofix job.** It fired on any validation failure including
+  ones it couldn't fix, and because it pushed with `GITHUB_TOKEN` — which by
+  design doesn't trigger workflows — you had to re-run the checks manually
+  regardless. `npm run format` locally is faster.
+
+Two problems found and fixed along the way:
+
+- **No concurrency control anywhere.** A merge fired Build and Deploy _and_ Test
+  Cleanup simultaneously, both SSHing in to run `docker compose up` against the
+  same project; two quick pushes to `main` raced the same way. Deploy now holds a
+  `concurrency: droplet` group that queues rather than cancels. (Deleting Test
+  Cleanup removes the merge-time race entirely, but the rapid-push race was real
+  on its own.)
 - **PR validation rebuilt every app on every PR**, so a README typo cost three
-  Docker builds. It now uses the same selection rules as the deploy.
-- **A dead step** in Test Cleanup that only echoed "skipped" — removed.
+  Docker builds. It now selects the same apps the deploy would.
 
-Test Cleanup _looks_ redundant with Build and Deploy, which also clears test
-state, but it isn't: the deploy step is skipped when a push touches no app, so
-Test Cleanup is the guarantee that a merged branch leaves nothing running. That
-relationship is now documented in both workflows rather than implied.
+Change selection lives in `infra/select_apps.py`, shared by both workflows and
+unit-testable outside CI — which matters, since workflow shell is otherwise only
+ever exercised in production.
 
-Change selection moved out of inline workflow bash into `infra/select_apps.py`,
-shared by both workflows and unit-testable outside CI — which matters, since CI
-shell logic is otherwise only exercised in production.
+**What this trades away:** previewing an _unmerged_ branch on a real URL. The
+`development` flag covers "this app isn't ready for its real subdomain," not
+"show me this branch before I merge it." Given the actual habit is testing live,
+that's the right trade — and `infra/README.md` records the shape to add back if
+it's ever needed.
 
 **Documentation**
 
@@ -154,7 +174,6 @@ never in a frontend build.
 | **Pre-1.0 backend** — PocketBase v0.x breaks between minor versions                   | Upgrades may need migration tweaks            | `PB_VERSION` is pinned; read release notes and back up before bumping                                               |
 | **Traefik v2.11** — v3 is current                                                     | Falling behind on fixes                       | Upgrade needs label/CLI migration; do it deliberately with a test deploy first                                      |
 | **No npm workspaces** — the `file:` + bootstrap dance is a papercut                   | One extra command on a fresh clone            | Workspaces would fix it, but the per-app `npm ci` in each Dockerfile would need reworking; not worth the risk today |
-| **One test deployment at a time**                                                     | Two branches can't test-deploy simultaneously | Rarely matters for a single developer                                                                               |
 
 ## Recommended next steps, in order of value
 

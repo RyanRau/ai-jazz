@@ -88,8 +88,7 @@ config, builds the apps affected by the push, pushes images to GHCR, regenerates
 `docker-compose.yml` on the droplet, and verifies containers come up healthy.
 
 - `deploy.yml` — which apps are live, their subdomains and ports
-- `infra/generate-compose.py` — renders `docker-compose.yml` (plus an optional
-  test overlay from `test-deploy.active.yml`)
+- `infra/generate-compose.py` — renders `docker-compose.yml`
 - `infra/validate_deploy.py` — catches duplicate subdomains, missing Dockerfiles,
   reserved-subdomain collisions, malformed fields
 - Traefik routes by `Host()` and provisions Let's Encrypt TLS automatically
@@ -112,6 +111,7 @@ manually with `build_all` to force a full rebuild.
 | `volumes`       | No       | `name:/path` mounts; named volumes are auto-registered               |
 | `depends_on`    | No       | Internal service → compose condition (e.g. `redis: service_healthy`) |
 | `healthcheck`   | No       | Compose healthcheck passthrough                                      |
+| `development`   | No       | `true` routes at `test-<subdomain>` instead of `<subdomain>`         |
 | `frame_options` | No       | `X-Frame-Options` value (default `SAMEORIGIN`)                       |
 | `rate_limit`    | No       | `{average, burst}` requests/sec per source IP (default 100/50)       |
 
@@ -123,9 +123,7 @@ other repos, so validation rejects a collision.
 1. Add the arg name to the app's `build_args` in `deploy.yml`
 2. Add a GitHub secret **with exactly that name**
 
-The workflows resolve build args from secrets by name — no workflow edit needed.
-Test deploys prefer `TEST_<NAME>` when that secret exists, otherwise fall back to
-`<NAME>`.
+The deploy resolves build args from secrets by name — no workflow edit needed.
 
 **Adding a runtime env var:**
 
@@ -161,55 +159,33 @@ SQLite persisted in the `pb_data` volume.
 
 Full detail in `apps/pocketbase/README.md`.
 
-## Test Subdomain Deployments
+## Apps Still In Development
 
-Any app (or several) can be deployed to test subdomains from a feature branch
-without impacting production.
+There is no separate test-deploy pipeline. An app that shouldn't own its real URL
+yet sets `development: true` in `deploy.yml`:
 
-1. Add `test-deploy.yml` to the branch:
+```yaml
+recipe_box:
+  subdomain: "recipe-box"
+  enabled: true
+  development: true # → test-recipe-box.ryanzrau.dev
+  port: 80
+```
 
-   ```yaml
-   app: bluestar # or: apps: [pocketbase, ryanzrau]
-   ```
+- It builds and deploys from `main` exactly like any other app — only the Traefik
+  `Host()` rule differs.
+- Root-domain apps (`subdomain: ""`) become `test.ryanzrau.dev`.
+- **Promoting is deleting one line.** The next deploy regenerates the compose
+  file and `--remove-orphans` retires the old route.
+- The `test-` namespace is derived from this flag. Validation rejects a
+  hand-written `test-*` subdomain so a URL can't be reachable two ways.
+- A development app and a production app may share a `subdomain` value — that's
+  what makes promotion a one-line change instead of a cutover.
 
-   App names must match keys in `deploy.yml`.
+Scaffold directly into this mode: `python3 infra/new_app.py <name> --development`.
 
-2. **Actions → Test Deploy → Run workflow**, selecting the branch.
-3. The app is live at its test subdomain. Re-run to update.
-4. Merging the PR triggers **Test Cleanup**, which removes the deployment.
-
-### Test subdomain naming
-
-- Root domain app (`subdomain: ""`) → `test.ryanzrau.dev`
-- Subdomain app (`"ui"`) → `test-ui.ryanzrau.dev`
-
-### How test deploy works
-
-1. Reads `test-deploy.yml` from the branch for the app list
-2. Builds each app and pushes with the `:test` tag to GHCR
-3. SCPs the branch's `deploy.yml` and `infra/generate-compose.py` to the droplet
-4. Writes `test-deploy.active.yml` on the droplet with app metadata
-5. Runs `generate-compose.py`, merging prod + test services into one compose file
-6. Restores main's files via `git checkout`
-7. Pulls test images, starts only the test services, and fails if one doesn't run
-
-### Key details
-
-- Multiple apps can be test-deployed simultaneously
-- Test containers get **no volumes** — a test PocketBase is empty and ephemeral
-- The workflow is manual (does not run on push)
-- `test-deploy.yml` is the branch config (committed); `test-deploy.active.yml` is
-  droplet runtime state (gitignored)
-- A prod deploy to `main` removes any active test deployment
-
-### Debugging test deploys
-
-- **"App not found in deploy.yml"** — the app must exist in the branch's
-  `deploy.yml` with a subdomain
-- **Image not found** — test images use the `:test` tag, not `:latest`
-- **Site not loading** — check `docker ps | grep test`, Traefik labels via
-  `docker inspect`, and `dig test-<subdomain>.ryanzrau.dev`
-- **Compose errors about missing services** — check `test-deploy.active.yml`
+Because a development app is a normal deployed app, it keeps its volumes and
+data. Point it at throwaway PocketBase collections if that matters.
 
 ## Code Quality
 

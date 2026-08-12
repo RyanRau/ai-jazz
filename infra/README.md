@@ -7,7 +7,7 @@ reach it, and how to debug it when they don't.
 
 | File                  | What it does                                                              |
 | --------------------- | ------------------------------------------------------------------------- |
-| `generate-compose.py` | Renders `deploy.yml` (+ optional test overlay) into `docker-compose.yml`  |
+| `generate-compose.py` | Renders `deploy.yml` into `docker-compose.yml`                            |
 | `validate_deploy.py`  | Validates `deploy.yml` — run in CI and before pushing config changes      |
 | `select_apps.py`      | Decides which apps a change set affects; shared by deploy and PR checks   |
 | `new_app.py`          | Scaffolds a new app from `templates/app` and registers it in `deploy.yml` |
@@ -81,8 +81,7 @@ Keep the private key for the next step.
 `GITHUB_TOKEN` is provided automatically.
 
 Any name listed in an app's `build_args` must also exist as a secret of the same
-name — the workflows resolve them by name, so no workflow edit is needed. Test
-deploys prefer `TEST_<NAME>` when present.
+name — the deploy resolves them by name, so no workflow edit is needed.
 
 ## 4. DNS
 
@@ -174,42 +173,33 @@ Common cases:
 
 ## Workflows
 
-Four, each with a distinct job:
+Two. That's the whole pipeline.
 
-| Workflow            | Trigger                | Does                                                                 |
-| ------------------- | ---------------------- | -------------------------------------------------------------------- |
-| `pr-validation.yml` | PR opened/updated      | Config, lint, format, and Docker builds for the apps the PR touches  |
-| `deploy.yml`        | Push to `main`, manual | Builds affected apps, deploys, verifies containers are healthy       |
-| `test-deploy.yml`   | Manual                 | Builds a branch's apps to `test-*` subdomains                        |
-| `test-cleanup.yml`  | PR merged              | Removes the test deployment and any `test-deploy.yml` left on `main` |
+| Workflow            | Trigger                | Does                                                                |
+| ------------------- | ---------------------- | ------------------------------------------------------------------- |
+| `pr-validation.yml` | PR opened/updated      | Config, lint, format, and Docker builds for the apps the PR touches |
+| `deploy.yml`        | Push to `main`, manual | Builds affected apps, deploys, verifies containers are healthy      |
 
-The three that touch the droplet share a `concurrency: droplet` group so they
-queue instead of interleaving `docker compose` runs — a merge fires both
-**Build and Deploy** and **Test Cleanup** at the same moment.
+`deploy.yml` holds a `concurrency: droplet` group so two pushes in quick
+succession queue instead of running `docker compose` against the same project at
+the same time. It never cancels — aborting a half-finished deploy is worse than
+waiting.
 
-Test Cleanup overlaps with Build and Deploy on purpose: the deploy step is
-skipped when a push touches no app, so Test Cleanup is what guarantees a merged
-branch never leaves a test container running.
+Manual runs (**Actions → Build and Deploy → Run workflow**) default to rebuilding
+everything; untick `build_all` to rebuild only what the last commit touched.
 
-## Test deployments
+### Previewing work before it's public
 
-1. `test-deploy.yml` on a branch declares which apps to test
-2. **Test Deploy** builds them with a `:test` tag
-3. `test-deploy.active.yml` (gitignored) is written on the droplet so
-   `generate-compose.py` adds test services alongside prod
-4. Merging the PR triggers **Test Cleanup**, which removes the overlay
+There is no separate test-deploy workflow. An app that isn't ready for its real
+URL carries `development: true` in `deploy.yml` and is routed at
+`test-<subdomain>` instead. It ships through the same pipeline as everything
+else; promoting it means deleting that line.
 
-Test services get Traefik routing at `test-<subdomain>.ryanzrau.dev` (or
-`test.ryanzrau.dev` for the root app) and inherit the app's environment,
-healthcheck, and rate limits — but **not** its volumes, so a test PocketBase is
-empty and ephemeral.
-
-Limitations:
-
-- One test deployment at a time (a single `test-deploy.active.yml`)
-- The workflow is manual — it doesn't run on push
-- A deploy to `main` removes the active test deployment (it deletes
-  `test-deploy.active.yml`, and `--remove-orphans` drops the container)
+This trades away previewing an _unmerged_ branch on a real URL. If that becomes
+necessary, the shape to add back is a manual workflow that builds a branch to a
+`:test` tag — but the droplet needs to know about the extra service, which is
+what made the old machinery (a state file, an SCP'd config, a `git checkout`
+restore) as involved as it was.
 
 ## Droplet sizing
 
