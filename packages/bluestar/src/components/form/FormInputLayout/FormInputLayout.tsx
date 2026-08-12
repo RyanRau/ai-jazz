@@ -1,35 +1,77 @@
+import { useId } from "react";
 import type { ReactNode } from "react";
 import { useTheme } from "../../../theme";
 import Flexbox from "../../layout/Flexbox/Flexbox";
 import Text from "../../text/Text/Text";
 
-export type FormInputLayoutProps = {
-  /** Field label displayed above the input. */
+/** Props every bluestar form control accepts. */
+export type FormFieldProps = {
+  /** Field label rendered above the control and wired to it via `htmlFor`. */
   label?: string;
   /** Helper text displayed beneath the label. */
   description?: string;
-  /** Warning message displayed below the input in warning color. Overrides description. */
+  /** Warning message shown below the control, in the warning colour. */
   warning?: string;
-  children: ReactNode;
+  /** Validation failure. Takes precedence over `warning` and sets `aria-invalid`. */
+  error?: string;
+  /** Marks the field required — shows an asterisk and sets the DOM attribute. */
+  required?: boolean;
+  /** Form field name. `useForm().field(name)` supplies this. */
+  name?: string;
+  isDisabled?: boolean;
+};
+
+export type FormInputLayoutProps = Omit<FormFieldProps, "name" | "isDisabled"> & {
+  /**
+   * Renders the control. Receives the ids to wire up so the label points at the
+   * real element and screen readers announce the description and error.
+   */
+  children: (ids: { id: string; describedBy: string | undefined; invalid: boolean }) => ReactNode;
 };
 
 export default function FormInputLayout({
   label,
   description,
   warning,
+  error,
+  required,
   children,
 }: FormInputLayoutProps) {
   const theme = useTheme();
+  const id = useId();
+
+  const descriptionId = description ? `${id}-description` : undefined;
+  const messageId = error || warning ? `${id}-message` : undefined;
+  const describedBy = [descriptionId, messageId].filter(Boolean).join(" ") || undefined;
 
   return (
     <Flexbox direction="column" gap={4}>
-      {label && <Text variant="label">{label}</Text>}
-      {description && <Text variant="caption">{description}</Text>}
-      {children}
-      {warning && (
-        <Text variant="caption" color={theme.colors.warning}>
-          {warning}
+      {label && (
+        <Text as="label" variant="label">
+          <label htmlFor={id}>
+            {label}
+            {required && (
+              <span aria-hidden="true" style={{ color: theme.colors.error }}>
+                {" *"}
+              </span>
+            )}
+          </label>
         </Text>
+      )}
+      {description && (
+        <span id={descriptionId}>
+          <Text variant="caption">{description}</Text>
+        </span>
+      )}
+
+      {children({ id, describedBy, invalid: Boolean(error) })}
+
+      {(error || warning) && (
+        <span id={messageId} role={error ? "alert" : undefined}>
+          <Text variant="caption" color={error ? theme.colors.error : theme.colors.warning}>
+            {error ?? warning}
+          </Text>
+        </span>
       )}
     </Flexbox>
   );

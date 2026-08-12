@@ -48,7 +48,7 @@ export const LongLabel: Story = {
 export const Secondary: Story = {
   args: {
     label: "Secondary",
-    type: "secondary",
+    variant: "secondary",
   },
   parameters: {
     docs: { description: { story: "Neutral gray — lower visual emphasis." } },
@@ -58,7 +58,7 @@ export const Secondary: Story = {
 export const Creation: Story = {
   args: {
     label: "Create",
-    type: "creation",
+    variant: "creation",
   },
   parameters: {
     docs: { description: { story: "Green — confirms creation or a successful action." } },
@@ -68,7 +68,7 @@ export const Creation: Story = {
 export const Destructive: Story = {
   args: {
     label: "Delete",
-    type: "destructive",
+    variant: "destructive",
   },
   parameters: {
     docs: { description: { story: "Red — warns of an irreversible or dangerous action." } },

@@ -32,7 +32,7 @@ export const Large: Story = {
 };
 
 export const CustomColor: Story = {
-  args: { size: 24, color: "#e53e3e" },
+  args: { size: 24, color: "var(--bs-color-error)" },
   parameters: {
     docs: { description: { story: "Custom color overriding the theme default." } },
   },

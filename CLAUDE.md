@@ -33,7 +33,10 @@ which defeats the purpose of the repo.
    If a component is missing, **add it to bluestar** — do not write a one-off
    component inside an app. See `packages/PACKAGES.md` for the real prop APIs
    (they are theme-driven and differ from typical component libraries: `Text`
-   takes a `variant`, spacing is a numeric union, buttons take `isDisabled`).
+   takes a `variant`, spacing is a numeric pixel union, buttons take `isDisabled`
+   and `variant` — `type` is the native HTML attribute). Forms use `useForm` +
+   `field(name)` rather than a `useState` per field, and the theme ships dark
+   mode via `colorScheme` / `useColorScheme`.
 3. **PocketBase** (`apps/pocketbase`) for auth, data, and file storage. One
    shared instance for every app; a new app gets a collection, not a new
    database. See `apps/pocketbase/README.md`.

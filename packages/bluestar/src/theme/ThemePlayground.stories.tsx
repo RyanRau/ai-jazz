@@ -68,9 +68,9 @@ function ThemePlayground(args: PlaygroundArgs) {
 
         <Flexbox direction="row" gap={12} alignItems="center">
           <Button label="Primary" onClick={() => {}} />
-          <Button label="Secondary" type="secondary" onClick={() => {}} />
-          <Button label="Creation" type="creation" onClick={() => {}} />
-          <Button label="Destructive" type="destructive" onClick={() => {}} />
+          <Button label="Secondary" variant="secondary" onClick={() => {}} />
+          <Button label="Creation" variant="creation" onClick={() => {}} />
+          <Button label="Destructive" variant="destructive" onClick={() => {}} />
           <AsyncButton label="Async" onClick={() => new Promise((r) => setTimeout(r, 2000))} />
           <Spinner />
         </Flexbox>

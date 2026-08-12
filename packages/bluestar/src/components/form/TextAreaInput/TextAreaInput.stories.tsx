@@ -17,7 +17,7 @@ const meta = {
 } satisfies Meta<typeof TextAreaInput>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof TextAreaInput>;
 
 export const Default: Story = {
   render: () => {

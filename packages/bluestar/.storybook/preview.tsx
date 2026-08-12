@@ -1,54 +1,40 @@
 import type { Preview, Decorator } from "@storybook/react";
-import { ThemeProvider, defaultTheme } from "../src/theme";
+import { ThemeProvider } from "../src/theme";
+import type { ColorScheme } from "../src/theme";
 import "../src/styling";
 
-const darkTheme = {
-  colors: {
-    ...defaultTheme.colors,
-    background: "#1a202c",
-    surface: "#2d3748",
-    text: "#f7fafc",
-    textMuted: "#a0aec0",
-    border: "#4a5568",
-  },
-};
-
-const themes: Record<string, object> = {
-  default: {},
-  dark: darkTheme,
-};
-
+/**
+ * Drives the library's real `colorScheme` API rather than swapping in a
+ * hand-rolled dark palette — if dark mode is broken for a component, it is
+ * visibly broken here too.
+ *
+ * `storageKey={null}` keeps the toolbar authoritative; otherwise a persisted
+ * choice from a previous session would fight the toolbar selection.
+ */
 const withTheme: Decorator = (Story, context) => {
-  const theme = themes[context.globals["theme"] ?? "default"] ?? {};
+  const scheme = (context.globals["theme"] as ColorScheme) ?? "auto";
+
   return (
-    <div
-      style={{
-        padding: "16px",
-        backgroundColor:
-          context.globals["theme"] === "dark"
-            ? darkTheme.colors.background
-            : defaultTheme.colors.background,
-        minHeight: "100%",
-      }}
-    >
-      <ThemeProvider theme={theme}>
+    <ThemeProvider colorScheme={scheme} storageKey={null}>
+      <div style={{ padding: 16, minHeight: "100%" }}>
         <Story />
-      </ThemeProvider>
-    </div>
+      </div>
+    </ThemeProvider>
   );
 };
 
 const preview: Preview = {
   globalTypes: {
     theme: {
-      description: "Global theme",
-      defaultValue: "default",
+      description: "Colour scheme",
+      defaultValue: "light",
       toolbar: {
-        title: "Theme",
+        title: "Scheme",
         icon: "paintbrush",
         items: [
-          { value: "default", title: "Default" },
+          { value: "light", title: "Light" },
           { value: "dark", title: "Dark" },
+          { value: "auto", title: "Auto (OS)" },
         ],
         dynamicTitle: true,
       },
