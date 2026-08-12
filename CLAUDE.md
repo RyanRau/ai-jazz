@@ -167,10 +167,17 @@ Full detail in `apps/pocketbase/README.md`.
 
 One workflow, two targets, decided by `development: true` in `deploy.yml`:
 
-| Target         | Trigger                 | Deploys                                                               |
-| -------------- | ----------------------- | --------------------------------------------------------------------- |
-| **production** | Push to `main` / manual | Apps **without** the flag → real subdomains, `:latest`                |
-| **test**       | Manual, any branch      | Apps **with** the flag → `test-<subdomain>`, `:test` from that branch |
+| Target         | Trigger                              | Deploys                                                               |
+| -------------- | ------------------------------------ | --------------------------------------------------------------------- |
+| **production** | Push to `main` / manual on `main`    | Apps **without** the flag → real subdomains, `:latest`                |
+| **test**       | Manual, any branch (**the default**) | Apps **with** the flag → `test-<subdomain>`, `:test` from that branch |
+
+A manual run defaults to `target: test`, and a manual `target: production` is
+**rejected from any branch but `main`**. The droplet renders `docker-compose.yml`
+from main's `deploy.yml` (it git-pulls main) while images come from the dispatched
+ref, so a production run off a branch would wire branch-built `:latest` images
+into main's config. The run's title in the Actions list shows the resolved target
+and ref, so a mis-picked dropdown is visible without opening the run.
 
 ```yaml
 recipe_box:

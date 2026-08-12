@@ -1,15 +1,23 @@
 name: Build and Deploy
 
+# The runs list otherwise shows every run as plain "Build and Deploy", which is
+# how a manual run that silently took the production path looks identical to the
+# test run you meant to start.
+run-name: "Deploy → ${{ github.event_name == 'push' && 'production' || inputs.target }} (${{ github.ref_name }})"
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
       target:
-        description: "production = the real subdomains from main; test = the development apps from this branch"
+        description: "test = the development apps from this branch; production = the real subdomains, main only"
         type: choice
-        options: [production, test]
-        default: production
+        options: [test, production]
+        # Defaults to the safe one. A push to main already deploys production, so
+        # a manual run is nearly always a test run — and picking the wrong option
+        # here deploys to the live subdomains.
+        default: test
       build_all:
         description: "Production only: rebuild every app instead of only the changed ones"
         type: boolean
@@ -49,6 +57,19 @@ jobs:
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
+
+      # A production deploy renders docker-compose.yml on the droplet from
+      # *main's* deploy.yml (the droplet git-pulls main), but builds images from
+      # whatever ref was dispatched. Dispatching production from a feature branch
+      # therefore ships branch-built :latest images under main's config — a
+      # silent half-deploy. Refuse it; that is what target: test is for.
+      - name: Guard the target
+        run: |
+          echo "Target: ${TARGET}   Ref: ${{ github.ref_name }}"
+          if [ "$TARGET" = "production" ] && [ "${{ github.ref_name }}" != "main" ]; then
+            echo "::error::Refusing a production deploy from '${{ github.ref_name }}'. The droplet renders compose from main, so images would be built from this branch but wired up by main's deploy.yml. Merge to main, or re-run with target: test."
+            exit 1
+          fi
 
       - name: Validate deploy.yml
         run: |
