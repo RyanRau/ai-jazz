@@ -16,8 +16,6 @@ yarn-error.log*
 
 # Generated deployment artifacts
 docker-compose.yml
-# Active test deployment state (written by CI to the droplet)
-test-deploy.active.yml
 
 # Python (infra/ tooling)
 __pycache__/

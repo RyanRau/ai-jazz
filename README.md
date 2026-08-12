@@ -16,12 +16,14 @@ packages/
   bluestar/            # React component library     → ui.ryanzrau.dev (Storybook)
   PACKAGES.md          # Component + prop reference
 infra/
-  generate-compose.py  # deploy.yml → docker-compose.yml
-  validate_deploy.py   # config checks, run in CI
-  new_app.py           # scaffolds a new app
-  templates/app/       # the app template it renders
-  README.md            # droplet setup and operations
-  AUDIT.md             # architecture assessment and known trade-offs
+  generate-compose.py   # deploy.yml → docker-compose.yml (production or test)
+  validate_deploy.py    # config checks, first step of every deploy
+  select_apps.py        # which apps a change set affects
+  new_app.py            # scaffolds a new app
+  retire_test_apps.sh   # removes the test project from the droplet
+  templates/app/        # the app template new_app.py renders
+  README.md             # droplet setup and operations
+  AUDIT.md              # architecture assessment and known trade-offs
 deploy.yml             # source of truth: which apps are live, and where
 ```
 
@@ -81,7 +83,7 @@ cd apps/<name> && npm install && npm run dev
 through a `file:` reference and import its built `dist/`, and npm will not
 install bluestar's own build tooling on their behalf.
 
-Repo-wide checks (all run in PR validation):
+Repo-wide checks. There is no PR gate — run these before you push:
 
 ```bash
 npm run lint             # eslint across apps/ and packages/
@@ -114,23 +116,27 @@ apps:
 | `depends_on`          | No       | Internal service → compose condition (e.g. `redis: service_healthy`)   |
 | `healthcheck`         | No       | Compose healthcheck passthrough                                        |
 | `frame_options`       | No       | `X-Frame-Options` value (default `SAMEORIGIN`)                         |
+| `development`         | No       | `true` moves the app to the test target at `test-<subdomain>`          |
 | `rate_limit`          | No       | `{average, burst}` requests/sec per IP (default 100/50)                |
 | `reserved_subdomains` | —        | Top-level list of subdomains owned by apps deployed from other repos   |
 
 Adding a build arg is one step: list it under `build_args` and add a GitHub
-secret **of the same name**. The workflows resolve them by name — no workflow
-edit. Test deploys prefer a `TEST_<NAME>` secret when one exists.
+secret **of the same name**. The deploy resolves them by name — no workflow
+edit.
 
 Runtime env vars need their values in `/opt/apps/.env` on the droplet
 (`chown deploy:deploy`, `chmod 600`).
 
 ## Deployment
 
-Pushing to `main` runs the **Build and Deploy** workflow: it validates
-`deploy.yml`, builds the apps affected by the push (any change under
-`packages/`, `infra/`, `deploy.yml`, or the workflows rebuilds everything),
-pushes images to GHCR, regenerates `docker-compose.yml` on the droplet, brings
-containers up, and fails the run if anything doesn't reach a healthy state.
+Pushing to `main` runs the **Build and Deploy** workflow against the production
+target: it validates `deploy.yml`, builds the affected apps (any change under
+`packages/`, `infra/`, `deploy.yml`, or the workflow rebuilds everything), pushes
+images to GHCR, regenerates `docker-compose.yml` on the droplet, brings containers
+up, and fails the run if anything doesn't reach a healthy state.
+
+The same workflow has a **test** target for apps still in development — see
+below. A config or build failure stops a run before the droplet is touched.
 
 Traefik terminates TLS with auto-provisioned Let's Encrypt certificates and
 routes by `Host()`, so a wildcard `*.ryanzrau.dev` DNS record means new
@@ -138,24 +144,46 @@ subdomains need no DNS or certificate work.
 
 Droplet setup, backups, and debugging live in [`infra/README.md`](infra/README.md).
 
-## Test deployments
+## Apps still in development
 
-Preview a branch on a real URL without touching production.
+An app that isn't ready to claim its real URL gets `development: true`:
 
-1. Add `test-deploy.yml` to the branch:
+```yaml
+apps:
+  recipe_box:
+    subdomain: "recipe-box"
+    enabled: true
+    development: true # → test-recipe-box.ryanzrau.dev
+    port: 80
+```
 
-   ```yaml
-   app: bluestar # or: apps: [pocketbase, ryanzrau]
-   ```
+That moves it out of the production deploy entirely and into the **test target**,
+which you run by hand against any branch:
 
-2. **Actions → Test Deploy → Run workflow**, selecting the branch.
-3. The app appears at its test subdomain: root-domain apps at
-   `test.ryanzrau.dev`, others at `test-<subdomain>.ryanzrau.dev`.
-4. Re-run the workflow to push updates; merging the PR cleans the test
-   deployment up automatically.
+**Actions → Build and Deploy → Run workflow** → pick the branch → `target: test`
 
-Test containers get no volumes, so a test PocketBase starts with an empty,
-throwaway database and cannot touch production data.
+It goes live at `test-recipe-box.ryanzrau.dev`, built from that branch. Push to
+the branch and re-run to update it. Production is untouched throughout — the two
+targets deploy separate Docker Compose projects, so neither can stop or remove
+the other's containers, and a test app gets its own empty volumes rather than
+production's data.
+
+When it's ready, delete the `development` line: the app joins the production
+deploy at `recipe-box.ryanzrau.dev` on the next push to `main`.
+
+**Any push to `main` retires the running test apps**, so that once main has
+shipped nothing is left on a `test-*` subdomain. That includes pushes unrelated
+to what you're testing — re-run the test target to bring it back up. A _failed_
+production deploy leaves the test apps alone.
+
+Root-domain apps (`subdomain: ""`) land at `test.ryanzrau.dev`. Scaffold straight
+into this mode with `python3 infra/new_app.py <name> --development`.
+
+The `test-` namespace is _derived_ from the flag — validation rejects a
+hand-written `test-*` subdomain, so two apps can never reach the same URL by two
+different routes. A development app and a production app may share a `subdomain`
+value, so you can run the new version at `test-recipe-box` while the old one
+keeps serving `recipe-box`.
 
 ## Conventions
 
@@ -163,7 +191,7 @@ throwaway database and cannot touch production data.
 - Each app owns its `Dockerfile` and `nginx.conf`; static sites use a two-stage
   build (`node:20-alpine` → `nginx:alpine`)
 - No shared build tooling — apps build independently in Docker
-- Images: `ghcr.io/ryanrau/mono/<app>:latest` (prod), `:test` (test deploys)
+- Images: `ghcr.io/ryanrau/mono/<app>:latest`
 - Documentation lives next to what it documents
 
 ## External app deployments

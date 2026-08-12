@@ -7,8 +7,10 @@ reach it, and how to debug it when they don't.
 
 | File                  | What it does                                                              |
 | --------------------- | ------------------------------------------------------------------------- |
-| `generate-compose.py` | Renders `deploy.yml` (+ optional test overlay) into `docker-compose.yml`  |
-| `validate_deploy.py`  | Validates `deploy.yml` — run in CI and before pushing config changes      |
+| `generate-compose.py` | Renders `deploy.yml` into `docker-compose.yml`                            |
+| `validate_deploy.py`  | Validates `deploy.yml` — first step of the deploy, and runnable locally   |
+| `select_apps.py`      | Decides which apps a change set affects; used by the deploy               |
+| `retire_test_apps.sh` | Removes the `mono-test` project from the droplet; run by CI or by hand    |
 | `new_app.py`          | Scaffolds a new app from `templates/app` and registers it in `deploy.yml` |
 | `templates/app/`      | The app template (`.tpl` files, placeholders substituted by `new_app.py`) |
 | `AUDIT.md`            | Architecture assessment, known weaknesses, deliberate omissions           |
@@ -80,8 +82,7 @@ Keep the private key for the next step.
 `GITHUB_TOKEN` is provided automatically.
 
 Any name listed in an app's `build_args` must also exist as a secret of the same
-name — the workflows resolve them by name, so no workflow edit is needed. Test
-deploys prefer `TEST_<NAME>` when present.
+name — the deploy resolves them by name, so no workflow edit is needed.
 
 ## 4. DNS
 
@@ -171,25 +172,79 @@ Common cases:
   step polls container health, so check its output first; a container that is
   `running` but serving errors is an app bug, not a deploy bug
 
-## Test deployments
+## The workflow
 
-1. `test-deploy.yml` on a branch declares which apps to test
-2. **Test Deploy** builds them with a `:test` tag
-3. `test-deploy.active.yml` (gitignored) is written on the droplet so
-   `generate-compose.py` adds test services alongside prod
-4. Merging the PR triggers **Test Cleanup**, which removes the overlay
+One workflow, `deploy.yml`, with two targets. There is no PR gate — merge and it
+ships.
 
-Test services get Traefik routing at `test-<subdomain>.ryanzrau.dev` (or
-`test.ryanzrau.dev` for the root app) and inherit the app's environment,
-healthcheck, and rate limits — but **not** its volumes, so a test PocketBase is
-empty and ephemeral.
+| Target         | How it runs               | Deploys                                                                                              |
+| -------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **production** | Push to `main`, or manual | Enabled apps **without** `development: true`, at their real subdomains, from `:latest`               |
+| **test**       | Manual, on any branch     | Enabled apps **with** `development: true`, at `test-<subdomain>`, from `:test` built off that branch |
 
-Limitations:
+Run the test target from **Actions → Build and Deploy → Run workflow**: pick the
+branch, set `target` to `test`.
 
-- One test deployment at a time (a single `test-deploy.active.yml`)
-- The workflow is manual — it doesn't run on push
-- A deploy to `main` removes the active test deployment (it deletes
-  `test-deploy.active.yml`, and `--remove-orphans` drops the container)
+### Why they can't clobber each other
+
+The two targets deploy **different Compose projects**:
+
+- production → project `apps`, `/opt/apps/docker-compose.yml`
+- test → project `mono-test`, `/opt/apps/docker-compose.test.yml`
+
+`docker compose --remove-orphans` is project-scoped, so a production deploy never
+sees a test container and a test deploy never sees a production one. It's the same
+isolation that lets apps from other repos share this droplet. On top of that the
+two sets are disjoint by construction — the `development` flag decides which
+project an app belongs to, so no app is ever in both — container names differ by a
+`-test` suffix, image tags differ (`:latest` vs `:test`), and named volumes are
+project-prefixed, so a test PocketBase gets its own empty volume rather than
+production's data.
+
+The test project joins the Traefik network as `external`, since production owns
+both Traefik and the network. Production therefore has to have been deployed at
+least once before a test deploy can work.
+
+### Test compose lives in CI, not on the droplet
+
+The test compose file is rendered in the workflow from the branch's `deploy.yml`
+and copied over as a single artifact. The droplet's own checkout stays on `main`
+and is never touched — no config SCP'd over the working tree, no `git checkout`
+to undo it afterwards.
+
+### A production deploy retires the test apps
+
+Every production run ends by tearing the `mono-test` project down, so once `main`
+has shipped, nothing is left serving a `test-*` subdomain. `main` is the whole
+truth.
+
+**This means a push to `main` removes whatever you were testing** — even an
+unrelated push, and even a docs-only one where the deploy itself is skipped.
+Re-run the test target to bring it back. The one exception is a _failed_
+production deploy: the teardown runs after the deploy and verification steps, so
+a broken production run leaves your test environment alone.
+
+You can also retire test apps without a production deploy:
+
+- run the test target with nothing marked `development: true`, or
+- on the droplet: `cd /opt/apps && bash infra/retire_test_apps.sh`
+
+### Everything else
+
+A `concurrency: droplet` group means two runs queue rather than driving
+`docker compose` on the same droplet at once. It never cancels — aborting a
+half-finished deploy is worse than waiting.
+
+A failed config check or image build stops a run **before** the droplet is
+touched, so a broken build can't take the site down — it just doesn't deploy.
+
+Production manual runs default to rebuilding everything; untick `build_all` to
+rebuild only what the last commit touched. The test target always rebuilds every
+development app — it's a deliberate action, not a diff.
+
+Lint and formatting are **not** checked anywhere automatically. Run
+`npm run lint && npm run format:check && npm run validate` before pushing if you
+care to keep them clean.
 
 ## Droplet sizing
 

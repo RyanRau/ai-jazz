@@ -1,85 +1,32 @@
 #!/usr/bin/env python3
 """
-Reads deploy.yml and generates a docker-compose.yml with:
-- Traefik reverse proxy with Let's Encrypt
-- One internal (non-routed) service per enabled entry in `services:`
-- One service per enabled app with proper Traefik labels
-- Optional test deployment overlay via test-deploy.active.yml
+Renders deploy.yml into a docker-compose file. Two modes, two Compose projects,
+so a test deploy can never disturb production.
+
+    python3 infra/generate-compose.py              # production
+    python3 infra/generate-compose.py --test       # test
+
+**production** (project `apps`, `docker-compose.yml`) — Traefik, the internal
+services, and every enabled app *without* `development: true`, at its real
+subdomain, from the `:latest` image.
+
+**test** (project `mono-test`, `docker-compose.test.yml`) — only the enabled apps
+*with* `development: true`, at `test-<subdomain>` (or `test.<domain>` for the root
+app), from the `:test` image, built off whichever branch you ran the workflow on.
+Services and containers get a `-test` suffix, and the Traefik network is joined as
+external rather than created.
+
+The split matters because `docker compose --remove-orphans` is project-scoped: a
+production deploy only ever sees production containers, so it cannot remove a
+running test app, and vice versa. It is the same isolation that lets apps from
+other repos share the droplet.
 """
 
+import argparse
 import copy
 import os
 
 import yaml
-
-CONFIG_PATH = os.environ.get("CONFIG_PATH", "deploy.yml")
-TEST_CONFIG_PATH = os.environ.get("TEST_CONFIG_PATH", "test-deploy.active.yml")
-
-with open(CONFIG_PATH) as f:
-    config = yaml.safe_load(f)
-
-domain = config["domain"]
-registry = config["registry"]
-email = config["letsencrypt_email"]
-
-services = {}
-named_volumes = {"letsencrypt": {}}
-
-# Traefik reverse proxy
-services["traefik"] = {
-    "image": "traefik:v2.11",
-    "container_name": "traefik",
-    "restart": "unless-stopped",
-    "command": [
-        "--api.dashboard=false",
-        "--providers.docker=true",
-        "--providers.docker.exposedbydefault=false",
-        "--entrypoints.web.address=:80",
-        "--entrypoints.websecure.address=:443",
-        "--entrypoints.web.http.redirections.entrypoint.to=websecure",
-        "--entrypoints.web.http.redirections.entrypoint.scheme=https",
-        "--certificatesresolvers.le.acme.httpchallenge=true",
-        "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web",
-        f"--certificatesresolvers.le.acme.email={email}",
-        "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json",
-    ],
-    "ports": ["80:80", "443:443"],
-    "volumes": [
-        "/var/run/docker.sock:/var/run/docker.sock:ro",
-        "letsencrypt:/letsencrypt",
-    ],
-    "networks": ["web"],
-}
-
-
-def collect_named_volumes(volume_entries):
-    """Register named volumes (e.g. "pgdata:/var/lib/...") in the top-level map."""
-    for entry in volume_entries:
-        source = entry.split(":", 1)[0]
-        if not source.startswith(("/", ".")):
-            named_volumes[source] = {}
-
-
-# Internal services (no Traefik routing, no host ports — only reachable
-# from other containers on the shared network)
-enabled_services = []
-for name, svc in config.get("services", {}).items():
-    if not svc.get("enabled", False):
-        continue
-
-    enabled_services.append(name)
-    service = {
-        "image": svc["image"],
-        "container_name": name,
-        "restart": "unless-stopped",
-        "networks": ["web"],
-    }
-    for key in ("environment", "volumes", "healthcheck"):
-        if svc.get(key):
-            service[key] = svc[key]
-    collect_named_volumes(svc.get("volumes", []))
-    services[name] = service
-
 
 # Requests/second per source IP, applied to every router. Generous enough that
 # a human never notices, low enough to blunt credential stuffing and scraping.
@@ -88,6 +35,10 @@ DEFAULT_RATE_LIMIT = {"average": 100, "burst": 50}
 # X-Frame-Options. SAMEORIGIN still allows same-origin iframes (Storybook's
 # preview pane), while denying other sites the ability to frame these apps.
 DEFAULT_FRAME_OPTIONS = "SAMEORIGIN"
+
+# Fixed so external Compose projects — and the test project below — can join it.
+NETWORK_NAME = "traefik_web"
+TEST_PROJECT = "mono-test"
 
 
 def make_service_labels(name, fqdn, port, frame_options=None, rate_limit=None):
@@ -113,139 +64,173 @@ def make_service_labels(name, fqdn, port, frame_options=None, rate_limit=None):
     ]
 
 
-def apply_app_extras(service, app):
-    """Optional depends_on (map of service -> condition) and healthcheck."""
-    depends_on = app.get("depends_on", {})
-    if depends_on:
-        service["depends_on"] = {
-            dep: {"condition": condition} for dep, condition in depends_on.items()
-        }
-    if app.get("healthcheck"):
-        service["healthcheck"] = copy.deepcopy(app["healthcheck"])
-
-
-# App services
-enabled_apps = []
-for name, app in config.get("apps", {}).items():
-    if not app.get("enabled", False):
-        continue
-
-    subdomain = app["subdomain"]
-    port = app.get("port", 80)
-    fqdn = f"{subdomain}.{domain}" if subdomain else domain
-    enabled_apps.append(name)
-
-    service = {
-        "image": f"{registry}/{name}:latest",
-        "container_name": name,
+def traefik_service(email):
+    return {
+        "image": "traefik:v2.11",
+        "container_name": "traefik",
         "restart": "unless-stopped",
-        "labels": make_service_labels(
-            name, fqdn, port, app.get("frame_options"), app.get("rate_limit")
-        ),
+        "command": [
+            "--api.dashboard=false",
+            "--providers.docker=true",
+            "--providers.docker.exposedbydefault=false",
+            "--entrypoints.web.address=:80",
+            "--entrypoints.websecure.address=:443",
+            "--entrypoints.web.http.redirections.entrypoint.to=websecure",
+            "--entrypoints.web.http.redirections.entrypoint.scheme=https",
+            "--certificatesresolvers.le.acme.httpchallenge=true",
+            "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web",
+            f"--certificatesresolvers.le.acme.email={email}",
+            "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json",
+        ],
+        "ports": ["80:80", "443:443"],
+        "volumes": [
+            "/var/run/docker.sock:/var/run/docker.sock:ro",
+            "letsencrypt:/letsencrypt",
+        ],
         "networks": ["web"],
     }
 
-    # Runtime environment variables (not baked into image)
-    env_vars = app.get("environment", {})
-    if env_vars:
-        service["environment"] = env_vars
 
-    if app.get("volumes"):
-        service["volumes"] = app["volumes"]
-        collect_named_volumes(app["volumes"])
+def build(config, test_mode):
+    domain = config["domain"]
+    registry = config["registry"]
 
-    apply_app_extras(service, app)
+    services = {}
+    named_volumes = {} if test_mode else {"letsencrypt": {}}
+    routed = []
+    internal = []
 
-    services[name] = service
+    def collect_named_volumes(volume_entries):
+        """Register named volumes (e.g. "pgdata:/var/lib/...") in the top-level map."""
+        for entry in volume_entries:
+            source = entry.split(":", 1)[0]
+            if not source.startswith(("/", ".")):
+                named_volumes[source] = {}
 
-# Optional test deployment overlay
-test_apps = []
-if os.path.exists(TEST_CONFIG_PATH):
-    with open(TEST_CONFIG_PATH) as f:
-        test_config = yaml.safe_load(f)
+    if not test_mode:
+        services["traefik"] = traefik_service(config["letsencrypt_email"])
 
-    if test_config is None:
-        test_config = []
+        # Internal services (no Traefik routing, no host ports — only reachable
+        # from other containers on the shared network). Production-only: the
+        # test project reaches them over the shared network by service name.
+        for name, svc in (config.get("services") or {}).items():
+            if not svc.get("enabled", False):
+                continue
+            internal.append(name)
+            service = {
+                "image": svc["image"],
+                "container_name": name,
+                "restart": "unless-stopped",
+                "networks": ["web"],
+            }
+            for key in ("environment", "volumes", "healthcheck"):
+                if svc.get(key):
+                    service[key] = svc[key]
+            collect_named_volumes(svc.get("volumes", []))
+            services[name] = service
 
-    # Support both list format and legacy single-app format
-    if isinstance(test_config, list):
-        test_entries = test_config
-    elif isinstance(test_config, dict):
-        # Legacy: {app: "name"} or {app: "name", subdomain: "x", port: 80}
-        if "app" in test_config:
-            test_entries = [test_config]
+    for name, app in (config.get("apps") or {}).items():
+        if not app.get("enabled", False):
+            continue
+        # The two modes partition the apps: every app belongs to exactly one
+        # project, which is what keeps --remove-orphans from crossing over.
+        if bool(app.get("development", False)) != test_mode:
+            continue
+
+        subdomain = app["subdomain"]
+        port = app.get("port", 80)
+
+        if test_mode:
+            service_name = f"{name}-test"
+            fqdn = f"test-{subdomain}.{domain}" if subdomain else f"test.{domain}"
+            image = f"{registry}/{name}:test"
         else:
-            test_entries = []
-    else:
-        test_entries = []
+            service_name = name
+            fqdn = f"{subdomain}.{domain}" if subdomain else domain
+            image = f"{registry}/{name}:latest"
 
-    for entry in test_entries:
-        if isinstance(entry, dict):
-            app_name = entry.get("app") or entry.get("name")
-        else:
-            continue
+        routed.append(f"{service_name} → {fqdn}")
 
-        if not app_name:
-            continue
-
-        # Get subdomain/port from entry, fall back to deploy.yml
-        subdomain = entry.get("subdomain")
-        port = entry.get("port")
-
-        if subdomain is None and app_name in config.get("apps", {}):
-            subdomain = config["apps"][app_name]["subdomain"]
-        if port is None and app_name in config.get("apps", {}):
-            port = config["apps"][app_name].get("port", 80)
-
-        if subdomain is None:
-            print(f"Warning: test app '{app_name}' has no subdomain config, skipping")
-            continue
-
-        port = port or 80
-        test_fqdn = f"test-{subdomain}.{domain}" if subdomain else f"test.{domain}"
-        test_name = f"{app_name}-test"
-
-        app_config = config.get("apps", {}).get(app_name, {})
-
-        test_service = {
-            "image": f"{registry}/{app_name}:test",
-            "container_name": test_name,
+        service = {
+            "image": image,
+            "container_name": service_name,
             "restart": "unless-stopped",
             "labels": make_service_labels(
-                test_name,
-                test_fqdn,
+                service_name,
+                fqdn,
                 port,
-                app_config.get("frame_options"),
-                app_config.get("rate_limit"),
+                app.get("frame_options"),
+                app.get("rate_limit"),
             ),
             "networks": ["web"],
         }
 
-        # Inherit runtime environment variables and extras from app config
-        if app_name in config.get("apps", {}):
-            app = config["apps"][app_name]
-            env_vars = app.get("environment", {})
-            if env_vars:
-                test_service["environment"] = dict(env_vars)
-            apply_app_extras(test_service, app)
+        # Runtime environment variables (not baked into image)
+        if app.get("environment"):
+            service["environment"] = app["environment"]
 
-        services[test_name] = test_service
-        test_apps.append(f"{app_name} → {test_fqdn}")
+        if app.get("volumes"):
+            # Named volumes are prefixed by the Compose project, so the test
+            # project gets its own empty volumes rather than production's data.
+            service["volumes"] = app["volumes"]
+            collect_named_volumes(app["volumes"])
 
-compose = {
-    "services": services,
-    "volumes": named_volumes,
-    "networks": {
-        "web": {"driver": "bridge", "name": "traefik_web"},
-    },
-}
+        depends_on = app.get("depends_on") or {}
+        if depends_on and not test_mode:
+            service["depends_on"] = {
+                dep: {"condition": condition} for dep, condition in depends_on.items()
+            }
+        if app.get("healthcheck"):
+            service["healthcheck"] = copy.deepcopy(app["healthcheck"])
 
-output_path = os.environ.get("COMPOSE_OUTPUT", "docker-compose.yml")
-with open(output_path, "w") as f:
-    yaml.dump(compose, f, default_flow_style=False, sort_keys=False)
+        services[service_name] = service
 
-print(f"Generated docker-compose.yml with enabled apps: {enabled_apps}")
-if enabled_services:
-    print(f"  + internal services: {enabled_services}")
-for t in test_apps:
-    print(f"  + test: {t}")
+    if test_mode:
+        # Traefik and the network are owned by the production project; join them.
+        network = {"external": True, "name": NETWORK_NAME}
+    else:
+        network = {"driver": "bridge", "name": NETWORK_NAME}
+
+    compose = {"services": services}
+    if named_volumes:
+        compose["volumes"] = named_volumes
+    compose["networks"] = {"web": network}
+
+    return compose, routed, internal
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="render the development apps into the test project instead",
+    )
+    parser.add_argument("--output", help="output path (default depends on mode)")
+    args = parser.parse_args()
+
+    config_path = os.environ.get("CONFIG_PATH", "deploy.yml")
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+
+    compose, routed, internal = build(config, args.test)
+
+    default_output = "docker-compose.test.yml" if args.test else "docker-compose.yml"
+    output_path = args.output or os.environ.get("COMPOSE_OUTPUT", default_output)
+    with open(output_path, "w") as f:
+        yaml.dump(compose, f, default_flow_style=False, sort_keys=False)
+
+    label = f"test (project {TEST_PROJECT})" if args.test else "production"
+    print(f"Generated {output_path} — {label}")
+    if not routed:
+        print("  (no apps)")
+    for entry in routed:
+        print(f"  {entry}")
+    if internal:
+        print(f"  + internal services: {internal}")
+
+
+if __name__ == "__main__":
+    main()

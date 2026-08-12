@@ -114,9 +114,6 @@ tar cron.
 and ships breaking changes between minor versions — read the release notes and
 take a backup before bumping.
 
-**Test deploys:** `pocketbase-test` gets no `pb_data` volume, so it starts empty
-and ephemeral. It cannot touch production data.
-
 ## Local development
 
 ```bash

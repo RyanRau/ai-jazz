@@ -14,7 +14,8 @@ apps/              # Deployable apps (Dockerfile + nginx.conf per app)
 packages/
   bluestar/        # React component library (also deployed as Storybook → ui.ryanzrau.dev)
   PACKAGES.md      # Component + prop reference — read before writing UI
-infra/             # generate-compose.py, validate_deploy.py, new_app.py, templates/, README, AUDIT
+infra/             # deploy tooling: generate-compose, validate_deploy, select_apps,
+                   # new_app, retire_test_apps, templates/, README, AUDIT
 deploy.yml         # Source of truth for which apps are deployed and their subdomains
 ```
 
@@ -73,7 +74,7 @@ cd apps/<name> && npm install && npm run dev
 install bluestar's devDependencies, so bluestar must be installed first. After
 changing bluestar, rebuild it — apps import `dist/`, not `src/`.
 
-Checks, all enforced by PR validation:
+Checks. Nothing runs them on a PR — run them before pushing:
 
 ```bash
 npm run lint && npm run format:check    # eslint + prettier across apps/ and packages/
@@ -88,8 +89,7 @@ config, builds the apps affected by the push, pushes images to GHCR, regenerates
 `docker-compose.yml` on the droplet, and verifies containers come up healthy.
 
 - `deploy.yml` — which apps are live, their subdomains and ports
-- `infra/generate-compose.py` — renders `docker-compose.yml` (plus an optional
-  test overlay from `test-deploy.active.yml`)
+- `infra/generate-compose.py` — renders `docker-compose.yml`
 - `infra/validate_deploy.py` — catches duplicate subdomains, missing Dockerfiles,
   reserved-subdomain collisions, malformed fields
 - Traefik routes by `Host()` and provisions Let's Encrypt TLS automatically
@@ -112,6 +112,7 @@ manually with `build_all` to force a full rebuild.
 | `volumes`       | No       | `name:/path` mounts; named volumes are auto-registered               |
 | `depends_on`    | No       | Internal service → compose condition (e.g. `redis: service_healthy`) |
 | `healthcheck`   | No       | Compose healthcheck passthrough                                      |
+| `development`   | No       | `true` moves the app to the test target at `test-<subdomain>`        |
 | `frame_options` | No       | `X-Frame-Options` value (default `SAMEORIGIN`)                       |
 | `rate_limit`    | No       | `{average, burst}` requests/sec per source IP (default 100/50)       |
 
@@ -123,9 +124,7 @@ other repos, so validation rejects a collision.
 1. Add the arg name to the app's `build_args` in `deploy.yml`
 2. Add a GitHub secret **with exactly that name**
 
-The workflows resolve build args from secrets by name — no workflow edit needed.
-Test deploys prefer `TEST_<NAME>` when that secret exists, otherwise fall back to
-`<NAME>`.
+The deploy resolves build args from secrets by name — no workflow edit needed.
 
 **Adding a runtime env var:**
 
@@ -161,62 +160,62 @@ SQLite persisted in the `pb_data` volume.
 
 Full detail in `apps/pocketbase/README.md`.
 
-## Test Subdomain Deployments
+## Apps Still In Development
 
-Any app (or several) can be deployed to test subdomains from a feature branch
-without impacting production.
+One workflow, two targets, decided by `development: true` in `deploy.yml`:
 
-1. Add `test-deploy.yml` to the branch:
+| Target         | Trigger                 | Deploys                                                               |
+| -------------- | ----------------------- | --------------------------------------------------------------------- |
+| **production** | Push to `main` / manual | Apps **without** the flag → real subdomains, `:latest`                |
+| **test**       | Manual, any branch      | Apps **with** the flag → `test-<subdomain>`, `:test` from that branch |
 
-   ```yaml
-   app: bluestar # or: apps: [pocketbase, ryanzrau]
-   ```
+```yaml
+recipe_box:
+  subdomain: "recipe-box"
+  enabled: true
+  development: true # → test-recipe-box.ryanzrau.dev, via the test target
+  port: 80
+```
 
-   App names must match keys in `deploy.yml`.
+Run the test target from **Actions → Build and Deploy → Run workflow**, selecting
+the branch and setting `target: test`.
 
-2. **Actions → Test Deploy → Run workflow**, selecting the branch.
-3. The app is live at its test subdomain. Re-run to update.
-4. Merging the PR triggers **Test Cleanup**, which removes the deployment.
+- **They cannot clobber each other.** The targets deploy separate Compose
+  projects (`apps` and `mono-test`), and `--remove-orphans` is project-scoped, so
+  a production deploy never sees a test container or vice versa. The app sets are
+  disjoint by construction, container names differ by a `-test` suffix, image tags
+  differ, and named volumes are project-prefixed — a test PocketBase gets its own
+  empty volume, not production's data.
+- The test compose file is rendered in CI from the branch's `deploy.yml` and
+  copied over as one artifact; the droplet's checkout stays on `main`.
+- The test project joins the Traefik network as `external`, so production must
+  have been deployed at least once first.
+- **A production deploy retires the test apps.** Every production run ends by
+  tearing the `mono-test` project down, so once `main` has shipped nothing is
+  serving a `test-*` subdomain — including on an unrelated or docs-only push.
+  Re-run the test target to bring it back. A _failed_ production deploy skips the
+  teardown and leaves the test environment intact.
+- **Promoting is deleting one line.** The app joins the production deploy on the
+  next push to `main`, which also retires its old test container. To retire test
+  apps without a production deploy, run the test target with nothing marked, or
+  `bash infra/retire_test_apps.sh` on the droplet.
+- Root-domain apps (`subdomain: ""`) become `test.ryanzrau.dev`.
+- The `test-` namespace is derived from the flag. Validation rejects a
+  hand-written `test-*` subdomain so a URL can't be reachable two ways.
+- A development app and a production app may share a `subdomain` value, so a new
+  version can run at `test-recipe-box` while the old one serves `recipe-box`.
 
-### Test subdomain naming
-
-- Root domain app (`subdomain: ""`) → `test.ryanzrau.dev`
-- Subdomain app (`"ui"`) → `test-ui.ryanzrau.dev`
-
-### How test deploy works
-
-1. Reads `test-deploy.yml` from the branch for the app list
-2. Builds each app and pushes with the `:test` tag to GHCR
-3. SCPs the branch's `deploy.yml` and `infra/generate-compose.py` to the droplet
-4. Writes `test-deploy.active.yml` on the droplet with app metadata
-5. Runs `generate-compose.py`, merging prod + test services into one compose file
-6. Restores main's files via `git checkout`
-7. Pulls test images, starts only the test services, and fails if one doesn't run
-
-### Key details
-
-- Multiple apps can be test-deployed simultaneously
-- Test containers get **no volumes** — a test PocketBase is empty and ephemeral
-- The workflow is manual (does not run on push)
-- `test-deploy.yml` is the branch config (committed); `test-deploy.active.yml` is
-  droplet runtime state (gitignored)
-- A prod deploy to `main` removes any active test deployment
-
-### Debugging test deploys
-
-- **"App not found in deploy.yml"** — the app must exist in the branch's
-  `deploy.yml` with a subdomain
-- **Image not found** — test images use the `:test` tag, not `:latest`
-- **Site not loading** — check `docker ps | grep test`, Traefik labels via
-  `docker inspect`, and `dig test-<subdomain>.ryanzrau.dev`
-- **Compose errors about missing services** — check `test-deploy.active.yml`
+Scaffold directly into this mode: `python3 infra/new_app.py <name> --development`.
 
 ## Code Quality
 
 ESLint + Prettier (JS/TS across `apps/` and `packages/`) and Ruff (Python in
-`infra/`) are enforced by PR validation, which also validates `deploy.yml` and
-builds every enabled app's image. The workflow auto-fixes lint/format issues and
-commits them back to the PR.
+`infra/`) are **not enforced by CI** — there is no PR gate. Run them locally
+before pushing.
+
+The deploy does gate on the two things that would actually break the site: it
+validates `deploy.yml` and builds each affected app's image, both before the
+droplet is touched.
 
 ## Security Expectations
 

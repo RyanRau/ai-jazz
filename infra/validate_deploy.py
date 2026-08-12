@@ -4,7 +4,7 @@ Validate deploy.yml before it reaches the droplet.
 
 Catches the mistakes that otherwise surface as a broken deploy: a subdomain
 claimed twice, an app with no Dockerfile, a collision with an externally-hosted
-subdomain, a typo'd field name. Run locally or in PR validation:
+subdomain, a typo'd field name. Runs first in the deploy, and locally:
 
     python3 infra/validate_deploy.py
 
@@ -36,6 +36,7 @@ TOP_LEVEL_KEYS = {
 APP_KEYS = {
     "subdomain",
     "enabled",
+    "development",
     "port",
     "path",
     "build_args",
@@ -127,6 +128,11 @@ def check_app(name, app, config, claimed):
     if not isinstance(app.get("enabled"), bool):
         error(f"{where}.enabled: must be true or false")
 
+    development = app.get("development", False)
+    if not isinstance(development, bool):
+        error(f"{where}.development: must be true or false")
+        development = False
+
     port = app.get("port")
     if not isinstance(port, int) or isinstance(port, bool) or not (1 <= port <= 65535):
         error(f"{where}.port: must be an integer between 1 and 65535")
@@ -135,22 +141,31 @@ def check_app(name, app, config, claimed):
     # app may legitimately have no Dockerfile yet. Everything below this block
     # is checked regardless, so problems surface before you flip enabled on.
     if app.get("enabled") is True:
+        # The test- namespace is derived from `development: true`, never written
+        # by hand — otherwise two apps could reach the same URL by two routes.
         if subdomain == "test" or subdomain.startswith("test-"):
             error(
-                f"{where}.subdomain: 'test' / 'test-*' is reserved for test deployments"
+                f"{where}.subdomain: the 'test' / 'test-*' namespace is produced by "
+                "'development: true' — set that instead of naming the subdomain"
             )
 
-        if subdomain in claimed:
+        # Claim the URL the app actually resolves to, so a development app and a
+        # production app can share a subdomain during a promotion.
+        fqdn = f"test-{subdomain}" if development else subdomain
+        if development and not subdomain:
+            fqdn = "test"
+
+        if fqdn in claimed:
             error(
-                f"{where}.subdomain: '{subdomain or '(root)'}' already claimed by '{claimed[subdomain]}'"
+                f"{where}.subdomain: '{fqdn or '(root)'}' already claimed by '{claimed[fqdn]}'"
             )
         else:
-            claimed[subdomain] = name
+            claimed[fqdn] = name
 
         for reserved in config.get("reserved_subdomains") or []:
-            if subdomain == reserved:
+            if fqdn == reserved:
                 error(
-                    f"{where}.subdomain: '{subdomain}' is reserved for an externally-deployed app"
+                    f"{where}.subdomain: '{fqdn}' is reserved for an externally-deployed app"
                 )
 
         app_path = app.get("path", f"apps/{name}")

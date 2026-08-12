@@ -15,8 +15,8 @@ that no longer existed.
   and inspectable, avoiding heavyweight orchestration.
 - **Traefik + Let's Encrypt + wildcard DNS** — a new subdomain needs zero DNS or
   TLS work, and security headers are applied uniformly to every app.
-- **Test subdomain deployments** — feature branches preview on real URLs without
-  touching prod, cleaned up automatically on merge.
+- **A single deploy path** — every app, including ones still in development,
+  ships through the same build-and-deploy; nothing has a bespoke pipeline.
 - **External app isolation** — separate Compose projects on the shared
   `traefik_web` network can't be touched by mono deploys.
 - **Multi-stage Dockerfiles** — small runtime images with a clean split between
@@ -46,19 +46,78 @@ that no longer existed.
   type-checks, and builds.
 - `infra/validate_deploy.py` enforces config invariants (duplicate subdomains,
   missing Dockerfiles, reserved-subdomain collisions, malformed fields) and runs
-  in all three workflows.
+  as the deploy's first step.
 - Build args now resolve from same-named GitHub secrets automatically, removing
   the hardcoded `case` statements that had to be edited in two workflows for
   every new secret.
 - Change detection: a push rebuilds only affected apps; changes to shared paths
   (`packages/`, `infra/`, `deploy.yml`, workflows) still rebuild everything.
-- Buildx layer caching (`type=gha`) across all three workflows.
+- Buildx layer caching (`type=gha`) on every image build.
 - Post-deploy verification polls container status and health, so a container that
   crashes on boot fails the deploy instead of quietly serving 502s.
 - Lint and format now cover `packages/` (previously only `apps/` was checked, so
   the component library was unchecked); the dead `bandit`/`pip-audit` steps —
   which had no Python dependencies to scan — were dropped.
 - Added Dependabot for GitHub Actions and npm.
+
+**Workflow simplification**
+
+Went from four workflows to one, with two targets. The typical flow is
+build-and-deploy; the rest was machinery around a preview path, plus a PR gate
+that was never waited on.
+
+- **Deleted `test-deploy.yml` and `test-cleanup.yml`**, and with them the whole
+  test-overlay system: the `test-deploy.yml` branch config, the
+  `test-deploy.active.yml` droplet state file, the `:test` image tag, the SCP of
+  branch config onto the droplet, and the `git checkout` restore afterwards.
+- **Replaced it with `development: true` on an app in `deploy.yml`** plus a
+  `target` input on the one remaining workflow. `production` (push to main)
+  deploys the apps without the flag at their real subdomains; `test` (manual, any
+  branch) deploys the apps with it at `test-<subdomain>`, built from that branch.
+  Promoting is deleting one line. Validation rejects a hand-written `test-*`
+  subdomain so the namespace stays derived, and allows a development app and a
+  production app to share a `subdomain` value, so a new version can run at
+  `test-recipe-box` while the old one still serves `recipe-box`.
+- **The two targets deploy separate Compose projects** (`apps` and `mono-test`).
+  This is the part that matters: `--remove-orphans` is project-scoped, so a
+  production deploy cannot stop or delete a running test container, and a test
+  deploy cannot touch production. The app sets are also disjoint by construction,
+  container names differ by a `-test` suffix, image tags differ, and named volumes
+  are project-prefixed. It's the same isolation that already lets apps from other
+  repos share the droplet.
+- **The test compose file is rendered in CI** from the branch's `deploy.yml` and
+  copied over as a single artifact, so the droplet's checkout stays on `main`.
+  That replaces the old approach of SCP'ing config over the working tree and
+  restoring it with `git checkout` afterwards.
+- **Production retires the test apps.** Every production run ends by tearing the
+  `mono-test` project down, so `main` is the whole truth: after it ships, nothing
+  is serving a `test-*` subdomain. The teardown sits after the deploy and verify
+  steps, so a failed production run doesn't also destroy the test environment.
+  `infra/retire_test_apps.sh` holds the logic and is runnable by hand; the test
+  target calls it too when nothing is marked `development`.
+- **Deleted `pr-validation.yml` too.** It was never waited on, so it was a
+  runner cost and a red X rather than a gate. What it uniquely enforced —
+  ESLint, Prettier, Ruff — is now local-only (`npm run lint`, `format:check`,
+  `validate`). What actually protects the site it did not uniquely provide: the
+  deploy validates `deploy.yml` and builds every affected image _before_ it
+  touches the droplet, so a bad config or a broken build fails the run without
+  deploying.
+
+Problems found along the way:
+
+- **No concurrency control anywhere.** A merge fired Build and Deploy _and_ Test
+  Cleanup simultaneously, both SSHing in to run `docker compose up` against the
+  same project; two quick pushes to `main` raced the same way. Deploy now holds a
+  `concurrency: droplet` group that queues rather than cancels. (Deleting Test
+  Cleanup removes the merge-time race entirely, but the rapid-push race was real
+  on its own.)
+- **PR validation rebuilt every app on every PR**, so a README typo cost three
+  Docker builds — moot now that the workflow is gone, but the same fix applies
+  to the deploy, which builds only what a push affected.
+
+Change selection lives in `infra/select_apps.py` rather than workflow YAML, so it
+is unit-testable outside CI — which matters, since workflow shell is otherwise
+only ever exercised in production.
 
 **Documentation**
 
@@ -121,18 +180,18 @@ never in a frontend build.
 
 ## Known weaknesses (accepted for now)
 
-| Issue                                                                                 | Impact                                        | Mitigation if it starts to hurt                                                                                     |
-| ------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Single droplet** — one machine is a SPOF for every app                              | Total outage on droplet failure               | Acceptable for personal apps; backups + these setup docs make a rebuild ~1hr. Multi-node isn't worth the cost yet   |
-| **No monitoring/alerting** — failures are discovered by visiting the site             | Silent downtime between deploys               | Cheapest real fix available: an external uptime ping (UptimeRobot / healthchecks.io) against `/api/health`          |
-| **No rollback** — a bad image stays live until the next push                          | Recovery requires a revert commit and rebuild | Deploy verification now _detects_ a failed boot; retagging the previous GHCR image is still manual                  |
-| **Secrets via SSH env + dotenv** — `/opt/apps/.env` is plaintext on the droplet       | Droplet compromise = all runtime secrets      | `chmod 600` + deploy-user-only; a secrets manager is overkill at this scale                                         |
-| **Third-party actions pinned by tag** — `appleboy/ssh-action@v1` etc. get the SSH key | A compromised tag could exfiltrate the key    | Pin to commit SHAs; Dependabot now keeps them current, which is the intermediate step                               |
-| **Single SQLite backend** — PocketBase is one container on one disk                   | Backend down = all apps lose data access      | Fine at this scale; scheduled backups + the volume. SQLite is plenty for personal traffic                           |
-| **Pre-1.0 backend** — PocketBase v0.x breaks between minor versions                   | Upgrades may need migration tweaks            | `PB_VERSION` is pinned; read release notes and back up before bumping                                               |
-| **Traefik v2.11** — v3 is current                                                     | Falling behind on fixes                       | Upgrade needs label/CLI migration; do it deliberately with a test deploy first                                      |
-| **No npm workspaces** — the `file:` + bootstrap dance is a papercut                   | One extra command on a fresh clone            | Workspaces would fix it, but the per-app `npm ci` in each Dockerfile would need reworking; not worth the risk today |
-| **One test deployment at a time**                                                     | Two branches can't test-deploy simultaneously | Rarely matters for a single developer                                                                               |
+| Issue                                                                                 | Impact                                          | Mitigation if it starts to hurt                                                                                     |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Single droplet** — one machine is a SPOF for every app                              | Total outage on droplet failure                 | Acceptable for personal apps; backups + these setup docs make a rebuild ~1hr. Multi-node isn't worth the cost yet   |
+| **No monitoring/alerting** — failures are discovered by visiting the site             | Silent downtime between deploys                 | Cheapest real fix available: an external uptime ping (UptimeRobot / healthchecks.io) against `/api/health`          |
+| **No rollback** — a bad image stays live until the next push                          | Recovery requires a revert commit and rebuild   | Deploy verification now _detects_ a failed boot; retagging the previous GHCR image is still manual                  |
+| **Secrets via SSH env + dotenv** — `/opt/apps/.env` is plaintext on the droplet       | Droplet compromise = all runtime secrets        | `chmod 600` + deploy-user-only; a secrets manager is overkill at this scale                                         |
+| **Third-party actions pinned by tag** — `appleboy/ssh-action@v1` etc. get the SSH key | A compromised tag could exfiltrate the key      | Pin to commit SHAs; Dependabot now keeps them current, which is the intermediate step                               |
+| **Single SQLite backend** — PocketBase is one container on one disk                   | Backend down = all apps lose data access        | Fine at this scale; scheduled backups + the volume. SQLite is plenty for personal traffic                           |
+| **One test app per subdomain** — the test project keys off the same `deploy.yml`      | Two branches can't preview the same app at once | Rarely matters for a single developer; the second branch waits                                                      |
+| **Pre-1.0 backend** — PocketBase v0.x breaks between minor versions                   | Upgrades may need migration tweaks              | `PB_VERSION` is pinned; read release notes and back up before bumping                                               |
+| **Traefik v2.11** — v3 is current                                                     | Falling behind on fixes                         | Upgrade needs label/CLI migration; do it deliberately with a test deploy first                                      |
+| **No npm workspaces** — the `file:` + bootstrap dance is a papercut                   | One extra command on a fresh clone              | Workspaces would fix it, but the per-app `npm ci` in each Dockerfile would need reworking; not worth the risk today |
 
 ## Recommended next steps, in order of value
 
