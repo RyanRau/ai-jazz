@@ -14,7 +14,10 @@ export default [
       "**/.venv/**",
       "**/.git/**",
       "**/coverage/**",
-      "**/.storybook-static/**",
+      // The built Storybook, not the .storybook/ config dir — the leading dot
+      // here was a typo, so a local `npm run build-storybook` used to make
+      // `npm run lint` report ~10k errors from minified bundles.
+      "**/storybook-static/**",
       "**/*.min.js",
       "**/package-lock.json",
       // PocketBase hook/migration scripts run in PocketBase's goja VM, not Node — globals

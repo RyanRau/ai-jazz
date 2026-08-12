@@ -117,6 +117,17 @@ and renders the label once; `Flexbox` uses goober; `FormInputLayout` wires
 `required` marker; every control now shares one `controlClass` so focus rings and
 disabled states can't drift apart.
 
+Two follow-ups, found when `FormInputLayout` finally got the story it had always
+been missing:
+
+- Its label was `<Text as="label">` wrapping a `<label htmlFor>` — `Text` renders
+  the tag `as` names and does not forward `htmlFor`, so the fix above had shipped
+  as **nested labels**, which are invalid and let the browser pick the
+  association. The `<label>` is now the outer element around a `<Text as="span">`.
+- The repo-wide eslint ignore said `**/.storybook-static/**` with a leading dot,
+  which matches nothing. Anyone who ran `npm run build-storybook` before
+  `npm run lint` got ~10,000 errors out of minified bundles.
+
 ### Stories are type-checked now
 
 They weren't reachable from `index.ts`, so tsup's dts pass never saw them and

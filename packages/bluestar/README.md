@@ -10,9 +10,15 @@ The full component and prop reference lives in
 [`AUDIT.md`](./AUDIT.md) records the architecture, its two non-obvious
 constraints, and what is deliberately not built yet.
 
-This package is also deployed: its Storybook is published as a static site at
-[ui.ryanzrau.dev](https://ui.ryanzrau.dev) (registered in the repo-root
-`deploy.yml` as the `bluestar` app with `path: packages/bluestar`).
+This package is also deployed: its Storybook is published as a static site,
+registered in the repo-root `deploy.yml` as the `bluestar` app with
+`path: packages/bluestar`.
+
+It is currently marked `development: true` while the rework is reviewed, so it
+serves from [test-ui.ryanzrau.dev](https://test-ui.ryanzrau.dev) via a manual run
+of **Actions → Build and Deploy** with `target: test`. Deleting that line
+promotes it back to [ui.ryanzrau.dev](https://ui.ryanzrau.dev) on the next push
+to `main`.
 
 ## Theming
 

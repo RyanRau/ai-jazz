@@ -47,16 +47,20 @@ export default function FormInputLayout({
   return (
     <Flexbox direction="column" gap={4}>
       {label && (
-        <Text as="label" variant="label">
-          <label htmlFor={id}>
+        // The <label> is the outer element: Text renders whatever tag `as` names
+        // and does not forward htmlFor, so wrapping a <label> in a Text
+        // as="label" would nest two labels — invalid, and the association goes
+        // to whichever one the browser picks.
+        <label htmlFor={id}>
+          <Text as="span" variant="label">
             {label}
             {required && (
               <span aria-hidden="true" style={{ color: theme.colors.error }}>
                 {" *"}
               </span>
             )}
-          </label>
-        </Text>
+          </Text>
+        </label>
       )}
       {description && (
         <span id={descriptionId}>
