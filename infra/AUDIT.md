@@ -89,8 +89,12 @@ that was never waited on.
   copied over as a single artifact, so the droplet's checkout stays on `main`.
   That replaces the old approach of SCP'ing config over the working tree and
   restoring it with `git checkout` afterwards.
-- **Running the test target with nothing marked tears the test project down**,
-  which is how a promoted app's leftover container gets retired.
+- **Production retires the test apps.** Every production run ends by tearing the
+  `mono-test` project down, so `main` is the whole truth: after it ships, nothing
+  is serving a `test-*` subdomain. The teardown sits after the deploy and verify
+  steps, so a failed production run doesn't also destroy the test environment.
+  `infra/retire_test_apps.sh` holds the logic and is runnable by hand; the test
+  target calls it too when nothing is marked `development`.
 - **Deleted `pr-validation.yml` too.** It was never waited on, so it was a
   runner cost and a red X rather than a gate. What it uniquely enforced —
   ESLint, Prettier, Ruff — is now local-only (`npm run lint`, `format:check`,

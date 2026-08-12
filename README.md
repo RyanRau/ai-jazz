@@ -167,9 +167,12 @@ the other's containers, and a test app gets its own empty volumes rather than
 production's data.
 
 When it's ready, delete the `development` line: the app joins the production
-deploy at `recipe-box.ryanzrau.dev` on the next push to `main`. Run the test
-target once more to retire the leftover test container (with nothing marked
-`development`, the run tears the test project down).
+deploy at `recipe-box.ryanzrau.dev` on the next push to `main`.
+
+**Any push to `main` retires the running test apps**, so that once main has
+shipped nothing is left on a `test-*` subdomain. That includes pushes unrelated
+to what you're testing — re-run the test target to bring it back up. A _failed_
+production deploy leaves the test apps alone.
 
 Root-domain apps (`subdomain: ""`) land at `test.ryanzrau.dev`. Scaffold straight
 into this mode with `python3 infra/new_app.py <name> --development`.

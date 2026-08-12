@@ -10,6 +10,7 @@ reach it, and how to debug it when they don't.
 | `generate-compose.py` | Renders `deploy.yml` into `docker-compose.yml`                            |
 | `validate_deploy.py`  | Validates `deploy.yml` — first step of the deploy, and runnable locally   |
 | `select_apps.py`      | Decides which apps a change set affects; used by the deploy               |
+| `retire_test_apps.sh` | Removes the `mono-test` project from the droplet; run by CI or by hand    |
 | `new_app.py`          | Scaffolds a new app from `templates/app` and registers it in `deploy.yml` |
 | `templates/app/`      | The app template (`.tpl` files, placeholders substituted by `new_app.py`) |
 | `AUDIT.md`            | Architecture assessment, known weaknesses, deliberate omissions           |
@@ -211,11 +212,22 @@ and copied over as a single artifact. The droplet's own checkout stays on `main`
 and is never touched — no config SCP'd over the working tree, no `git checkout`
 to undo it afterwards.
 
-### Retiring a test deployment
+### A production deploy retires the test apps
 
-Promote the app (delete its `development: true`) or unset the flags, then run the
-test target again. With nothing marked, the run tears the `mono-test` project down
-instead of deploying it.
+Every production run ends by tearing the `mono-test` project down, so once `main`
+has shipped, nothing is left serving a `test-*` subdomain. `main` is the whole
+truth.
+
+**This means a push to `main` removes whatever you were testing** — even an
+unrelated push, and even a docs-only one where the deploy itself is skipped.
+Re-run the test target to bring it back. The one exception is a _failed_
+production deploy: the teardown runs after the deploy and verification steps, so
+a broken production run leaves your test environment alone.
+
+You can also retire test apps without a production deploy:
+
+- run the test target with nothing marked `development: true`, or
+- on the droplet: `cd /opt/apps && bash infra/retire_test_apps.sh`
 
 ### Everything else
 

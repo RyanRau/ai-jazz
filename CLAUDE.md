@@ -189,9 +189,15 @@ the branch and setting `target: test`.
   copied over as one artifact; the droplet's checkout stays on `main`.
 - The test project joins the Traefik network as `external`, so production must
   have been deployed at least once first.
+- **A production deploy retires the test apps.** Every production run ends by
+  tearing the `mono-test` project down, so once `main` has shipped nothing is
+  serving a `test-*` subdomain — including on an unrelated or docs-only push.
+  Re-run the test target to bring it back. A _failed_ production deploy skips the
+  teardown and leaves the test environment intact.
 - **Promoting is deleting one line.** The app joins the production deploy on the
-  next push to `main`; run the test target once more (with nothing marked) to
-  tear the leftover test container down.
+  next push to `main`, which also retires its old test container. To retire test
+  apps without a production deploy, run the test target with nothing marked, or
+  `bash infra/retire_test_apps.sh` on the droplet.
 - Root-domain apps (`subdomain: ""`) become `test.ryanzrau.dev`.
 - The `test-` namespace is derived from the flag. Validation rejects a
   hand-written `test-*` subdomain so a URL can't be reachable two ways.

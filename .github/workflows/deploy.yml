@@ -201,6 +201,22 @@ jobs:
             done
             exit 1
 
+      # main is the source of truth: once it has shipped, nothing should still be
+      # serving a test-* subdomain. Runs even on a docs-only push (where the
+      # deploy above is skipped), but not if the deploy failed — a broken
+      # production run shouldn't also destroy whatever you were testing.
+      - name: Retire test apps (production is the whole truth)
+        if: env.TARGET == 'production'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/apps
+            bash infra/retire_test_apps.sh
+
       # ---------------------------------------------------------------------
       # Test target: a separate Compose project, so nothing here can touch a
       # production container. The compose file is rendered here from this
@@ -291,7 +307,7 @@ jobs:
       # Promoting the last development app (or unsetting the flags) leaves its
       # test containers with nothing to describe them. Running the test target
       # with nothing marked is how you retire them.
-      - name: Tear down test project
+      - name: Retire test apps
         if: env.TARGET == 'test' && steps.select.outputs.apps == ''
         uses: appleboy/ssh-action@v1
         with:
@@ -301,9 +317,5 @@ jobs:
           script: |
             set -e
             cd /opt/apps
-            if [ -f docker-compose.test.yml ]; then
-              docker compose -p mono-test -f docker-compose.test.yml down --remove-orphans
-              rm -f docker-compose.test.yml
-            fi
+            bash infra/retire_test_apps.sh
             docker image prune -f
-            echo "=== Test project torn down ==="
