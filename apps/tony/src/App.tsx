@@ -15,7 +15,7 @@ function App() {
       .getFullList({ expand: "app" })
       .then((grants) =>
         setGranted(
-          grants.some((g) => (g.expand?.app as { slug?: string } | undefined)?.slug === "llm")
+          grants.some((g) => (g.expand?.app as { slug?: string } | undefined)?.slug === "tony")
         )
       );
   }, [record]);
@@ -31,7 +31,7 @@ function App() {
   if (granted === false) {
     return (
       <Flexbox direction="column" alignItems="center" style={{ padding: 32 }}>
-        <EmptyState title="No access" description="Ask the admin to grant you the LLM app." />
+        <EmptyState title="No access" description="Ask the admin to grant you the Tony app." />
       </Flexbox>
     );
   }
@@ -39,7 +39,7 @@ function App() {
   if (granted === null) return null;
 
   return (
-    <AppShell title="LLM" account={<AccountMenu />}>
+    <AppShell title="Tony" account={<AccountMenu />}>
       <Card padding={24}>
         <Flexbox direction="column" gap={8}>
           <Header variant="h2">Coming soon</Header>
