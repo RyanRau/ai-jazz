@@ -395,9 +395,10 @@ display name or email, never a backend record; bluestar stays backend-agnostic.
 A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `check`,
-`user`, `plus`, `trash`, `search`, `externalLink`. `color` defaults to
-`"currentColor"` so it inherits surrounding text/button color for free — pass
-`label` only for an icon standing alone with no adjacent text (it's
+`user`, `plus`, `trash`, `search`, `externalLink`, `key`, `chat` (the last
+two are hand-drawn for this repo, not adapted from Lucide). `color` defaults
+to `"currentColor"` so it inherits surrounding text/button color for free —
+pass `label` only for an icon standing alone with no adjacent text (it's
 decorative/`aria-hidden` otherwise).
 
 #### `Badge`
@@ -494,6 +495,7 @@ Native anchor props plus `variant` (`"primary" | "muted"`) and `external` (adds
 | `appSwitcher` | `ReactNode` | —        |
 | `nav`         | `ReactNode` | —        |
 | `account`     | `ReactNode` | —        |
+| `sideNav`     | `ReactNode` | —        |
 | `children`    | `ReactNode` | required |
 | `footer`      | `ReactNode` | —        |
 | `maxWidth`    | `number`    | `960`    |
@@ -505,6 +507,29 @@ optional footer. `appSwitcher` renders immediately after `title` — a `Menu` +
 to is the intended use (each app's own `AppSwitcher.tsx`, scaffolded like
 `AccountMenu.tsx`, builds this). `account` is meant for a profile pill (see
 `Avatar` + `Menu`); `nav` is nav links/buttons.
+
+`sideNav` (typically a `SideNav`) is locked to the true left edge, below the
+header, spanning its own full height — not inside the centred content
+column. Passing it flips the shell into a scroll-locked layout: the header,
+sideNav, and footer stay fixed in place and only `children` scrolls. Omit it
+(the default) for the normal behavior, where the whole page scrolls as one —
+every app without this prop is completely unaffected by its existence.
+
+#### `SideNav`
+
+| Prop         | Type                    | Default                        |
+| ------------ | ----------------------- | ------------------------------ |
+| `items`      | `SideNavItem[]`         | required                       |
+| `activeKey`  | `string`                | required                       |
+| `onSelect`   | `(key: string) => void` | required                       |
+| `storageKey` | `string \| null`        | `"bluestar-sidenav-collapsed"` |
+
+`SideNavItem` is `{ key, label, icon? }`. A collapsible left rail for an
+app's top-level pages — meant for `AppShell`'s `sideNav` slot. Collapses to
+an icon-only strip via a toggle at the bottom; give every item an `icon` or
+it becomes unusable once collapsed. Collapsed state persists to
+`localStorage` the same way `useColorScheme` persists its own choice — pass
+`storageKey={null}` to disable that.
 
 ---
 

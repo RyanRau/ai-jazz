@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppShell, Button, EmptyState, Flexbox } from "bluestar";
+import { AppShell, EmptyState, Flexbox, SideNav } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
@@ -49,26 +49,22 @@ function App() {
   if (granted === null) return null;
 
   return (
-    <AppShell title="Tony" appSwitcher={<AppSwitcher />} account={<AccountMenu />}>
-      <Flexbox gap={24}>
-        <Flexbox direction="column" gap={4} style={{ width: 160, flexShrink: 0 }}>
-          <Button
-            label="Playground"
-            variant={tab === "playground" ? "primary" : "secondary"}
-            style={{ width: "100%", justifyContent: "flex-start" }}
-            onClick={() => setTab("playground")}
-          />
-          <Button
-            label="Keys"
-            variant={tab === "keys" ? "primary" : "secondary"}
-            style={{ width: "100%", justifyContent: "flex-start" }}
-            onClick={() => setTab("keys")}
-          />
-        </Flexbox>
-        <Flexbox direction="column" grow={1} style={{ minWidth: 0 }}>
-          {tab === "playground" ? <PlaygroundPage /> : <KeysPage />}
-        </Flexbox>
-      </Flexbox>
+    <AppShell
+      title="Tony"
+      appSwitcher={<AppSwitcher />}
+      account={<AccountMenu />}
+      sideNav={
+        <SideNav
+          items={[
+            { key: "playground", label: "Playground", icon: "chat" },
+            { key: "keys", label: "Keys", icon: "key" },
+          ]}
+          activeKey={tab}
+          onSelect={(key) => setTab(key as Tab)}
+        />
+      }
+    >
+      {tab === "playground" ? <PlaygroundPage /> : <KeysPage />}
     </AppShell>
   );
 }
