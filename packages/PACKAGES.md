@@ -395,11 +395,48 @@ display name or email, never a backend record; bluestar stays backend-agnostic.
 A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `check`,
-`user`, `plus`, `trash`, `search`, `externalLink`, `key`, `chat`, `menu`
-(`key`/`chat`/`menu` are hand-drawn for this repo, not adapted from Lucide).
-`color` defaults to `"currentColor"` so it inherits surrounding text/button
-color for free — pass `label` only for an icon standing alone with no
-adjacent text (it's decorative/`aria-hidden` otherwise).
+`user`, `plus`, `trash`, `search`, `externalLink`, `key`, `chat`, `menu`,
+`chart` (`key`/`chat`/`menu`/`chart` are hand-drawn for this repo, not
+adapted from Lucide). `color` defaults to `"currentColor"` so it inherits
+surrounding text/button color for free — pass `label` only for an icon
+standing alone with no adjacent text (it's decorative/`aria-hidden`
+otherwise).
+
+#### `StatTile`
+
+| Prop    | Type               | Default  |
+| ------- | ------------------ | -------- |
+| `label` | `string`           | required |
+| `value` | `string \| number` | required |
+
+A label + a large number, for a headline metric that doesn't need a chart
+(e.g. a total). `value` renders with `font-variant-numeric: proportional-nums`
+per the dataviz skill's guidance for standalone big numbers.
+
+#### `LineChart`
+
+| Prop          | Type                    | Default              |
+| ------------- | ----------------------- | -------------------- |
+| `series`      | `LineChartSeries[]`     | required             |
+| `height`      | `number`                | `260`                |
+| `formatValue` | `(n: number) => string` | `n.toLocaleString()` |
+
+```ts
+type LineChartSeries = {
+  key: string;
+  label: string;
+  color: string;
+  points: { x: string; y: number }[];
+};
+```
+
+A multi-series SVG line chart. All series must share the same `x` categories
+in the same order. Ships with a legend + direct end-labels, a crosshair +
+tooltip on hover, and a "Show table" toggle for the accessibility-required
+table view. Colors are caller-supplied — pick a categorical pair with the
+dataviz skill's `scripts/validate_palette.js` and pass different hexes for
+light vs. dark mode (`useColorScheme().resolved`); a pair validated against
+one surface can fail against the other.
 
 #### `Badge`
 

@@ -23,6 +23,8 @@ export * from "./components/display/Avatar";
 export * from "./components/display/Icon";
 export * from "./components/display/Badge";
 export * from "./components/display/Table";
+export * from "./components/display/StatTile";
+export * from "./components/display/LineChart";
 
 // Overlay
 export * from "./components/overlay/Modal";
