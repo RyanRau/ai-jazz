@@ -65,6 +65,18 @@ Conventions:
   a new migration — never edit an applied one, since PocketBase records applied
   filenames and will not re-run them.
 
+## Collections in this backend
+
+Beyond PocketBase's built-in `users` (two extra fields: `is_admin` — dashboard
+admin rights; `is_service` — marks a machine/service account like the
+llm-gateway, checked in hooks instead of granted broader access):
+
+| Collection                          | What it's for                                                                                                                                                                                                                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `registry_apps` / `registry_grants` | Cross-app dashboard registry — the catalog of apps and who may see which one. Any signed-in user can read `registry_apps`; `registry_grants` is superuser-write-only (Admin UI), user-read-own-rows-only. `hub` reads `registry_grants` to know what to show; `stash`/`tony` gate access the same way. |
+| `stash_items`                       | `stash`'s inventory rows — owner-scoped, with view-only sharing via `shared_with` (a list of user ids) resolved through `pb_hooks/stash_shareable_users.pb.js`.                                                                                                                                        |
+| `llm_api_keys` / `llm_usage_logs`   | API keys and per-request usage for `home-server/llm-gateway`. Both are superuser-only via unset rules — every read/write goes through `pb_hooks/llm.pb.js` instead, so a plaintext key exists only in its one creation response (only its hash and a short prefix are ever stored).                    |
+
 ## Talking to it from an app
 
 Use the official JS SDK — there is no local wrapper package.

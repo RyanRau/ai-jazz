@@ -100,8 +100,8 @@ src/
     layout/             # Flexbox, Card, Divider
     buttons/            # Button, AsyncButton
     feedback/           # Spinner, Alert, Skeleton, EmptyState, Toast
-    display/            # Badge, Table
-    overlay/            # Modal, ConfirmDialog
+    display/            # Avatar, Badge, Icon, Table
+    overlay/            # Menu, Modal, ConfirmDialog
     navigation/         # Link, AppShell
     text/               # Header, Text, TextPairing
     form/               # TextInput, NumberInput, TextAreaInput, Checkbox,

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useTheme } from "../../../theme";
 import Flexbox from "../../layout/Flexbox/Flexbox";
 import Text from "../../text/Text/Text";
+import Icon from "../../display/Icon/Icon";
 
 export type AlertVariant = "info" | "success" | "warning" | "error";
 
@@ -59,9 +60,8 @@ export default function Alert({ variant = "info", title, children, onDismiss }: 
               background: none;
               border: none;
               cursor: pointer;
+              display: flex;
               padding: 0 4px;
-              line-height: 1;
-              font-size: 18px;
               color: ${theme.colors.textMuted};
               &:hover {
                 color: ${theme.colors.text};
@@ -72,7 +72,7 @@ export default function Alert({ variant = "info", title, children, onDismiss }: 
               }
             `}
           >
-            ×
+            <Icon name="close" size={16} />
           </button>
         )}
       </Flexbox>

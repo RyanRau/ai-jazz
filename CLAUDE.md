@@ -10,6 +10,9 @@ work.
 ```
 apps/              # Deployable apps (Dockerfile + nginx.conf per app)
   ryanzrau/        # Personal site → ryanzrau.dev
+  hub/             # Cross-app dashboard + shared settings page → hub.ryanzrau.dev
+  stash/           # Household inventory with sharing → stash.ryanzrau.dev
+  tony/            # LLM dashboard (home-lab) → tony.ryanzrau.dev
   pocketbase/      # Shared backend: auth + data + admin UI → api.ryanzrau.dev
 packages/
   bluestar/        # React component library (also deployed as Storybook → ui.ryanzrau.dev)
@@ -228,9 +231,9 @@ the branch and setting `target: test`.
   `path` and `subdomain`, flagged `development: true`. The original key keeps
   serving production untouched at its subdomain while the new key builds and
   tests at `test-<subdomain>`; promote later by deleting the old key and
-  dropping the flag from the new one. `infra/check_demotions.py` runs in the
-  production deploy and fails the run if a currently-live app would be
-  silently demoted this way.
+  dropping the flag from the new one. `infra/check_demotions.py` runs on every
+  production deploy triggered by a push (not a manual dispatch) and fails the
+  run if a currently-live app would be silently demoted this way.
 
 Scaffold directly into this mode: `python3 infra/new_app.py <name> --development`.
 

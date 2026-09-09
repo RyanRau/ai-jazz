@@ -5,15 +5,17 @@ reach it, and how to debug it when they don't.
 
 ## Tooling in this directory
 
-| File                  | What it does                                                              |
-| --------------------- | ------------------------------------------------------------------------- |
-| `generate-compose.py` | Renders `deploy.yml` into `docker-compose.yml`                            |
-| `validate_deploy.py`  | Validates `deploy.yml` — first step of the deploy, and runnable locally   |
-| `select_apps.py`      | Decides which apps a change set affects; used by the deploy               |
-| `retire_test_apps.sh` | Removes the `mono-test` project from the droplet; run by CI or by hand    |
-| `new_app.py`          | Scaffolds a new app from `templates/app` and registers it in `deploy.yml` |
-| `templates/app/`      | The app template (`.tpl` files, placeholders substituted by `new_app.py`) |
-| `AUDIT.md`            | Architecture assessment, known weaknesses, deliberate omissions           |
+| File                  | What it does                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generate-compose.py` | Renders `deploy.yml` into `docker-compose.yml`                                                                                                    |
+| `validate_deploy.py`  | Validates `deploy.yml` — first step of the deploy, and runnable locally                                                                           |
+| `select_apps.py`      | Decides which apps a change set affects; used by the deploy                                                                                       |
+| `app_field.py`        | Reads one field (build path, a `build_args` name) out of `deploy.yml` for an app — used by the workflow instead of `yq`                           |
+| `check_demotions.py`  | Fails the production deploy if a push would silently drop a currently-live app to the test target (see `CLAUDE.md`'s "Apps Still In Development") |
+| `retire_test_apps.sh` | Removes the `mono-test` project from the droplet; run by CI or by hand                                                                            |
+| `new_app.py`          | Scaffolds a new app from `templates/app` and registers it in `deploy.yml`                                                                         |
+| `templates/app/`      | The app template (`.tpl` files, placeholders substituted by `new_app.py`)                                                                         |
+| `AUDIT.md`            | Architecture assessment, known weaknesses, deliberate omissions                                                                                   |
 
 `generate-compose.py` and `validate_deploy.py` need `pyyaml` and nothing else.
 
@@ -177,10 +179,10 @@ Common cases:
 One workflow, `deploy.yml`, with two targets. There is no PR gate — merge and it
 ships.
 
-| Target         | How it runs               | Deploys                                                                                              |
-| -------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **production** | Push to `main`, or manual | Enabled apps **without** `development: true`, at their real subdomains, from `:latest`               |
-| **test**       | Manual, on any branch     | Enabled apps **with** `development: true`, at `test-<subdomain>`, from `:test` built off that branch |
+| Target         | How it runs                                                                                  | Deploys                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **production** | Push to `main`, or manual **on `main` only** — a manual run off any other branch is rejected | Enabled apps **without** `development: true`, at their real subdomains, from `:latest`               |
+| **test**       | Manual, on any branch                                                                        | Enabled apps **with** `development: true`, at `test-<subdomain>`, from `:test` built off that branch |
 
 Run the test target from **Actions → Build and Deploy → Run workflow**: pick the
 branch, set `target` to `test`.
@@ -228,6 +230,15 @@ You can also retire test apps without a production deploy:
 
 - run the test target with nothing marked `development: true`, or
 - on the droplet: `cd /opt/apps && bash infra/retire_test_apps.sh`
+
+### Demotion guard
+
+A production run triggered by a `push` (not a manual dispatch) runs
+`check_demotions.py` before deploying: it fails the run if the push would
+silently move a currently-live app to the test target by flipping
+`development: true` on its existing `deploy.yml` key, rather than adding a
+second key for the new version. See `CLAUDE.md`'s "Apps Still In
+Development" section for why that distinction matters.
 
 ### Everything else
 

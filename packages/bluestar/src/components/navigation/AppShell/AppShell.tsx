@@ -39,7 +39,12 @@ export default function AppShell({
 }: AppShellProps) {
   const theme = useTheme();
 
-  const centred = css`
+  // Raw CSS text, not a `css`-generated class name: `css()` returns a class
+  // name string, and embedding that as literal text inside another `css`
+  // template is invalid CSS that silently drops the whole declaration (this
+  // is why `main` never actually got width-capped before — the class was
+  // built but only ever wired up correctly for the footer's own div below).
+  const centredRules = `
     width: 100%;
     max-width: ${maxWidth}px;
     margin: 0 auto;
@@ -88,7 +93,7 @@ export default function AppShell({
 
       <main
         className={css`
-          ${centred}
+          ${centredRules}
           flex: 1;
           padding-top: 24px;
           padding-bottom: 24px;
@@ -104,7 +109,13 @@ export default function AppShell({
             padding: 16px 0;
           `}
         >
-          <div className={centred}>{footer}</div>
+          <div
+            className={css`
+              ${centredRules}
+            `}
+          >
+            {footer}
+          </div>
         </footer>
       )}
     </div>

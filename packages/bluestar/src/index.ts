@@ -20,6 +20,7 @@ export * from "./components/feedback/Toast";
 
 // Display
 export * from "./components/display/Avatar";
+export * from "./components/display/Icon";
 export * from "./components/display/Badge";
 export * from "./components/display/Table";
 

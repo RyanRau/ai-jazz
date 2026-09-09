@@ -22,10 +22,11 @@ export type FormProps<T extends FormValues> = {
   /**
    * Max width in pixels for the rendered `<form>`. Defaults to `480` — a
    * comfortable form-column width so fields don't stretch edge-to-edge of
-   * an arbitrarily wide parent. Pass `undefined` for a form that should
-   * genuinely stretch full-width.
+   * an arbitrarily wide parent. Pass `null` (not `undefined` — an omitted
+   * or explicitly-`undefined` prop both fall through to the default) for a
+   * form that should genuinely stretch full-width.
    */
-  maxWidth?: number;
+  maxWidth?: number | null;
 };
 
 /**
@@ -48,7 +49,7 @@ export function Form<T extends FormValues>({
         onSubmit={form.handleSubmit}
         noValidate
         className={
-          maxWidth === undefined
+          maxWidth === null
             ? undefined
             : css`
                 max-width: ${maxWidth}px;

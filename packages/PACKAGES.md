@@ -211,16 +211,18 @@ field, setValue, setValues, setError, reset, handleSubmit }`.
 
 ### `Form`
 
-| Prop              | Type         | Default  |
-| ----------------- | ------------ | -------- |
-| `form`            | `FormApi<T>` | required |
-| `gap`             | `Spacing`    | `16`     |
-| `showSubmitError` | `boolean`    | `true`   |
-| `maxWidth`        | `number`     | `480`    |
+| Prop              | Type             | Default  |
+| ----------------- | ---------------- | -------- |
+| `form`            | `FormApi<T>`     | required |
+| `gap`             | `Spacing`        | `16`     |
+| `showSubmitError` | `boolean`        | `true`   |
+| `maxWidth`        | `number \| null` | `480`    |
 
 `maxWidth` caps the rendered `<form>`'s width so fields don't stretch
-edge-to-edge of an arbitrarily wide parent. Pass `maxWidth={undefined}` for a
-form that should genuinely stretch full-width.
+edge-to-edge of an arbitrarily wide parent. Pass `maxWidth={null}` (not
+`undefined` — an omitted or explicitly-`undefined` prop both fall through to
+the default, a real JS default-parameter gotcha) for a form that should
+genuinely stretch full-width, e.g. to fill a `Card` of a known width.
 
 ### `SubmitButton`
 
@@ -380,6 +382,23 @@ toast.show("Sync started", { title: "Heads up", duration: 0 }); // 0 = sticky
 Circular; shows `src` if given, falling back to initials on a hashed color
 (missing `src`, or the image failing to load). `name` is plain text — pass a
 display name or email, never a backend record; bluestar stays backend-agnostic.
+
+#### `Icon`
+
+| Prop    | Type       | Default          |
+| ------- | ---------- | ---------------- |
+| `name`  | `IconName` | required         |
+| `size`  | `number`   | `20`             |
+| `color` | `string`   | `"currentColor"` |
+| `label` | `string`   | —                |
+
+A small curated set of stroke icons (adapted from Lucide, ISC License) — not
+a general-purpose icon library; a name is added only when a real consumer
+needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `check`,
+`user`, `plus`, `trash`, `search`, `externalLink`. `color` defaults to
+`"currentColor"` so it inherits surrounding text/button color for free — pass
+`label` only for an icon standing alone with no adjacent text (it's
+decorative/`aria-hidden` otherwise).
 
 #### `Badge`
 

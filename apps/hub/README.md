@@ -1,9 +1,13 @@
 # hub
 
-Ryan Rau — Apps — served at `https://hub.ryanzrau.dev`.
+The cross-app dashboard — served at `https://hub.ryanzrau.dev`.
 
-> Replace this line with what the app actually does. This README is the app's
-> documentation; the repo root only explains the framework around it.
+Signed-in users see a grid of the apps they've been granted access to (via
+`registry_grants`, superuser-managed from the PocketBase admin UI — there's no
+in-app way to grant access yet). hub also hosts the one shared account
+**settings page** at `/settings` (name, avatar upload, password change) —
+every other app's account menu links out to it here rather than each app
+building its own copy.
 
 ## Local development
 
@@ -30,7 +34,10 @@ After changing `packages/bluestar`, rebuild it (`npm run build` in
   the component API. Add missing primitives to bluestar rather than building
   one-off components here.
 - **PocketBase** for auth and data via `src/pb.ts` — collections live in
-  `apps/pocketbase/pb_migrations`.
+  `apps/pocketbase/pb_migrations`. The settings page's password change
+  re-authenticates immediately after a successful update, since PocketBase
+  invalidates the current session token on any password change (even to the
+  same value) — see the comment above that call in `src/SettingsPage.tsx`.
 
 ## Deployment
 

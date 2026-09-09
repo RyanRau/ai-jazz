@@ -1,9 +1,13 @@
 # stash
 
-Stash — served at `https://stash.ryanzrau.dev`.
+Household inventory — served at `https://stash.ryanzrau.dev`.
 
-> Replace this line with what the app actually does. This README is the app's
-> documentation; the repo root only explains the framework around it.
+Add items (name, quantity, location) to the shared `stash_items` collection.
+Each item is owner-scoped by default; the owner can share view access to
+specific other granted users via the "Share" action, which lists everyone
+else with a `registry_grants` entry for stash (fetched from the
+`/api/custom/stash/shareable-users` PocketBase hook) and writes their ids into
+the item's `shared_with` field.
 
 ## Local development
 
