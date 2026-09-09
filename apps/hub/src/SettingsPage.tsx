@@ -109,7 +109,7 @@ export function SettingsPage({ record }: { record: RecordModel }) {
             </Flexbox>
           </Flexbox>
 
-          <Form form={nameForm} maxWidth={undefined}>
+          <Form form={nameForm}>
             <TextInput {...nameForm.field("name")} label="Name" />
             <SubmitButton label="Save name" />
           </Form>
@@ -119,7 +119,7 @@ export function SettingsPage({ record }: { record: RecordModel }) {
       <Card padding={24}>
         <Flexbox direction="column" gap={16}>
           <Header variant="h2">Change password</Header>
-          <Form form={passwordForm} maxWidth={undefined}>
+          <Form form={passwordForm}>
             <TextInput
               {...passwordForm.field("oldPassword")}
               label="Current password"

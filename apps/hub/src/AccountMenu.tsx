@@ -1,4 +1,4 @@
-import { Avatar, Button, Flexbox, Link, Menu, Text } from "bluestar";
+import { Avatar, Button, Flexbox, Icon, Link, Menu, Text } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { pb, signOut } from "./pb";
 
@@ -28,12 +28,22 @@ export function AccountMenu() {
           <Text variant="label">{record.name || "—"}</Text>
           <Text variant="caption">{record.email}</Text>
         </Flexbox>
-        <div style={{ padding: "0 8px" }}>
-          <Link href={SETTINGS_URL} variant="muted">
-            Settings
-          </Link>
-        </div>
-        <Button label="Log out" variant="secondary" density="dense" onClick={signOut} />
+        <Link href={SETTINGS_URL} variant="muted" style={{ padding: "0 8px" }}>
+          <Flexbox direction="row" alignItems="center" gap={8}>
+            <Icon name="settings" size={16} />
+            <Text variant="body" color="inherit">
+              Settings
+            </Text>
+          </Flexbox>
+        </Link>
+        <Button label="Log out" variant="secondary" density="dense" onClick={signOut}>
+          <Flexbox direction="row" alignItems="center" gap={8}>
+            <Icon name="logOut" size={16} />
+            <Text variant="label" color="inherit">
+              Log out
+            </Text>
+          </Flexbox>
+        </Button>
       </Flexbox>
     </Menu>
   );

@@ -381,6 +381,23 @@ Circular; shows `src` if given, falling back to initials on a hashed color
 (missing `src`, or the image failing to load). `name` is plain text — pass a
 display name or email, never a backend record; bluestar stays backend-agnostic.
 
+#### `Icon`
+
+| Prop    | Type       | Default          |
+| ------- | ---------- | ---------------- |
+| `name`  | `IconName` | required         |
+| `size`  | `number`   | `20`             |
+| `color` | `string`   | `"currentColor"` |
+| `label` | `string`   | —                |
+
+A small curated set of stroke icons (adapted from Lucide, ISC License) — not
+a general-purpose icon library; a name is added only when a real consumer
+needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `check`,
+`user`, `plus`, `trash`, `search`, `externalLink`. `color` defaults to
+`"currentColor"` so it inherits surrounding text/button color for free — pass
+`label` only for an icon standing alone with no adjacent text (it's
+decorative/`aria-hidden` otherwise).
+
 #### `Badge`
 
 `variant`: `"neutral" | "primary" | "success" | "warning" | "error"` (default

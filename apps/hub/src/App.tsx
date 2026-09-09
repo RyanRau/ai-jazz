@@ -38,7 +38,7 @@ function App() {
 
   if (onSettingsPath) {
     return (
-      <AppShell title="Settings" account={<AccountMenu />}>
+      <AppShell title="Settings" account={<AccountMenu />} maxWidth={640}>
         <SettingsPage record={record} />
       </AppShell>
     );

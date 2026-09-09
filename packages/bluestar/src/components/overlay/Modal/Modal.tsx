@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTheme } from "../../../theme";
 import Flexbox from "../../layout/Flexbox/Flexbox";
 import Header from "../../text/Header/Header";
+import Icon from "../../display/Icon/Icon";
 
 export type ModalProps = {
   isOpen: boolean;
@@ -113,8 +114,7 @@ export default function Modal({
                 background: none;
                 border: none;
                 cursor: pointer;
-                font-size: 20px;
-                line-height: 1;
+                display: flex;
                 /* ~40px tap target, not just the glyph. */
                 padding: 10px 12px;
                 margin: -10px -12px;
@@ -130,7 +130,7 @@ export default function Modal({
                 }
               `}
             >
-              ×
+              <Icon name="close" size={20} />
             </button>
           </Flexbox>
 

@@ -24,21 +24,32 @@ function App() {
   }
 
   return (
-    <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
-      <Card padding={24}>
-        <Flexbox direction="column" gap={8}>
-          <Header variant="h1">Ryan Rau</Header>
-          <Text variant="body">
-            Welcome! This is Ryan Rau's site. Sign in to reach the dashboard and its apps.
-          </Text>
-          <Button label="Sign in" variant="secondary" onClick={() => setLoginOpen(true)} />
-        </Flexbox>
-      </Card>
+    <AppShell
+      title="Ryan Rau"
+      account={
+        <Button
+          label="Sign in"
+          variant="secondary"
+          density="dense"
+          onClick={() => setLoginOpen(true)}
+        />
+      }
+    >
+      <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
+        <Card padding={24}>
+          <Flexbox direction="column" gap={8}>
+            <Header variant="h1">Ryan Rau</Header>
+            <Text variant="body">
+              Welcome! This is Ryan Rau's site. Sign in to reach the dashboard and its apps.
+            </Text>
+          </Flexbox>
+        </Card>
+      </Flexbox>
 
       <Modal isOpen={loginOpen} onClose={() => setLoginOpen(false)} title="Sign in">
         <LoginForm onSuccess={() => setLoginOpen(false)} />
       </Modal>
-    </Flexbox>
+    </AppShell>
   );
 }
 
