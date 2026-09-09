@@ -28,6 +28,7 @@ export * from "./components/display/Table";
 export * from "./components/overlay/Modal";
 export * from "./components/overlay/ConfirmDialog";
 export * from "./components/overlay/Menu";
+export * from "./components/overlay/MenuItem";
 
 // Navigation
 export * from "./components/navigation/Link";

@@ -45,8 +45,11 @@ function App() {
 
   useEffect(() => {
     if (!record) return;
+    // Distinct requestKey: AppSwitcher fetches from this same endpoint
+    // concurrently on this same page, and the PocketBase SDK auto-cancels
+    // requests that share a key (by default, method+URL).
     pb.collection("registry_grants")
-      .getFullList({ expand: "app" })
+      .getFullList({ expand: "app", requestKey: "stash-access" })
       .then((grants) =>
         setGranted(
           record.is_admin === true ||

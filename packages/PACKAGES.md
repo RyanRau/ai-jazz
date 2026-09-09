@@ -460,6 +460,25 @@ top-right account pill. No close-on-item-click plumbing either: a navigating
 `Link` or an action that unmounts the tree (like signing out) closes the
 popover along with everything else.
 
+#### `MenuItem`
+
+| Prop       | Type         | Default  |
+| ---------- | ------------ | -------- |
+| `icon`     | `ReactNode`  | —        |
+| `title`    | `string`     | required |
+| `subtitle` | `string`     | —        |
+| `href`     | `string`     | —        |
+| `onClick`  | `() => void` | —        |
+
+A clickable row for `Menu` content — icon, title, optional subtitle, with a
+block background highlight on hover/focus. `Menu` itself imposes no styling
+on its children, so this is what makes a list of entries feel like a picker
+rather than plain links in a box. `icon` is a plain `ReactNode` — an emoji
+string works fine, same pattern `EmptyState`'s `icon` prop already uses.
+`subtitle` is truncated to one line internally, so callers don't need to
+pre-truncate a longer field (e.g. an app's `description`). Provide `href`
+_or_ `onClick`, not both — `href` renders an `<a>`, `onClick` a `<button>`.
+
 ### Navigation
 
 #### `Link`
