@@ -47,3 +47,15 @@ apps:
     enabled: true
     port: 80
     path: "packages/bluestar"
+  hub:
+    subdomain: "hub"
+    enabled: true
+    port: 80
+  stash:
+    subdomain: "stash"
+    enabled: true
+    port: 80
+  llm:
+    subdomain: "llm"
+    enabled: true
+    port: 80
