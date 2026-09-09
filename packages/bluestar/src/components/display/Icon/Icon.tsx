@@ -12,7 +12,8 @@ export type IconName =
   | "search"
   | "externalLink"
   | "key"
-  | "chat";
+  | "chat"
+  | "menu";
 
 export type IconProps = {
   name: IconName;
