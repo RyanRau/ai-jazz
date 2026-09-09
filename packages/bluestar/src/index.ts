@@ -32,6 +32,7 @@ export * from "./components/overlay/Menu";
 // Navigation
 export * from "./components/navigation/Link";
 export * from "./components/navigation/AppShell";
+export * from "./components/navigation/SideNav";
 
 // Text
 export * from "./components/text/Header";

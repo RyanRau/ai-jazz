@@ -61,4 +61,21 @@ export const iconPaths: Record<IconName, React.ReactNode> = {
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
     </>
   ),
+  // Hand-drawn for llm-gateway's key management, not adapted from Lucide --
+  // simple enough to verify by construction rather than transcribe: a round
+  // head, a diagonal shaft, two teeth perpendicular to it.
+  key: (
+    <>
+      <circle cx="8" cy="15" r="4" />
+      <path d="M11 12 20 3" />
+      <path d="M16 7l3 3" />
+      <path d="M13 10l2 2" />
+    </>
+  ),
+  chat: (
+    <>
+      <rect x="3" y="4" width="18" height="13" rx="2" />
+      <path d="M8 21l3-4" />
+    </>
+  ),
 };

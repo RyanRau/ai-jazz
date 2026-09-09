@@ -13,6 +13,14 @@ export type AppShellProps = {
   nav?: ReactNode;
   /** Account/profile control, pinned to the true right edge of the header — rendered after `nav`. */
   account?: ReactNode;
+  /**
+   * A left rail (typically `SideNav`) locked to the true left edge, below
+   * the header, spanning its own full height. When given, only `children`
+   * scrolls — the header, sideNav, and footer stay put. Omit for the
+   * default behavior (the whole page scrolls together), which every app
+   * without this prop keeps exactly as before.
+   */
+  sideNav?: ReactNode;
   /** Page content, width-constrained and centred. */
   children: ReactNode;
   /** Optional footer below the content. */
@@ -36,6 +44,7 @@ export default function AppShell({
   appSwitcher,
   nav,
   account,
+  sideNav,
   children,
   footer,
   maxWidth = 960,
@@ -57,7 +66,12 @@ export default function AppShell({
   return (
     <div
       className={css`
-        min-height: 100vh;
+        /* With a sideNav, the shell itself is the scroll container's outer
+           bound (exactly one viewport tall, nothing escapes it) so the rail
+           and header can stay fixed in place while only the body scrolls.
+           Without one, this is unchanged from before: a normal page that
+           scrolls as a whole. */
+        ${sideNav ? "height: 100vh; overflow: hidden;" : "min-height: 100vh;"}
         display: flex;
         flex-direction: column;
         background-color: ${theme.colors.background};
@@ -68,6 +82,7 @@ export default function AppShell({
         className={css`
           border-bottom: 1px solid ${theme.colors.border};
           background-color: ${theme.colors.surface};
+          flex-shrink: 0;
           /* Vertical breathing room for when title+nav wrap to two lines on
              a narrow viewport — a fixed height would clip the wrapped row.
              Horizontal padding lives here (not on a centred inner wrapper)
@@ -97,22 +112,33 @@ export default function AppShell({
         </Flexbox>
       </header>
 
-      <main
+      <div
         className={css`
-          ${centredRules}
+          display: flex;
           flex: 1;
-          padding-top: 24px;
-          padding-bottom: 24px;
+          ${sideNav ? "overflow: hidden;" : ""}
         `}
       >
-        {children}
-      </main>
+        {sideNav}
+        <main
+          className={css`
+            ${centredRules}
+            flex: 1;
+            padding-top: 24px;
+            padding-bottom: 24px;
+            ${sideNav ? "overflow-y: auto;" : ""}
+          `}
+        >
+          {children}
+        </main>
+      </div>
 
       {footer && (
         <footer
           className={css`
             border-top: 1px solid ${theme.colors.border};
             padding: 16px 0;
+            flex-shrink: 0;
           `}
         >
           <div
