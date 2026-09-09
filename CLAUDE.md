@@ -214,6 +214,16 @@ the branch and setting `target: test`.
   hand-written `test-*` subdomain so a URL can't be reachable two ways.
 - A development app and a production app may share a `subdomain` value, so a new
   version can run at `test-recipe-box` while the old one serves `recipe-box`.
+- **Never flip `development: true` on an app's existing key to test a rework of
+  something already live** — that moves it out of the production app set, and
+  the next production deploy tears its container down the moment the change
+  reaches `main`. Add a **second** entry instead: a new key with the same
+  `path` and `subdomain`, flagged `development: true`. The original key keeps
+  serving production untouched at its subdomain while the new key builds and
+  tests at `test-<subdomain>`; promote later by deleting the old key and
+  dropping the flag from the new one. `infra/check_demotions.py` runs in the
+  production deploy and fails the run if a currently-live app would be
+  silently demoted this way.
 
 Scaffold directly into this mode: `python3 infra/new_app.py <name> --development`.
 
