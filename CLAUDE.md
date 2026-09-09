@@ -14,6 +14,8 @@ apps/              # Deployable apps (Dockerfile + nginx.conf per app)
 packages/
   bluestar/        # React component library (also deployed as Storybook → ui.ryanzrau.dev)
   PACKAGES.md      # Component + prop reference — read before writing UI
+home-server/       # Tools that run on home hardware, NOT the deploy pipeline
+  llm-gateway/     # Auth + on-demand model swap in front of llama-server
 infra/             # deploy tooling: generate-compose, validate_deploy, select_apps,
                    # new_app, retire_test_apps, templates/, README, AUDIT
 deploy.yml         # Source of truth for which apps are deployed and their subdomains
@@ -22,6 +24,11 @@ deploy.yml         # Source of truth for which apps are deployed and their subdo
 Each app and package has its own README covering how to run and change it. There
 is no top-level `docs/` directory — documentation lives next to what it
 documents.
+
+`home-server/` is a separate category from `apps/`: nothing in it is a Docker
+image, listed in `deploy.yml`, or routed by Traefik — it's source for tools
+that run on physical hardware at home, kept in this repo for one set of
+conventions and shared history. See `home-server/README.md`.
 
 ## The house stack (non-negotiable defaults)
 

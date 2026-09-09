@@ -15,6 +15,9 @@ apps/
 packages/
   bluestar/            # React component library     → ui.ryanzrau.dev (Storybook)
   PACKAGES.md          # Component + prop reference
+home-server/
+  llm-gateway/          # Auth + on-demand model swap in front of llama-server
+  README.md              # What this directory is and isn't
 infra/
   generate-compose.py   # deploy.yml → docker-compose.yml (production or test)
   validate_deploy.py    # config checks, first step of every deploy
@@ -44,6 +47,18 @@ own logic — everything else is already solved.
 
 Missing a component? Add it to bluestar. Need data? Add a collection to
 PocketBase. Neither is a reason to start a new stack.
+
+## home-server/
+
+Tools that run on physical hardware at home rather than the droplet —
+currently [`llm-gateway`](home-server/llm-gateway/README.md), a reverse proxy
+in front of a local `llama-server`. This directory is **not** part of the
+`apps/` deploy pipeline: nothing in it is built into a Docker image, listed in
+`deploy.yml`, or routed by Traefik. It lives here for one repo, one set of
+conventions, and shared history — each tool still runs on its own machine,
+started however that machine starts long-running processes (systemd, a login
+item, etc.), and is documented in its own subdirectory README. See
+[`home-server/README.md`](home-server/README.md) for the ground rules.
 
 ## Creating an app
 

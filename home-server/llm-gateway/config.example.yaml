@@ -4,15 +4,15 @@ server:
   host: "127.0.0.1"
   port: 8000
   max_parallel_requests: 3
-  model_idle_timeout_seconds: 900   # 0 disables auto-unload
+  model_idle_timeout_seconds: 900 # 0 disables auto-unload
   request_timeout_seconds: 300
 
 auth:
   api_keys:
-    - "sk-REPLACE-ME"   # gen: python3 -c "import secrets; print('sk-' + secrets.token_hex(24))"
+    - "sk-REPLACE-ME" # gen: python3 -c "import secrets; print('sk-' + secrets.token_hex(24))"
 
 llama_server:
-  binary: "/opt/homebrew/bin/llama-server"   # `which llama-server`
+  binary: "/opt/homebrew/bin/llama-server" # `which llama-server`
   host: "127.0.0.1"
   port: 8100
   startup_timeout_seconds: 180

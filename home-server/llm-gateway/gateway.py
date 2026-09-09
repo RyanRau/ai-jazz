@@ -43,11 +43,15 @@ def resolve_model(model_field: Optional[str]) -> dict:
         return lookup.get("default", CONFIG["models"][0])
     if model_field not in lookup:
         available = sorted({m["name"] for m in CONFIG["models"]})
-        raise HTTPException(400, f"Unknown model '{model_field}'. Available: {available}")
+        raise HTTPException(
+            400, f"Unknown model '{model_field}'. Available: {available}"
+        )
     return lookup[model_field]
 
 
-def check_api_key(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)):
+def check_api_key(
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+):
     keys = CONFIG["auth"]["api_keys"]
     if not creds or not any(secrets.compare_digest(creds.credentials, k) for k in keys):
         raise HTTPException(401, "Invalid or missing API key")
@@ -101,7 +105,11 @@ class ModelManager:
         while True:
             await asyncio.sleep(30)
             async with self.cv:
-                if self.process and self.active_requests == 0 and time.time() - self.last_used > timeout:
+                if (
+                    self.process
+                    and self.active_requests == 0
+                    and time.time() - self.last_used > timeout
+                ):
                     print(f"[gateway] unloading '{self.current_model_name}' (idle)")
                     await self._stop_process()
                     self.current_model_name = None
@@ -132,9 +140,12 @@ class ModelManager:
     async def _start_process(self, model_cfg: dict):
         argv = [
             self.cfg["llama_server"]["binary"],
-            "--model", os.path.expanduser(model_cfg["model_path"]),
-            "--host", self.llama_host,
-            "--port", str(self.llama_port),
+            "--model",
+            os.path.expanduser(model_cfg["model_path"]),
+            "--host",
+            self.llama_host,
+            "--port",
+            str(self.llama_port),
         ]
         if model_cfg.get("vision") and model_cfg.get("mmproj_path"):
             argv += ["--mmproj", os.path.expanduser(model_cfg["mmproj_path"])]
@@ -209,7 +220,10 @@ async def health():
 async def list_models():
     return {
         "object": "list",
-        "data": [{"id": m["name"], "object": "model", "aliases": m.get("aliases", [])} for m in CONFIG["models"]],
+        "data": [
+            {"id": m["name"], "object": "model", "aliases": m.get("aliases", [])}
+            for m in CONFIG["models"]
+        ],
     }
 
 
@@ -219,7 +233,9 @@ async def chat_completions(request: Request):
     model_cfg = resolve_model(body.get("model"))
 
     if _contains_image(body) and not model_cfg.get("vision"):
-        raise HTTPException(400, f"Model '{model_cfg['name']}' does not support image input.")
+        raise HTTPException(
+            400, f"Model '{model_cfg['name']}' does not support image input."
+        )
 
     body["model"] = model_cfg["name"]  # normalize alias -> real name before forwarding
 
@@ -242,7 +258,9 @@ async def chat_completions(request: Request):
         await manager.release()
 
 
-async def _proxy_stream(client: httpx.AsyncClient, body: dict, release) -> StreamingResponse:
+async def _proxy_stream(
+    client: httpx.AsyncClient, body: dict, release
+) -> StreamingResponse:
     async def gen():
         try:
             async with client.stream("POST", "/v1/chat/completions", json=body) as r:
@@ -251,6 +269,7 @@ async def _proxy_stream(client: httpx.AsyncClient, body: dict, release) -> Strea
         finally:
             await client.aclose()
             await release()
+
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 

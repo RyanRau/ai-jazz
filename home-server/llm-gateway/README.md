@@ -47,6 +47,7 @@ cp config.example.yaml config.yaml
 Set `llama_server.binary` to your `llama-server` path (`which llama-server`).
 
 Generate keys:
+
 ```bash
 python3 -c "import secrets; print('sk-' + secrets.token_hex(24))"
 ```
@@ -73,11 +74,11 @@ passes through untouched — no gateway change needed.
 
 ## Routes
 
-| Route | Auth | Purpose |
-|---|---|---|
-| `GET /health` | no | gateway + loaded-model status |
-| `GET /v1/models` | yes | configured models + aliases |
-| `POST /v1/chat/completions` | yes | chat, streaming, vision |
+| Route                       | Auth | Purpose                       |
+| --------------------------- | ---- | ----------------------------- |
+| `GET /health`               | no   | gateway + loaded-model status |
+| `GET /v1/models`            | yes  | configured models + aliases   |
+| `POST /v1/chat/completions` | yes  | chat, streaming, vision       |
 
 ## Limitations
 
