@@ -316,16 +316,16 @@ promise settles, including on rejection.
 
 ### Form controls
 
-| Component       | Value type                                   | Extra props                                               |
-| --------------- | -------------------------------------------- | --------------------------------------------------------- |
-| `TextInput`     | `string`                                     | `placeholder`, `type` (`text\|email\|password\|url\|tel`) |
-| `NumberInput`   | `number \| null`                             | `min`, `max`, `step`, `placeholder`                       |
-| `TextAreaInput` | `string`                                     | `rows` (default `4`), `placeholder`                       |
-| `Checkbox`      | `boolean`                                    | `label` is the text beside the box                        |
-| `Switch`        | `boolean`                                    | same shape as `Checkbox`, toggle UI                       |
-| `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                             |
-| `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`               |
-| `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                  |
+| Component       | Value type                                   | Extra props                                                                                                                    |
+| --------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `TextInput`     | `string`                                     | `placeholder`, `type` (`text\|email\|password\|url\|tel`)                                                                      |
+| `NumberInput`   | `number \| null`                             | `min`, `max`, `step`, `placeholder`                                                                                            |
+| `TextAreaInput` | `string`                                     | `rows` (default `4`), `placeholder`                                                                                            |
+| `Checkbox`      | `boolean`                                    | `label` is the text beside the box; `hideLabel` visually hides it (sr-only) for dense grids where the label would be redundant |
+| `Switch`        | `boolean`                                    | same shape as `Checkbox`, toggle UI                                                                                            |
+| `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                                                                                                  |
+| `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`                                                                                    |
+| `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                                                                                       |
 
 An empty `NumberInput` yields `null`, never `NaN`.
 
@@ -469,19 +469,23 @@ Native anchor props plus `variant` (`"primary" | "muted"`) and `external` (adds
 
 #### `AppShell`
 
-| Prop       | Type        | Default  |
-| ---------- | ----------- | -------- |
-| `title`    | `string`    | required |
-| `nav`      | `ReactNode` | —        |
-| `account`  | `ReactNode` | —        |
-| `children` | `ReactNode` | required |
-| `footer`   | `ReactNode` | —        |
-| `maxWidth` | `number`    | `960`    |
+| Prop          | Type        | Default  |
+| ------------- | ----------- | -------- |
+| `title`       | `string`    | required |
+| `appSwitcher` | `ReactNode` | —        |
+| `nav`         | `ReactNode` | —        |
+| `account`     | `ReactNode` | —        |
+| `children`    | `ReactNode` | required |
+| `footer`      | `ReactNode` | —        |
+| `maxWidth`    | `number`    | `960`    |
 
 Full-width header (title pinned left, `nav` then `account` pinned right —
 `account` is always the rightmost element), centred content column below it,
-optional footer. `account` is meant for a profile pill (see `Avatar` + `Menu`);
-`nav` is nav links/buttons.
+optional footer. `appSwitcher` renders immediately after `title` — a `Menu` +
+`Icon name="chevronDown"` dropdown for jumping between apps a user has access
+to is the intended use (each app's own `AppSwitcher.tsx`, scaffolded like
+`AccountMenu.tsx`, builds this). `account` is meant for a profile pill (see
+`Avatar` + `Menu`); `nav` is nav links/buttons.
 
 ---
 

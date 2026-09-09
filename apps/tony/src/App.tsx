@@ -3,6 +3,7 @@ import { AppShell, Card, EmptyState, Flexbox, Header, Text } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
+import { AppSwitcher } from "./AppSwitcher";
 import { pb } from "./pb";
 
 function App() {
@@ -15,7 +16,8 @@ function App() {
       .getFullList({ expand: "app" })
       .then((grants) =>
         setGranted(
-          grants.some((g) => (g.expand?.app as { slug?: string } | undefined)?.slug === "tony")
+          record.is_admin === true ||
+            grants.some((g) => (g.expand?.app as { slug?: string } | undefined)?.slug === "tony")
         )
       );
   }, [record]);
@@ -39,7 +41,7 @@ function App() {
   if (granted === null) return null;
 
   return (
-    <AppShell title="Tony" account={<AccountMenu />}>
+    <AppShell title="Tony" appSwitcher={<AppSwitcher />} account={<AccountMenu />}>
       <Card padding={24}>
         <Flexbox direction="column" gap={8}>
           <Header variant="h2">Coming soon</Header>

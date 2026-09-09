@@ -3,6 +3,7 @@ import { AppShell, Button, Card, Flexbox, Header, Modal, Text } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
+import { AppSwitcher } from "./AppSwitcher";
 
 function App() {
   const record = useAuthRecord();
@@ -10,7 +11,7 @@ function App() {
 
   if (record) {
     return (
-      <AppShell title="Ryan Rau" account={<AccountMenu />}>
+      <AppShell title="Ryan Rau" appSwitcher={<AppSwitcher />} account={<AccountMenu />}>
         <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
           <Card padding={24}>
             <Flexbox direction="column" gap={12}>
