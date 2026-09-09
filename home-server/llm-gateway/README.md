@@ -123,8 +123,9 @@ passes through untouched — no gateway change needed.
   per-model port pool instead of a single swap slot.
 - `model_idle_timeout_seconds: 0` keeps the loaded model resident indefinitely.
 - Streaming passed through as SSE.
-- `llama-server` crash on startup → gateway returns 500 with the failure (including
-  a tail of its stderr), not a hang.
+- `llama-server` crash on startup → gateway returns 500, not a hang. The
+  failure (including a tail of its stderr) is logged server-side; the client
+  only gets FastAPI's generic 500 body, not the stderr tail itself.
 - Token counts come from the upstream response's `usage` field (or, for a
   streamed response, whichever chunk carries it — usually the last one). If
   `llama-server` doesn't include `usage`, or a stream is cut off before that

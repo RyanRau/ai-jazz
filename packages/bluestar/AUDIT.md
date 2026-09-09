@@ -137,8 +137,9 @@ have shipped as broken stories.
 
 ## Deliberately not done
 
-- **`Tabs`, `Tooltip`, `Menu`/`Popover`, `Pagination`, `Accordion`,
-  `Breadcrumbs`, `ProgressBar`, `Avatar`.** Speculative until an app needs one.
+- **`Tabs`, `Tooltip`, `Pagination`, `Accordion`, `Breadcrumbs`, `ProgressBar`.**
+  Speculative until an app needs one. (`Menu`/`Popover` and `Avatar` were in
+  this list too, until the account-menu work needed both — see `PACKAGES.md`.)
 - **`DatePicker`, `FileUpload`, `SearchInput`.** Cheaper now: they only have to
   satisfy the `value`/`onChange` contract that `field()` already spreads.
 - **`LoginForm`.** Every app needs one, but it would make the UI library import

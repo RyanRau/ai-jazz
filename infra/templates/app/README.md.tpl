@@ -5,6 +5,22 @@ __TITLE__ — served at `https://__FQDN__`.
 > Replace this line with what the app actually does. This README is the app's
 > documentation; the repo root only explains the framework around it.
 
+## Shared auth, scaffolded for you
+
+`App.tsx` already gates its content on sign-in — signed out, it shows a
+`LoginForm`; signed in, it wraps your content in `AppShell` with an
+`AccountMenu` in the account slot. This comes from a few files copied
+verbatim from `infra/templates/app/src/*.tpl`, common to every app in this
+repo (edit them locally if this app needs to deviate — they're not imported
+from anywhere shared):
+
+| File                 | What it does                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `CookieAuthStore.ts` | Persists the PocketBase auth token as a `.ryanzrau.dev`-scoped cookie instead of `localStorage`, so signing in on any app signs you into all of them. |
+| `useAuth.ts`         | `useAuthRecord()` — the current signed-in user's record, or `null`, re-rendering on auth changes. |
+| `LoginForm.tsx`      | A real login form built from bluestar's `useForm`/`Form` — kept out of bluestar itself since bluestar must not depend on the `pocketbase` package. |
+| `AccountMenu.tsx`    | The avatar-pill dropdown (name/email, a link to the shared settings page at `hub.ryanzrau.dev/settings`, log out) that goes in `AppShell`'s `account` slot. |
+
 ## Local development
 
 ```bash

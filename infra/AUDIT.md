@@ -228,3 +228,17 @@ successfully, then removed. ESLint, Prettier, and Ruff all pass repo-wide. Docke
 image builds and the deploy workflows themselves could **not** be executed here
 (no Docker daemon in the audit environment) — the first push to `main` is their
 first real run.
+
+## Since this audit (September 2026)
+
+A point-in-time snapshot ages; noting what it predates rather than rewriting the
+assessment above:
+
+- `check_demotions.py` and `app_field.py` were added to `infra/` — both are
+  documented in `infra/README.md`'s tooling table.
+- `hub`, `stash`, and `tony` (originally `llm`) were scaffolded and deployed,
+  alongside `packages/bluestar`'s own Storybook deploy entry — the app roster
+  this audit's "Cleanup" section discusses is no longer current.
+
+The "Known weaknesses" and "Recommended next steps" above still hold — none of
+this changed the action-pinning, rollback, or admin-UI-exposure gaps.
