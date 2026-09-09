@@ -395,10 +395,11 @@ display name or email, never a backend record; bluestar stays backend-agnostic.
 A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `check`,
-`user`, `plus`, `trash`, `search`, `externalLink`. `color` defaults to
-`"currentColor"` so it inherits surrounding text/button color for free — pass
-`label` only for an icon standing alone with no adjacent text (it's
-decorative/`aria-hidden` otherwise).
+`user`, `plus`, `trash`, `search`, `externalLink`, `key`, `chat`, `menu`
+(`key`/`chat`/`menu` are hand-drawn for this repo, not adapted from Lucide).
+`color` defaults to `"currentColor"` so it inherits surrounding text/button
+color for free — pass `label` only for an icon standing alone with no
+adjacent text (it's decorative/`aria-hidden` otherwise).
 
 #### `Badge`
 
@@ -494,6 +495,7 @@ Native anchor props plus `variant` (`"primary" | "muted"`) and `external` (adds
 | `appSwitcher` | `ReactNode` | —        |
 | `nav`         | `ReactNode` | —        |
 | `account`     | `ReactNode` | —        |
+| `sideNav`     | `ReactNode` | —        |
 | `children`    | `ReactNode` | required |
 | `footer`      | `ReactNode` | —        |
 | `maxWidth`    | `number`    | `960`    |
@@ -505,6 +507,46 @@ optional footer. `appSwitcher` renders immediately after `title` — a `Menu` +
 to is the intended use (each app's own `AppSwitcher.tsx`, scaffolded like
 `AccountMenu.tsx`, builds this). `account` is meant for a profile pill (see
 `Avatar` + `Menu`); `nav` is nav links/buttons.
+
+`sideNav` (typically a `SideNav`) is locked to the true left edge, below the
+header, spanning its own full height — not inside the centred content
+column. Passing it flips the shell into a scroll-locked layout: the header,
+sideNav, and footer stay fixed in place and only `children` scrolls. Omit it
+(the default) for the normal behavior, where the whole page scrolls as one —
+every app without this prop is completely unaffected by its existence.
+
+Below the `sm` breakpoint (480px), the permanent rail disappears entirely —
+a hamburger button appears in the header instead (before `title`), opening
+the same `sideNav` content as an overlay drawer (a native `<dialog>`, same
+`showModal()` technique as `Modal`: focus trapping, top-layer, Esc-to-close
+for free) rather than eating permanent width on a phone-sized screen. A
+visible close (×) button floats just outside the drawer's right edge —
+`showModal()` makes the header's hamburger inert while open, and there's no
+Esc key on a touchscreen, so backdrop-tap and Esc aren't the only ways out.
+One known simplification: selecting a page from the drawer does not
+auto-close it — there's no plumbing between an opaque `sideNav` node and
+AppShell's drawer state to detect "that click was a navigation, not a
+collapse-toggle," so it stays open until dismissed. Nothing here needs
+wiring from the app; it's automatic based on `sideNav` being passed and the
+viewport width.
+
+#### `SideNav`
+
+| Prop         | Type                    | Default                        |
+| ------------ | ----------------------- | ------------------------------ |
+| `items`      | `SideNavItem[]`         | required                       |
+| `activeKey`  | `string`                | required                       |
+| `onSelect`   | `(key: string) => void` | required                       |
+| `storageKey` | `string \| null`        | `"bluestar-sidenav-collapsed"` |
+
+`SideNavItem` is `{ key, label, icon? }`. A collapsible left rail for an
+app's top-level pages — meant for `AppShell`'s `sideNav` slot. Collapses to
+an icon-only strip via a small circular toggle straddling the rail's right
+border at vertical centre (the convention most dashboard component
+libraries — Bootstrap, Tailwind UI — use, rather than a full-width row).
+Give every item an `icon` or it becomes unusable once collapsed. Collapsed
+state persists to `localStorage` the same way `useColorScheme` persists its
+own choice — pass `storageKey={null}` to disable that.
 
 ---
 

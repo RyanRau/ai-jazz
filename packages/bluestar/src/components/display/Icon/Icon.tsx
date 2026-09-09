@@ -10,7 +10,10 @@ export type IconName =
   | "plus"
   | "trash"
   | "search"
-  | "externalLink";
+  | "externalLink"
+  | "key"
+  | "chat"
+  | "menu";
 
 export type IconProps = {
   name: IconName;
