@@ -55,7 +55,7 @@ apps:
     subdomain: "stash"
     enabled: true
     port: 80
-  llm:
-    subdomain: "llm"
+  tony:
+    subdomain: "tony"
     enabled: true
     port: 80

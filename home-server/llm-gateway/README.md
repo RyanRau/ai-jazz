@@ -5,13 +5,13 @@ concurrency cap. OpenAI-compatible API.
 
 ```
                      ┌──────────────────────────────┐
- client ────────────▶│  gateway.py :8000             │
-                     │  - API key check             │
-                     │  - concurrency gate (N)      │
-                     │  - swap llama-server if      │
-                     │    "model" field changed     │
-                     └──────────────┬────────────────┘
-                                    │ spawns / proxies
+ client ────────────▶│  gateway.py :8000             │◀── pulls active key
+                     │  - API key check             │    hashes, pushes usage
+                     │  - concurrency gate (N)      │    (model + tokens only)
+                     │  - swap llama-server if      │         │
+                     │    "model" field changed     │         ▼
+                     └──────────────┬────────────────┘   PocketBase
+                                    │ spawns / proxies    (api.ryanzrau.dev)
                      ┌──────────────▼────────────────┐
                      │  llama-server :8100            │
                      │  (one model loaded at a time)  │
@@ -46,11 +46,48 @@ cp config.example.yaml config.yaml
 
 Set `llama_server.binary` to your `llama-server` path (`which llama-server`).
 
-Generate keys:
+## Auth
 
-```bash
-python3 -c "import secrets; print('sk-' + secrets.token_hex(24))"
-```
+API keys and usage (model + token counts only, never request/response content)
+live in PocketBase (`apps/pocketbase`), not in `config.yaml` — see
+`apps/pocketbase/pb_hooks/llm.pb.js` for the routes and
+`apps/pocketbase/pb_migrations/1788918240_llm_api_keys_and_usage.js` for the
+schema. This is plain outbound HTTPS to `api.ryanzrau.dev`, the same as any
+other app talking to PocketBase — it doesn't need the WireGuard tunnel.
+
+The gateway never sees a plaintext key at rest: it pulls the active set of
+SHA-256 hashes on a timer (`key_refresh_seconds`), hashes each incoming
+`Authorization: Bearer` token the same way, and compares hashes. **Deny by
+default** — a key only works if it was present in the last successful pull,
+so a PocketBase outage can delay a new key or revocation taking effect, but
+can never turn into open access.
+
+One-time setup, once per fresh `pb_data` volume:
+
+1. In the PocketBase admin UI (`https://api.ryanzrau.dev/_/`), create a
+   `users` record for the gateway (e.g. `llm-gateway@service.internal`) and
+   check its `is_service` field. Put that email + password in `config.yaml`'s
+   `auth.service_email`/`service_password`.
+2. Create your own `users` record (or flip `is_admin` on an existing one) —
+   this is the account the `tony` dashboard's key-management screen will use.
+   Until that screen exists, mint the first key by hand:
+
+   ```bash
+   TOKEN=$(curl -s -X POST https://api.ryanzrau.dev/api/collections/users/auth-with-password \
+     -H 'Content-Type: application/json' \
+     -d '{"identity":"you@email.com","password":"your-password"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+
+   curl -s -X POST https://api.ryanzrau.dev/api/custom/llm/keys \
+     -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+     -d '{"label":"my-laptop"}'
+   ```
+
+   The response's `key` field is the plaintext key — **shown exactly once**;
+   only its hash is ever stored. Save it somewhere real (password manager),
+   not just your terminal scrollback.
+
+A key generated this way (or later revoked) shows up for the gateway within
+`key_refresh_seconds`.
 
 ## Run
 
@@ -88,3 +125,12 @@ passes through untouched — no gateway change needed.
 - Streaming passed through as SSE.
 - `llama-server` crash on startup → gateway returns 500 with the failure (including
   a tail of its stderr), not a hang.
+- Token counts come from the upstream response's `usage` field (or, for a
+  streamed response, whichever chunk carries it — usually the last one). If
+  `llama-server` doesn't include `usage`, or a stream is cut off before that
+  chunk arrives, the logged counts for that call are `0` — verify your build
+  actually returns `usage` (some require `stream_options: {"include_usage":
+true}` in the request for streamed responses).
+- New keys and revocations take up to `key_refresh_seconds` to take effect —
+  the gateway validates against its last successful pull, not PocketBase
+  directly, so it keeps working through a brief PocketBase outage.

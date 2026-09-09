@@ -1,14 +1,14 @@
-# llm
+# tony
 
-LLM — served at `https://llm.ryanzrau.dev`.
-
-> Replace this line with what the app actually does. This README is the app's
-> documentation; the repo root only explains the framework around it.
+Dashboard for the home-lab LLM setup — served at `https://tony.ryanzrau.dev`.
+Talks to [`home-server/llm-gateway`](../../home-server/llm-gateway/README.md)
+(one-off prompts) and PocketBase (`registry_apps`/`registry_grants` for
+access, plus API key + usage tracking once that lands).
 
 ## Local development
 
 ```bash
-cd apps/llm
+cd apps/tony
 npm install          # also builds the bluestar file: dependency
 npm run dev          # http://localhost:5173
 npm run build        # type-check + production build into dist/
@@ -38,5 +38,12 @@ Registered in the repo-root `deploy.yml`; pushing to `main` builds and ships it.
 Nginx and container config live in this directory (`Dockerfile`, `nginx.conf`).
 
 - `enabled: false` takes it offline.
-- `development: true` routes it at `test-llm` instead of the real
+- `development: true` routes it at `test-tony` instead of the real
   subdomain — delete that line to promote it.
+
+## History
+
+Renamed from `llm` (formerly `https://llm.ryanzrau.dev`); the `registry_apps`
+catalog entry was updated in place (migration
+`1788918230_rename_llm_app_to_tony.js`) rather than recreated, so existing
+`registry_grants` records keep working unchanged.

@@ -5,8 +5,9 @@ Run: python3 gateway.py --config config.yaml
 
 import argparse
 import asyncio
+import hashlib
+import json
 import os
-import secrets
 import signal
 import sys
 import time
@@ -51,11 +52,120 @@ def resolve_model(model_field: Optional[str]) -> dict:
 
 def check_api_key(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-):
-    keys = CONFIG["auth"]["api_keys"]
-    if not creds or not any(secrets.compare_digest(creds.credentials, k) for k in keys):
+) -> str:
+    """Returns the matched key's PocketBase record id, for usage attribution."""
+    key_id = creds and key_store.check(creds.credentials)
+    if not key_id:
         raise HTTPException(401, "Invalid or missing API key")
-    return True
+    return key_id
+
+
+class KeyStore:
+    """Caches active API-key hashes pulled from PocketBase, and batches usage
+    rows back to it. Deny-by-default: a key is only ever accepted if it's
+    present in the last successful pull, so a PocketBase outage can't turn
+    into open access -- it can only make new keys and revocations take effect
+    late, using the last known-good cache in the meantime.
+    """
+
+    def __init__(self, cfg: dict):
+        auth_cfg = cfg["auth"]
+        self.service_email = auth_cfg["service_email"]
+        self.service_password = auth_cfg["service_password"]
+        self.refresh_interval = auth_cfg.get("key_refresh_seconds", 60)
+        self.flush_interval = auth_cfg.get("usage_flush_seconds", 20)
+        self._token: Optional[str] = None
+        self._active_hashes: dict[str, str] = {}  # sha256(key) -> PocketBase record id
+        self._usage_queue: asyncio.Queue = asyncio.Queue(maxsize=10_000)
+        self._client = httpx.AsyncClient(
+            base_url=auth_cfg["pocketbase_url"].rstrip("/"), timeout=10
+        )
+        self._refresh_task: Optional[asyncio.Task] = None
+        self._flush_task: Optional[asyncio.Task] = None
+
+    def start(self):
+        self._refresh_task = asyncio.create_task(self._refresh_loop())
+        self._flush_task = asyncio.create_task(self._flush_loop())
+
+    async def stop(self):
+        for task in (self._refresh_task, self._flush_task):
+            if task:
+                task.cancel()
+        await self._client.aclose()
+
+    def check(self, presented_key: str) -> Optional[str]:
+        digest = hashlib.sha256(presented_key.encode()).hexdigest()
+        return self._active_hashes.get(digest)
+
+    def record_usage(self, key_id: str, model: str, tokens_in: int, tokens_out: int):
+        row = {
+            "key_id": key_id,
+            "model": model,
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+        }
+        try:
+            self._usage_queue.put_nowait(row)
+        except asyncio.QueueFull:
+            print("[gateway] usage queue full, dropping oldest usage record")
+            self._usage_queue.get_nowait()
+            self._usage_queue.put_nowait(row)
+
+    async def _authenticate(self):
+        r = await self._client.post(
+            "/api/collections/users/auth-with-password",
+            json={"identity": self.service_email, "password": self.service_password},
+        )
+        r.raise_for_status()
+        self._token = r.json()["token"]
+
+    async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+        if not self._token:
+            await self._authenticate()
+        headers = {"Authorization": f"Bearer {self._token}"}
+        r = await self._client.request(method, path, headers=headers, **kwargs)
+        if r.status_code == 401:
+            await self._authenticate()
+            headers = {"Authorization": f"Bearer {self._token}"}
+            r = await self._client.request(method, path, headers=headers, **kwargs)
+        r.raise_for_status()
+        return r
+
+    async def _refresh_loop(self):
+        while True:
+            try:
+                r = await self._request("GET", "/api/custom/llm/keys/active")
+                self._active_hashes = {
+                    row["key_hash"]: row["id"] for row in r.json()["keys"]
+                }
+            except httpx.HTTPError as e:
+                print(f"[gateway] key refresh failed, keeping cached keys: {e}")
+            await asyncio.sleep(self.refresh_interval)
+
+    async def _flush_loop(self):
+        while True:
+            await asyncio.sleep(self.flush_interval)
+            rows = []
+            while not self._usage_queue.empty() and len(rows) < 200:
+                rows.append(self._usage_queue.get_nowait())
+            if not rows:
+                continue
+            try:
+                await self._request(
+                    "POST", "/api/custom/llm/usage", json={"rows": rows}
+                )
+            except httpx.HTTPError as e:
+                print(
+                    f"[gateway] usage flush failed, re-queueing {len(rows)} rows: {e}"
+                )
+                for row in rows:
+                    try:
+                        self._usage_queue.put_nowait(row)
+                    except asyncio.QueueFull:
+                        break
+
+
+key_store: Optional[KeyStore] = None
 
 
 class ModelManager:
@@ -194,12 +304,15 @@ manager: Optional[ModelManager] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global manager
+    global manager, key_store
     manager = ModelManager(CONFIG)
+    key_store = KeyStore(CONFIG)
+    key_store.start()
     reaper = asyncio.create_task(manager.start_idle_reaper())
     yield
     reaper.cancel()
     await manager.shutdown()
+    await key_store.stop()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -227,8 +340,8 @@ async def list_models():
     }
 
 
-@app.post("/v1/chat/completions", dependencies=[Depends(check_api_key)])
-async def chat_completions(request: Request):
+@app.post("/v1/chat/completions")
+async def chat_completions(request: Request, key_id: str = Depends(check_api_key)):
     body = await request.json()
     model_cfg = resolve_model(body.get("model"))
 
@@ -246,11 +359,19 @@ async def chat_completions(request: Request):
     if body.get("stream"):
         # manager.release() runs inside the generator's finally, once the stream
         # actually finishes -- releasing here would let a swap start mid-stream.
-        return await _proxy_stream(client, body, manager.release)
+        return await _proxy_stream(client, body, manager.release, key_id)
 
     try:
         r = await client.post("/v1/chat/completions", json=body)
-        return JSONResponse(r.json(), status_code=r.status_code)
+        data = r.json()
+        usage = data.get("usage") or {}
+        key_store.record_usage(
+            key_id,
+            model_cfg["name"],
+            usage.get("prompt_tokens", 0),
+            usage.get("completion_tokens", 0),
+        )
+        return JSONResponse(data, status_code=r.status_code)
     except httpx.HTTPError as e:
         raise HTTPException(502, f"Upstream llama-server error: {e}")
     finally:
@@ -259,15 +380,44 @@ async def chat_completions(request: Request):
 
 
 async def _proxy_stream(
-    client: httpx.AsyncClient, body: dict, release
+    client: httpx.AsyncClient, body: dict, release, key_id: str
 ) -> StreamingResponse:
+    model_name = body["model"]
+
     async def gen():
+        usage: dict = {}
+        leftover = b""
         try:
             async with client.stream("POST", "/v1/chat/completions", json=body) as r:
                 async for chunk in r.aiter_bytes():
                     yield chunk
+                    # Look for a `usage` field in each SSE chunk (OpenAI-style
+                    # servers put it in the final one) without buffering the
+                    # whole stream -- only an unterminated trailing line
+                    # carries over to the next chunk.
+                    leftover += chunk
+                    *lines, leftover = leftover.split(b"\n")
+                    for line in lines:
+                        line = line.strip()
+                        if not line.startswith(b"data:"):
+                            continue
+                        payload = line[len(b"data:") :].strip()
+                        if payload in (b"", b"[DONE]"):
+                            continue
+                        try:
+                            parsed = json.loads(payload)
+                        except ValueError:
+                            continue
+                        if parsed.get("usage"):
+                            usage = parsed["usage"]
         finally:
             await client.aclose()
+            key_store.record_usage(
+                key_id,
+                model_name,
+                usage.get("prompt_tokens", 0),
+                usage.get("completion_tokens", 0),
+            )
             await release()
 
     return StreamingResponse(gen(), media_type="text/event-stream")
