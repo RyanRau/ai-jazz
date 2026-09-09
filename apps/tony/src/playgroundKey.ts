@@ -38,7 +38,7 @@ export async function getOrCreatePlaygroundKey(userId: string): Promise<string> 
 export async function mintPlaygroundKey(userId: string): Promise<string> {
   const res = await pb.send<{ id: string; label: string; key: string }>("/api/custom/llm/keys", {
     method: "POST",
-    body: { label: LABEL },
+    body: { label: LABEL, is_default: true },
     requestKey: null,
   });
   localStorage.setItem(storageKey(userId), res.key);

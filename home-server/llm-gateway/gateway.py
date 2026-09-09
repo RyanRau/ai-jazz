@@ -350,7 +350,12 @@ async def list_models():
     return {
         "object": "list",
         "data": [
-            {"id": m["name"], "object": "model", "aliases": m.get("aliases", [])}
+            {
+                "id": m["name"],
+                "object": "model",
+                "aliases": m.get("aliases", []),
+                "vision": m.get("vision", False),
+            }
             for m in CONFIG["models"]
         ],
     }

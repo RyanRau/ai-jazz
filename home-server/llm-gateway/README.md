@@ -112,11 +112,11 @@ passes through untouched — no gateway change needed.
 
 ## Routes
 
-| Route                       | Auth | Purpose                       |
-| --------------------------- | ---- | ----------------------------- |
-| `GET /health`               | no   | gateway + loaded-model status |
-| `GET /v1/models`            | yes  | configured models + aliases   |
-| `POST /v1/chat/completions` | yes  | chat, streaming, vision       |
+| Route                       | Auth | Purpose                                               |
+| --------------------------- | ---- | ----------------------------------------------------- |
+| `GET /health`               | no   | gateway + loaded-model status                         |
+| `GET /v1/models`            | yes  | configured models + aliases + per-model `vision` flag |
+| `POST /v1/chat/completions` | yes  | chat, streaming, vision                               |
 
 ## Limitations
 

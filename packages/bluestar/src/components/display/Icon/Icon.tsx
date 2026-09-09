@@ -14,7 +14,7 @@ export type IconName =
   | "key"
   | "chat"
   | "menu"
-  | "chart";
+  | "image";
 
 export type IconProps = {
   name: IconName;

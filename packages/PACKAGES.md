@@ -395,9 +395,9 @@ display name or email, never a backend record; bluestar stays backend-agnostic.
 A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `check`,
-`user`, `plus`, `trash`, `search`, `externalLink`, `key`, `chat`, `menu`,
-`chart` (`key`/`chat`/`menu`/`chart` are hand-drawn for this repo, not
-adapted from Lucide). `color` defaults to `"currentColor"` so it inherits
+`user`, `plus`, `trash`, `search`, `externalLink`, `image`, `key`, `chat`,
+`menu` (`key`/`chat`/`menu` are hand-drawn for this repo, not adapted from
+Lucide). `color` defaults to `"currentColor"` so it inherits
 surrounding text/button color for free — pass `label` only for an icon
 standing alone with no adjacent text (it's decorative/`aria-hidden`
 otherwise).

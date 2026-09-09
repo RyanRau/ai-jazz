@@ -20,7 +20,12 @@
 // routerAdd callbacks (ReferenceError at request time), so each callback
 // must be fully self-contained. (Same fix as apps/pocketbase/pb_hooks/admin.pb.js.)
 
-// Create a key for yourself. Body: { label }. Returns the plaintext key once.
+// Create a key for yourself. Body: { label, is_default? }. Returns the
+// plaintext key once. is_default just marks the key as one the revoke route
+// below will refuse to touch -- it's the caller's own key either way, so
+// there's no privilege being granted, only a self-inflicted-footgun guard
+// for the key apps/tony/src/playgroundKey.ts mints (see its is_default
+// migration for why the Playground needs this).
 routerAdd(
   "POST",
   "/api/custom/llm/keys",
@@ -43,6 +48,7 @@ routerAdd(
       label: label,
       key_hash: $security.sha256(secret),
       key_prefix: secret.substring(0, 10),
+      is_default: body.is_default === true,
     });
     e.app.save(record);
 
@@ -75,6 +81,7 @@ routerAdd(
         created: r.getString("created"),
         revoked_at: r.getString("revoked_at"),
         last_used_at: r.getString("last_used_at"),
+        is_default: r.getBool("is_default"),
       };
       if (isAdmin) {
         const owner = e.app.findRecordById("users", r.getString("user"));
@@ -88,7 +95,8 @@ routerAdd(
 );
 
 // Revoke a key. Body: { id }. Idempotent. Admin: any key. Otherwise: only
-// your own.
+// your own. A default key (the Playground's auto-provisioned key) can't be
+// revoked at all, admin included -- see the is_default migration.
 routerAdd(
   "POST",
   "/api/custom/llm/keys/revoke",
@@ -106,6 +114,9 @@ routerAdd(
     const isAdmin = auth.get("is_admin") === true;
     if (!isAdmin && record.getString("user") !== auth.id) {
       throw new ForbiddenError("You don't own this key.");
+    }
+    if (record.getBool("is_default")) {
+      throw new BadRequestError("The default key can't be revoked.");
     }
     if (!record.getString("revoked_at")) {
       record.set("revoked_at", new Date().toISOString());
