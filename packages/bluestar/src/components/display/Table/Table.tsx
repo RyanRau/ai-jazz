@@ -52,6 +52,7 @@ export default function Table<Row>({
       className={css`
         width: 100%;
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
         border: 1px solid ${theme.colors.border};
         border-radius: ${theme.radius.md};
       `}

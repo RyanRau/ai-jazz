@@ -115,7 +115,9 @@ export default function Modal({
                 cursor: pointer;
                 font-size: 20px;
                 line-height: 1;
-                padding: 2px 6px;
+                /* ~40px tap target, not just the glyph. */
+                padding: 10px 12px;
+                margin: -10px -12px;
                 border-radius: ${theme.radius.sm};
                 color: ${theme.colors.textMuted};
                 &:hover {

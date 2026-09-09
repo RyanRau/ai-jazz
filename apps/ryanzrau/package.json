@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "bluestar": "file:../../packages/bluestar",
+    "goober": "^2.1.18",
     "pocketbase": "^0.26.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

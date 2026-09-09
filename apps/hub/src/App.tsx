@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
-import { AppShell, Button, Card, Flexbox, Header, Link, Spinner, Text } from "bluestar";
+import { AppShell, Card, Flexbox, Header, Link, Spinner, Text } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
-import { pb, signOut } from "./pb";
+import { AccountMenu } from "./AccountMenu";
+import { SettingsPage } from "./SettingsPage";
+import { pb } from "./pb";
 
 type GrantedApp = { id: string; name: string; url: string; description?: string };
+
+const onSettingsPath = window.location.pathname === "/settings";
 
 function App() {
   const record = useAuthRecord();
@@ -13,7 +17,7 @@ function App() {
   useEffect(() => {
     // Not rendered while signed out (see below), so a stale list here is
     // harmless — no need to reset it back to null on sign-out.
-    if (!record) return;
+    if (!record || onSettingsPath) return;
     pb.collection("registry_grants")
       .getFullList({ expand: "app" })
       .then((grants) => setApps(grants.map((g) => g.expand!.app as GrantedApp)));
@@ -32,11 +36,16 @@ function App() {
     );
   }
 
+  if (onSettingsPath) {
+    return (
+      <AppShell title="Settings" account={<AccountMenu />}>
+        <SettingsPage record={record} />
+      </AppShell>
+    );
+  }
+
   return (
-    <AppShell
-      title="Apps"
-      nav={<Button label="Log out" variant="secondary" density="dense" onClick={signOut} />}
-    >
+    <AppShell title="Apps" account={<AccountMenu />}>
       {!apps ? (
         <Spinner />
       ) : apps.length === 0 ? (

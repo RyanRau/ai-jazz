@@ -18,7 +18,8 @@ import {
 } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
-import { pb, signOut } from "./pb";
+import { AccountMenu } from "./AccountMenu";
+import { pb } from "./pb";
 
 type StashItem = {
   id: string;
@@ -98,10 +99,7 @@ function App() {
   if (granted === null) return null;
 
   return (
-    <AppShell
-      title="Stash"
-      nav={<Button label="Log out" variant="secondary" density="dense" onClick={signOut} />}
-    >
+    <AppShell title="Stash" account={<AccountMenu />}>
       <Flexbox direction="column" gap={24}>
         <Card padding={20}>
           <Form form={form}>

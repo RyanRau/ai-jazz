@@ -63,6 +63,8 @@ export default function RadioGroup({
                 display: flex;
                 align-items: flex-start;
                 gap: 8px;
+                /* The label (not just the 16px radio) is the tap target. */
+                padding: 6px 0;
                 cursor: ${isDisabled ? "not-allowed" : "pointer"};
                 opacity: ${isDisabled ? 0.5 : 1};
               `}

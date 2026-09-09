@@ -19,12 +19,14 @@ export * from "./components/feedback/EmptyState";
 export * from "./components/feedback/Toast";
 
 // Display
+export * from "./components/display/Avatar";
 export * from "./components/display/Badge";
 export * from "./components/display/Table";
 
 // Overlay
 export * from "./components/overlay/Modal";
 export * from "./components/overlay/ConfirmDialog";
+export * from "./components/overlay/Menu";
 
 // Navigation
 export * from "./components/navigation/Link";

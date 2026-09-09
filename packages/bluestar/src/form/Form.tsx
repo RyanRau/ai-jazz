@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
+import { css } from "goober";
 import Flexbox from "../components/layout/Flexbox/Flexbox";
 import Alert from "../components/feedback/Alert/Alert";
 import type { Spacing } from "../theme";
@@ -18,6 +19,13 @@ export type FormProps<T extends FormValues> = {
   gap?: Spacing;
   /** Render `submitError` as an Alert above the fields. Defaults to true. */
   showSubmitError?: boolean;
+  /**
+   * Max width in pixels for the rendered `<form>`. Defaults to `480` — a
+   * comfortable form-column width so fields don't stretch edge-to-edge of
+   * an arbitrarily wide parent. Pass `undefined` for a form that should
+   * genuinely stretch full-width.
+   */
+  maxWidth?: number;
 };
 
 /**
@@ -32,10 +40,21 @@ export function Form<T extends FormValues>({
   children,
   gap = 16,
   showSubmitError = true,
+  maxWidth = 480,
 }: FormProps<T>) {
   return (
     <FormContext.Provider value={form as unknown as AnyFormApi}>
-      <form onSubmit={form.handleSubmit} noValidate>
+      <form
+        onSubmit={form.handleSubmit}
+        noValidate
+        className={
+          maxWidth === undefined
+            ? undefined
+            : css`
+                max-width: ${maxWidth}px;
+              `
+        }
+      >
         <Flexbox direction="column" gap={gap}>
           {showSubmitError && form.submitError && <Alert variant="error">{form.submitError}</Alert>}
           {children}

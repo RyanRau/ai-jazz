@@ -55,6 +55,10 @@ export default function Button({
   const theme = useTheme();
   const { bg, hover } = getColors(variant, theme);
   const padding = density === "dense" ? "4px 10px" : "8px 16px";
+  // Comfortable touch targets: the label text plus its own padding lands
+  // under the ~44px Apple/Google guideline, especially for "dense" — this
+  // floors it without changing the visual padding.
+  const minHeight = density === "dense" ? 36 : 44;
 
   return (
     <button
@@ -66,6 +70,7 @@ export default function Button({
         font-family: ${theme.fonts.body};
         color: ${theme.colors.textOnAccent};
         padding: ${padding};
+        min-height: ${minHeight}px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
