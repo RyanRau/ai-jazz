@@ -1,7 +1,7 @@
 # tony
 
 Dashboard for the home-lab LLM setup — served at `https://tony.ryanzrau.dev`.
-A side nav switches between two pages:
+A side nav switches between three pages:
 
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
@@ -21,6 +21,10 @@ A side nav switches between two pages:
   `is_admin` account sees and can revoke every key across every user; anyone
   else only ever sees their own. A key's plaintext is shown exactly once, at
   creation — the server never stores it, only its hash.
+- **Usage** — aggregate totals (call count, tokens in/out) and a daily
+  time-series chart, over the same rows the Keys page's per-key totals
+  come from (so it's scoped the same way: an admin sees every row, anyone
+  else only their own). Built on bluestar's `StatTile` and `LineChart`.
 
 Auth and data both go through PocketBase (`registry_apps`/`registry_grants`
 for who can open the app at all; `llm_api_keys`/`llm_usage_logs` for the Keys

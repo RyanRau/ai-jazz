@@ -6,9 +6,10 @@ import { AccountMenu } from "./AccountMenu";
 import { AppSwitcher } from "./AppSwitcher";
 import { KeysPage } from "./KeysPage";
 import { PlaygroundPage } from "./PlaygroundPage";
+import { UsagePage } from "./UsagePage";
 import { pb } from "./pb";
 
-type Tab = "playground" | "keys";
+type Tab = "playground" | "keys" | "usage";
 
 function App() {
   const record = useAuthRecord();
@@ -58,13 +59,16 @@ function App() {
           items={[
             { key: "playground", label: "Playground", icon: "chat" },
             { key: "keys", label: "Keys", icon: "key" },
+            { key: "usage", label: "Usage", icon: "chart" },
           ]}
           activeKey={tab}
           onSelect={(key) => setTab(key as Tab)}
         />
       }
     >
-      {tab === "playground" ? <PlaygroundPage /> : <KeysPage />}
+      {tab === "playground" && <PlaygroundPage />}
+      {tab === "keys" && <KeysPage />}
+      {tab === "usage" && <UsagePage />}
     </AppShell>
   );
 }

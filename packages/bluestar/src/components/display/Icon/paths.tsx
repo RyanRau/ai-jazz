@@ -85,4 +85,14 @@ export const iconPaths: Record<IconName, React.ReactNode> = {
       <path d="M4 18h16" />
     </>
   ),
+  // Straight lines only, coordinates chosen so every bar visibly touches
+  // the shared baseline -- verifiable by construction, not transcribed.
+  chart: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="M8 17v4" />
+      <path d="M13 12v9" />
+      <path d="M18 8v13" />
+    </>
+  ),
 };

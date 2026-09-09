@@ -13,7 +13,8 @@ export type IconName =
   | "externalLink"
   | "key"
   | "chat"
-  | "menu";
+  | "menu"
+  | "chart";
 
 export type IconProps = {
   name: IconName;
