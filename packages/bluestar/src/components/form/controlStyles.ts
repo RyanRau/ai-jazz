@@ -25,7 +25,10 @@ export function controlClass(
     background-color: ${theme.colors.background};
     color: ${theme.colors.text};
     font-family: ${theme.fonts.body};
-    font-size: ${theme.textTypes.subtitle.size};
+    /* iOS Safari auto-zooms on focusing any input with a computed font-size
+       below 16px — max() keeps the design size everywhere else while never
+       going below the threshold that triggers it. */
+    font-size: max(${theme.textTypes.subtitle.size}, 16px);
     outline: none;
     box-sizing: border-box;
     transition:

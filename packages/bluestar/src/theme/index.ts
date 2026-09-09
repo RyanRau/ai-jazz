@@ -5,6 +5,6 @@ export type {
   ResolvedColorScheme,
   DeepPartial,
 } from "./ThemeContext";
-export { defaultTheme, darkTheme } from "./theme";
+export { defaultTheme, darkTheme, breakpoints } from "./theme";
 export type { Theme, Spacing, TextStyle, HeadingStyle } from "./theme";
 export { themeToVars, varRefs, VAR_PREFIX } from "./cssVars";

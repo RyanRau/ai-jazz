@@ -47,6 +47,9 @@ export default function AppShell({ title, nav, children, footer, maxWidth = 960 
         className={css`
           border-bottom: 1px solid ${theme.colors.border};
           background-color: ${theme.colors.surface};
+          /* Vertical breathing room for when title+nav wrap to two lines on
+             a narrow viewport — a fixed height would clip the wrapped row. */
+          padding: 8px 0;
         `}
       >
         <div className={centred}>
@@ -54,12 +57,13 @@ export default function AppShell({ title, nav, children, footer, maxWidth = 960 
             direction="row"
             alignItems="center"
             justifyContent="space-between"
+            flexWrap="wrap"
             gap={16}
-            height={56}
+            style={{ minHeight: 56 }}
           >
             <Header variant="h3">{title}</Header>
             {nav && (
-              <Flexbox direction="row" alignItems="center" gap={16}>
+              <Flexbox direction="row" alignItems="center" flexWrap="wrap" gap={16}>
                 {nav}
               </Flexbox>
             )}

@@ -12,6 +12,23 @@
 
 export type Spacing = 4 | 8 | 12 | 16 | 20 | 24 | 32;
 
+/**
+ * Viewport widths (px) for responsive CSS, e.g.
+ * `@media (max-width: ${breakpoints.sm}px) { ... }`.
+ *
+ * Plain numbers, not theme tokens: a `@media` condition can't reference a CSS
+ * custom property, so these can't flow through the `var(--bs-…)` system the
+ * rest of the theme uses.
+ */
+export const breakpoints = {
+  /** Phones. */
+  sm: 480,
+  /** Tablets and the usual "mobile vs. desktop" cutoff. */
+  md: 768,
+  /** Small laptops. */
+  lg: 1024,
+} as const;
+
 /** Size, weight, style and colour of one text variant. */
 export type TextStyle = {
   size: string;

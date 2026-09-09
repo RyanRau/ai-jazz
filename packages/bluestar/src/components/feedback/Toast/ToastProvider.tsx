@@ -72,10 +72,16 @@ export function ToastProvider({ children, position = "bottom-right" }: ToastProv
     [show, dismiss]
   );
 
+  // max() with env(safe-area-inset-*) keeps toasts clear of a notch or the
+  // home indicator on phones that have one, without changing anything on
+  // devices that don't (env() falls back to 0).
   const anchor = {
-    "top-right": "top: 16px; right: 16px;",
-    "bottom-right": "bottom: 16px; right: 16px;",
-    "top-center": "top: 16px; left: 50%; transform: translateX(-50%);",
+    "top-right":
+      "top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right));",
+    "bottom-right":
+      "bottom: max(16px, env(safe-area-inset-bottom)); right: max(16px, env(safe-area-inset-right));",
+    "top-center":
+      "top: max(16px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);",
   }[position];
 
   return (

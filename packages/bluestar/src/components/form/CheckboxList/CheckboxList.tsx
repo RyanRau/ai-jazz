@@ -62,6 +62,8 @@ export default function CheckboxList({
                 display: flex;
                 align-items: center;
                 gap: 8px;
+                /* The label (not just the 16px box) is the tap target. */
+                padding: 6px 0;
                 cursor: ${isDisabled ? "not-allowed" : "pointer"};
                 opacity: ${isDisabled ? 0.5 : 1};
               `}

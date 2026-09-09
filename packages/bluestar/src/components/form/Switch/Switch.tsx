@@ -39,6 +39,8 @@ export default function Switch({
           display: flex;
           align-items: center;
           gap: 10px;
+          /* The label (not just the switch) is the tap target. */
+          padding: 6px 0;
           cursor: ${isDisabled ? "not-allowed" : "pointer"};
           opacity: ${isDisabled ? 0.5 : 1};
         `}

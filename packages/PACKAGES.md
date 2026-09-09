@@ -151,6 +151,12 @@ Notes that catch people out:
 Also exported: `defaultTheme`, `darkTheme`, `themeToVars(theme)`,
 `varRefs(theme)`, `VAR_PREFIX`, `deepMerge`.
 
+**`breakpoints`** — `{ sm: 480, md: 768, lg: 1024 }`, plain pixel numbers for
+`@media` conditions (e.g. `` `@media (max-width: ${breakpoints.sm}px)` ``).
+Not part of `Theme` and not a `var(--bs-…)` reference — a media query
+condition can't be a CSS custom property, so these can't flow through the
+same var-based system as the rest of the theme.
+
 ---
 
 ## Forms
