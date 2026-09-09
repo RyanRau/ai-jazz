@@ -78,4 +78,11 @@ export const iconPaths: Record<IconName, React.ReactNode> = {
       <path d="M8 21l3-4" />
     </>
   ),
+  menu: (
+    <>
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </>
+  ),
 };
