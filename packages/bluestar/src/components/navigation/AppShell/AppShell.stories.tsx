@@ -6,6 +6,8 @@ import Text from "../../text/Text/Text";
 import Header from "../../text/Header/Header";
 import Button from "../../buttons/Button/Button";
 import Flexbox from "../../layout/Flexbox/Flexbox";
+import Avatar from "../../display/Avatar/Avatar";
+import Menu from "../../overlay/Menu/Menu";
 import { useColorScheme } from "../../../theme";
 
 const meta = {
@@ -17,7 +19,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Header, centred content column, optional footer — so every app doesn't rebuild the same page chrome and they all agree on content width.",
+          "Full-width header (title pinned left, account control pinned right), centred content column, optional footer — so every app doesn't rebuild the same page chrome and they all agree on content width.",
       },
     },
   },
@@ -48,6 +50,22 @@ export const Default: Story = {
           <Link href="#">Tags</Link>
           <SchemeToggle />
         </>
+      }
+      account={
+        <Menu trigger={<Avatar name="Ryan Rau" />} triggerLabel="Account menu for Ryan Rau">
+          <Flexbox direction="column" gap={12}>
+            <Flexbox direction="column" gap={4} style={{ padding: "4px 8px" }}>
+              <Text variant="label">Ryan Rau</Text>
+              <Text variant="caption">ryan@example.com</Text>
+            </Flexbox>
+            <div style={{ padding: "0 8px" }}>
+              <Link href="#" variant="muted">
+                Settings
+              </Link>
+            </div>
+            <Button label="Log out" variant="secondary" density="dense" onClick={() => {}} />
+          </Flexbox>
+        </Menu>
       }
       footer={<Text variant="caption">Deployed from the monorepo.</Text>}
     >

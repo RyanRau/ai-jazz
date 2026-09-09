@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { AppShell, Button, Card, EmptyState, Flexbox, Header, Text } from "bluestar";
+import { AppShell, Card, EmptyState, Flexbox, Header, Text } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
-import { pb, signOut } from "./pb";
+import { AccountMenu } from "./AccountMenu";
+import { pb } from "./pb";
 
 function App() {
   const record = useAuthRecord();
@@ -38,10 +39,7 @@ function App() {
   if (granted === null) return null;
 
   return (
-    <AppShell
-      title="LLM"
-      nav={<Button label="Log out" variant="secondary" density="dense" onClick={signOut} />}
-    >
+    <AppShell title="LLM" account={<AccountMenu />}>
       <Card padding={24}>
         <Flexbox direction="column" gap={8}>
           <Header variant="h2">Coming soon</Header>

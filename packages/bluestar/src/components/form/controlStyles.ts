@@ -19,6 +19,12 @@ export function controlClass(
 
   return css`
     width: 100%;
+    /* Never render narrower than a comfortable minimum, even inside a
+       parent that collapses to content size (a flex item's implicit
+       min-width: auto lets a width:100% child inside it shrink
+       unpredictably) — matches the field-width floor Material Design,
+       Ant Design, Chakra, Bootstrap, and shadcn/ui all converge on. */
+    min-width: 240px;
     padding: 8px 12px;
     border: 1px solid ${borderColor};
     border-radius: ${theme.radius.md};

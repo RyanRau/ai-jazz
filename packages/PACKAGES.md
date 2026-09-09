@@ -216,6 +216,11 @@ field, setValue, setValues, setError, reset, handleSubmit }`.
 | `form`            | `FormApi<T>` | required |
 | `gap`             | `Spacing`    | `16`     |
 | `showSubmitError` | `boolean`    | `true`   |
+| `maxWidth`        | `number`     | `480`    |
+
+`maxWidth` caps the rendered `<form>`'s width so fields don't stretch
+edge-to-edge of an arbitrarily wide parent. Pass `maxWidth={undefined}` for a
+form that should genuinely stretch full-width.
 
 ### `SubmitButton`
 
@@ -363,6 +368,19 @@ toast.show("Sync started", { title: "Heads up", duration: 0 }); // 0 = sticky
 
 ### Display
 
+#### `Avatar`
+
+| Prop   | Type     | Default  |
+| ------ | -------- | -------- |
+| `src`  | `string` | —        |
+| `name` | `string` | required |
+| `size` | `number` | `36`     |
+| `alt`  | `string` | —        |
+
+Circular; shows `src` if given, falling back to initials on a hashed color
+(missing `src`, or the image failing to load). `name` is plain text — pass a
+display name or email, never a backend record; bluestar stays backend-agnostic.
+
 #### `Badge`
 
 `variant`: `"neutral" | "primary" | "success" | "warning" | "error"` (default
@@ -406,6 +424,23 @@ Built on native `<dialog>`, so focus trapping and Esc-to-close come for free.
 `isOpen`, `onClose`, `onConfirm` (may be async), `title`, `message`,
 `confirmLabel`, `cancelLabel`, `confirmVariant` (default `"destructive"`).
 
+#### `Menu`
+
+| Prop           | Type        | Default  |
+| -------------- | ----------- | -------- |
+| `trigger`      | `ReactNode` | required |
+| `triggerLabel` | `string`    | —        |
+| `children`     | `ReactNode` | required |
+| `width`        | `number`    | `240`    |
+
+A single flat dropdown, right-aligned to its trigger. Built on the native
+Popover API — click-to-toggle, light-dismiss, Esc-to-close, and top-layer
+stacking all come from the browser rather than hand-rolled JS. No nested
+submenus or configurable alignment — the only real use case today is a
+top-right account pill. No close-on-item-click plumbing either: a navigating
+`Link` or an action that unmounts the tree (like signing out) closes the
+popover along with everything else.
+
 ### Navigation
 
 #### `Link`
@@ -415,8 +450,19 @@ Native anchor props plus `variant` (`"primary" | "muted"`) and `external` (adds
 
 #### `AppShell`
 
-`title`, `nav`, `children`, `footer`, `maxWidth` (default `960`). Header, centred
-content column, optional footer.
+| Prop       | Type        | Default  |
+| ---------- | ----------- | -------- |
+| `title`    | `string`    | required |
+| `nav`      | `ReactNode` | —        |
+| `account`  | `ReactNode` | —        |
+| `children` | `ReactNode` | required |
+| `footer`   | `ReactNode` | —        |
+| `maxWidth` | `number`    | `960`    |
+
+Full-width header (title pinned left, `nav` then `account` pinned right —
+`account` is always the rightmost element), centred content column below it,
+optional footer. `account` is meant for a profile pill (see `Avatar` + `Menu`);
+`nav` is nav links/buttons.
 
 ---
 
