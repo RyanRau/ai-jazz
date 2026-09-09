@@ -1,15 +1,22 @@
-# Copy to config.yaml. Keep config.yaml out of git — it holds your API keys.
+# Copy to config.yaml. Keep config.yaml out of git — it holds the PocketBase
+# service-account password.
 
 server:
-  host: "127.0.0.1"
+  host: "0.0.0.0" # needs to be reachable on the LAN, not just localhost
   port: 8000
   max_parallel_requests: 3
   model_idle_timeout_seconds: 900 # 0 disables auto-unload
   request_timeout_seconds: 300
 
+# API keys and usage are managed in PocketBase (mono's shared backend), not
+# here -- see home-server/llm-gateway/README.md#auth. This is plain outbound
+# HTTPS to a normal public endpoint; it doesn't need the WireGuard tunnel.
 auth:
-  api_keys:
-    - "sk-REPLACE-ME" # gen: python3 -c "import secrets; print('sk-' + secrets.token_hex(24))"
+  pocketbase_url: "https://api.ryanzrau.dev"
+  service_email: "llm-gateway@service.internal" # create in the PocketBase admin UI, is_service: true
+  service_password: "REPLACE-ME"
+  key_refresh_seconds: 60 # how often to re-pull the active-key list
+  usage_flush_seconds: 20 # how often to push buffered usage rows
 
 llama_server:
   binary: "/opt/homebrew/bin/llama-server" # `which llama-server`
