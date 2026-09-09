@@ -5,9 +5,17 @@ A side nav switches between two pages:
 
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
-  browser, the same as any other API client. Needs a key from the Keys page
-  and (until the WireGuard tunnel exists) will fail to reach the gateway —
-  that's expected, not a bug in this page.
+  browser, the same as any other API client. Uses a personal key created
+  automatically the first time a user visits (`src/playgroundKey.ts`) —
+  nothing to paste in. It's a real key like any other (created via the same
+  self-service route the Keys page uses, just triggered for the user rather
+  than by them), cached client-side in `localStorage` scoped by user id, and
+  shows up on the Keys page as `"Tony Playground (auto)"` where it can be
+  revoked like any other. If the cached key stops working (revoked, cache
+  cleared), the page mints a fresh one and retries once rather than
+  surfacing an auth error for a key the user never typed in themselves.
+  Until the WireGuard tunnel exists, sending will fail to reach the gateway
+  — that's expected, not a bug in this page.
 - **Keys** — create/revoke API keys and see per-key usage (call count,
   tokens in/out). Backed by `apps/pocketbase/pb_hooks/llm.pb.js`: an
   `is_admin` account sees and can revoke every key across every user; anyone
