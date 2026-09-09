@@ -76,6 +76,15 @@ jobs:
           pip install pyyaml
           python3 infra/validate_deploy.py
 
+      # Catches flipping `development: true` on an app that is currently live
+      # in production — that silently drops it from docker-compose.yml and the
+      # next deploy tears down its container. Only meaningful on a push, where
+      # `github.event.before` is the state main was actually deployed from; a
+      # manual production re-run doesn't change deploy.yml relative to that.
+      - name: Check for silent production demotions
+        if: env.TARGET == 'production' && github.event_name == 'push'
+        run: python3 infra/check_demotions.py --base "${{ github.event.before }}" --head "${{ github.sha }}"
+
       - name: Select apps to build
         id: select
         run: |
