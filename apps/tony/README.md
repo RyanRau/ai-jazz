@@ -29,9 +29,13 @@ A side nav switches between two pages:
   A key's plaintext is shown exactly once, at creation — the server never
   stores it, only its hash. The Playground's auto-provisioned key is marked
   `is_default` and has no Revoke button — the route refuses to revoke it
-  even for an admin, since there'd be no way for the Playground to recover.
-  The usage stats and chart are built on bluestar's `StatTile` and
-  `LineChart`.
+  even for an admin, since there'd be no way for the Playground to recover
+  (a `1788989340`/`1788992030` migration pair adds the field and backfills
+  it onto keys that were minted before it existed). Revoking is a soft
+  delete: the key drops out of the table and usage dropdown, but a "Show
+  revoked keys" toggle brings it (and its usage) back into view rather than
+  deleting the row. The usage stats and chart are built on bluestar's
+  `StatTile` and `LineChart`.
 
 Auth and data both go through PocketBase (`registry_apps`/`registry_grants`
 for who can open the app at all; `llm_api_keys`/`llm_usage_logs` for the Keys

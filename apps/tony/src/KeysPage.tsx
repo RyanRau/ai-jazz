@@ -13,6 +13,7 @@ import {
   Modal,
   StatTile,
   SubmitButton,
+  Switch,
   Table,
   Text,
   TextInput,
@@ -117,6 +118,7 @@ export function KeysPage() {
 
   const [selectedKeyId, setSelectedKeyId] = useState("");
   const [keyScopedUsage, setKeyScopedUsage] = useState<UsageRow[] | null>(null);
+  const [showRevoked, setShowRevoked] = useState(false);
 
   function load() {
     return Promise.all([
@@ -147,7 +149,6 @@ export function KeysPage() {
   }, [selectedKeyId]);
 
   const usageByKey = totalsByKey(allUsage);
-  const scopedUsage = selectedKeyId ? keyScopedUsage : allUsage;
 
   const form = useForm<{ label: string }>({
     initialValues: { label: "" },
@@ -171,17 +172,32 @@ export function KeysPage() {
     await load();
   }
 
+  // A revoked key is soft-deleted, not gone -- it stays out of the table
+  // and usage dropdown by default, but toggling "Show revoked keys" brings
+  // it (and its usage) back into view rather than deleting the record.
+  function toggleShowRevoked(next: boolean) {
+    setShowRevoked(next);
+    if (!next && keys?.find((k) => k.id === selectedKeyId)?.revoked_at) {
+      setSelectedKeyId("");
+    }
+  }
+
   if (keys === null) return null;
+
+  const visibleKeys = showRevoked ? keys : keys.filter((k) => !k.revoked_at);
+  const visibleKeyIds = new Set(visibleKeys.map((k) => k.id));
 
   const keyOptions = [
     { label: "All keys", value: "" },
-    ...keys.map((k) => ({
+    ...visibleKeys.map((k) => ({
       label: isAdmin && k.owner_email ? `${k.label} (${k.owner_email})` : k.label,
       value: k.id,
     })),
   ];
 
-  const rows = scopedUsage ?? [];
+  const rows = selectedKeyId
+    ? (keyScopedUsage ?? [])
+    : allUsage.filter((r) => visibleKeyIds.has(r.key));
   const totalCalls = rows.length;
   const totalIn = rows.reduce((sum, r) => sum + r.tokens_in, 0);
   const totalOut = rows.reduce((sum, r) => sum + r.tokens_out, 0);
@@ -205,13 +221,19 @@ export function KeysPage() {
           <Button label="New key" variant="creation" onClick={() => setCreating(true)} />
         </Flexbox>
 
+        <Switch label="Show revoked keys" value={showRevoked} onChange={toggleShowRevoked} />
+
         <Table
-          rows={keys}
+          rows={visibleKeys}
           rowKey={(k) => k.id}
           empty={
             <EmptyState
-              title="No keys yet"
-              description="Create one to start calling the gateway."
+              title={showRevoked ? "No keys yet" : "No active keys"}
+              description={
+                showRevoked
+                  ? "Create one to start calling the gateway."
+                  : 'Turn on "Show revoked keys" to see revoked ones.'
+              }
             />
           }
           columns={[
