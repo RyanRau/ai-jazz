@@ -7,6 +7,7 @@ import Header from "../../text/Header/Header";
 import Button from "../../buttons/Button/Button";
 import Flexbox from "../../layout/Flexbox/Flexbox";
 import Avatar from "../../display/Avatar/Avatar";
+import Icon from "../../display/Icon/Icon";
 import Menu from "../../overlay/Menu/Menu";
 import { useColorScheme } from "../../../theme";
 
@@ -44,6 +45,18 @@ export const Default: Story = {
   render: () => (
     <AppShell
       title="Recipe Box"
+      appSwitcher={
+        <Menu trigger={<Icon name="chevronDown" size={16} />} triggerLabel="Switch apps">
+          <Flexbox direction="column" gap={4} style={{ padding: "4px 8px" }}>
+            <Link href="#" variant="muted">
+              Hub
+            </Link>
+            <Link href="#" variant="muted">
+              Stash
+            </Link>
+          </Flexbox>
+        </Menu>
+      }
       nav={
         <>
           <Link href="#">Recipes</Link>

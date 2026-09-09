@@ -8,8 +8,16 @@ import Text from "../../text/Text/Text";
 export type CheckboxProps = Omit<FormFieldProps, "label"> & {
   value: boolean;
   onChange: (value: boolean) => void;
-  /** Text beside the box. Clicking it toggles the checkbox. */
+  /** Text beside the box. Clicking it toggles the checkbox. Always the accessible name, even when `hideLabel` is set. */
   label: string;
+  /**
+   * Visually hides `label` (kept for screen readers via sr-only styling)
+   * instead of rendering it as visible text. For a dense grid — a
+   * permission matrix, say — where the row/column headers already convey
+   * what the checkbox means, so a repeated visible label per cell is
+   * redundant. Defaults to `false`.
+   */
+  hideLabel?: boolean;
 };
 
 /** A single boolean checkbox. Use `CheckboxList` for a set of options. */
@@ -17,6 +25,7 @@ export default function Checkbox({
   value,
   onChange,
   label,
+  hideLabel = false,
   description,
   warning,
   error,
@@ -64,7 +73,25 @@ export default function Checkbox({
             }
           `}
         />
-        <Text variant="subtitle">{label}</Text>
+        {hideLabel ? (
+          <span
+            className={css`
+              position: absolute;
+              width: 1px;
+              height: 1px;
+              padding: 0;
+              margin: -1px;
+              overflow: hidden;
+              clip: rect(0, 0, 0, 0);
+              white-space: nowrap;
+              border: 0;
+            `}
+          >
+            {label}
+          </span>
+        ) : (
+          <Text variant="subtitle">{label}</Text>
+        )}
       </label>
 
       {description && <Text variant="caption">{description}</Text>}

@@ -7,6 +7,8 @@ import Header from "../../text/Header/Header";
 export type AppShellProps = {
   /** App name shown at the left of the header. */
   title: string;
+  /** Rendered immediately after `title` — e.g. a `Menu`-based dropdown for switching between apps. */
+  appSwitcher?: ReactNode;
   /** Nav links or buttons, placed right of the title. */
   nav?: ReactNode;
   /** Account/profile control, pinned to the true right edge of the header — rendered after `nav`. */
@@ -31,6 +33,7 @@ export type AppShellProps = {
  */
 export default function AppShell({
   title,
+  appSwitcher,
   nav,
   account,
   children,
@@ -81,7 +84,10 @@ export default function AppShell({
           width="100%"
           style={{ minHeight: 56 }}
         >
-          <Header variant="h3">{title}</Header>
+          <Flexbox direction="row" alignItems="center" gap={4}>
+            <Header variant="h3">{title}</Header>
+            {appSwitcher}
+          </Flexbox>
           {(nav || account) && (
             <Flexbox direction="row" alignItems="center" flexWrap="wrap" gap={16}>
               {nav}

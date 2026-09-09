@@ -19,6 +19,7 @@ import {
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
+import { AppSwitcher } from "./AppSwitcher";
 import { pb } from "./pb";
 
 type StashItem = {
@@ -48,7 +49,8 @@ function App() {
       .getFullList({ expand: "app" })
       .then((grants) =>
         setGranted(
-          grants.some((g) => (g.expand?.app as { slug?: string } | undefined)?.slug === "stash")
+          record.is_admin === true ||
+            grants.some((g) => (g.expand?.app as { slug?: string } | undefined)?.slug === "stash")
         )
       );
   }, [record]);
@@ -99,7 +101,7 @@ function App() {
   if (granted === null) return null;
 
   return (
-    <AppShell title="Stash" account={<AccountMenu />}>
+    <AppShell title="Stash" appSwitcher={<AppSwitcher />} account={<AccountMenu />}>
       <Flexbox direction="column" gap={24}>
         <Card padding={20}>
           <Form form={form}>

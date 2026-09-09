@@ -4,7 +4,9 @@
 // who already have a registry_grants row for the stash app, rather than
 // exposing the users collection directly (its listRule only ever lets a
 // user see their own record). Restricted to callers who are themselves
-// stash grantees — this is a stash-only feature, not a general directory.
+// stash grantees — this is a stash-only feature, not a general directory —
+// except an admin, who can reach every app without a grant row of their own
+// (the same bypass the stash app's own access gate applies).
 routerAdd(
   "GET",
   "/api/custom/stash/shareable-users",
@@ -17,7 +19,7 @@ routerAdd(
       appId: stashApp.id,
     });
     const granteeIds = grants.map((g) => g.get("user"));
-    if (!granteeIds.includes(authRecord.id)) {
+    if (authRecord.get("is_admin") !== true && !granteeIds.includes(authRecord.id)) {
       throw new ForbiddenError("You don't have access to the stash app.");
     }
     const users = granteeIds
