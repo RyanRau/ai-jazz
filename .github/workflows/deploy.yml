@@ -53,11 +53,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-
       # A production deploy renders docker-compose.yml on the droplet from
       # *main's* deploy.yml (the droplet git-pulls main), but builds images from
       # whatever ref was dispatched. Dispatching production from a feature branch
@@ -140,10 +135,10 @@ jobs:
           for app in ${{ steps.select.outputs.apps }}; do
             echo "=== Building $app ==="
             IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.REPO }}/${app}:${{ steps.select.outputs.tag }}" | tr '[:upper:]' '[:lower:]')
-            APP_PATH=$(yq ".apps.${app}.path // \"apps/${app}\"" deploy.yml)
+            APP_PATH=$(python3 infra/app_field.py path "$app")
 
             BUILD_ARGS=()
-            for arg in $(yq ".apps.${app}.build_args // [] | .[]" deploy.yml); do
+            for arg in $(python3 infra/app_field.py build_args "$app"); do
               value=$(jq -r --arg k "$arg" '.[$k] // empty' <<< "$ALL_SECRETS")
               if [ -z "$value" ]; then
                 echo "::error::build arg '${arg}' for '${app}' has no matching GitHub secret"
