@@ -211,16 +211,18 @@ field, setValue, setValues, setError, reset, handleSubmit }`.
 
 ### `Form`
 
-| Prop              | Type         | Default  |
-| ----------------- | ------------ | -------- |
-| `form`            | `FormApi<T>` | required |
-| `gap`             | `Spacing`    | `16`     |
-| `showSubmitError` | `boolean`    | `true`   |
-| `maxWidth`        | `number`     | `480`    |
+| Prop              | Type             | Default  |
+| ----------------- | ---------------- | -------- |
+| `form`            | `FormApi<T>`     | required |
+| `gap`             | `Spacing`        | `16`     |
+| `showSubmitError` | `boolean`        | `true`   |
+| `maxWidth`        | `number \| null` | `480`    |
 
 `maxWidth` caps the rendered `<form>`'s width so fields don't stretch
-edge-to-edge of an arbitrarily wide parent. Pass `maxWidth={undefined}` for a
-form that should genuinely stretch full-width.
+edge-to-edge of an arbitrarily wide parent. Pass `maxWidth={null}` (not
+`undefined` — an omitted or explicitly-`undefined` prop both fall through to
+the default, a real JS default-parameter gotcha) for a form that should
+genuinely stretch full-width, e.g. to fill a `Card` of a known width.
 
 ### `SubmitButton`
 
