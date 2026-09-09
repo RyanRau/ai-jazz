@@ -1,0 +1,77 @@
+# Copy to config.yaml. Keep config.yaml out of git — it holds your API keys.
+
+server:
+  host: "127.0.0.1"
+  port: 8000
+  max_parallel_requests: 3
+  model_idle_timeout_seconds: 900 # 0 disables auto-unload
+  request_timeout_seconds: 300
+
+auth:
+  api_keys:
+    - "sk-REPLACE-ME" # gen: python3 -c "import secrets; print('sk-' + secrets.token_hex(24))"
+
+llama_server:
+  binary: "/opt/homebrew/bin/llama-server" # `which llama-server`
+  host: "127.0.0.1"
+  port: 8100
+  startup_timeout_seconds: 180
+
+models:
+  - name: "qwen3.5-2b"
+    aliases: ["2b"]
+    model_path: "~/server/llm/models/qwen3.5-2b/Qwen3.5-2B-Q4_K_M.gguf"
+    mmproj_path: "~/server/llm/models/qwen3.5-2b/mmproj-BF16.gguf"
+    vision: true
+    args:
+      ctx-size: 32768
+      n-gpu-layers: 99
+      jinja: true
+      no-webui: true
+      reasoning-budget: 1024
+
+  - name: "qwen3.5-4b"
+    aliases: ["4b"]
+    model_path: "~/server/llm/models/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf"
+    mmproj_path: "~/server/llm/models/qwen3.5-4b/mmproj-BF16.gguf"
+    vision: true
+    args:
+      ctx-size: 32768
+      n-gpu-layers: 99
+      jinja: true
+      no-webui: true
+      reasoning-budget: 1024
+
+  - name: "qwen3.5-9b"
+    aliases: ["9b", "default"]
+    model_path: "~/server/llm/models/qwen3.5-9b/Qwen3.5-9B-Q4_K_M.gguf"
+    mmproj_path: "~/server/llm/models/qwen3.5-9b/mmproj-BF16.gguf"
+    vision: true
+    args:
+      ctx-size: 16384
+      n-gpu-layers: 99
+      jinja: true
+      no-webui: true
+      reasoning-budget: 1024
+
+  - name: "qwen2.5-coder-7b"
+    aliases: ["coder"]
+    model_path: "~/server/llm/models/qwen2.5-coder-7b/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+    vision: false
+    args:
+      ctx-size: 24576
+      n-gpu-layers: 99
+      jinja: true
+      no-webui: true
+      reasoning-budget: 1024
+
+  - name: "phi-4-14b"
+    aliases: ["phi4"]
+    model_path: "~/server/llm/models/phi-4-14b/phi-4-Q4_K_M.gguf"
+    vision: false
+    args:
+      ctx-size: 8192
+      n-gpu-layers: 99
+      jinja: true
+      no-webui: true
+      reasoning-budget: 1024
