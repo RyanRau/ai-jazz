@@ -69,8 +69,9 @@ One-time setup, once per fresh `pb_data` volume:
    check its `is_service` field. Put that email + password in `config.yaml`'s
    `auth.service_email`/`service_password`.
 2. Create your own `users` record (or flip `is_admin` on an existing one) —
-   this is the account the `tony` dashboard's key-management screen will use.
-   Until that screen exists, mint the first key by hand:
+   this is the account the `tony` dashboard's Keys page uses. Sign in there
+   to create/revoke keys and see usage day to day; the same thing by hand,
+   e.g. for scripting:
 
    ```bash
    TOKEN=$(curl -s -X POST https://api.ryanzrau.dev/api/collections/users/auth-with-password \
@@ -135,3 +136,8 @@ true}` in the request for streamed responses).
 - New keys and revocations take up to `key_refresh_seconds` to take effect —
   the gateway validates against its last successful pull, not PocketBase
   directly, so it keeps working through a brief PocketBase outage.
+- CORS is locked to `https://tony.ryanzrau.dev` (plus any `http://localhost:*`
+  origin, for local dev) so the `tony` dashboard's Playground can call this
+  from the browser. It's a fixed constant in `gateway.py`, not something in
+  `config.yaml` — there's only one real caller, and it can't be read from
+  config anyway (`add_middleware` runs before `--config` is parsed).

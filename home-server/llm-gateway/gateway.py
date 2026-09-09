@@ -19,6 +19,7 @@ import httpx
 import uvicorn
 import yaml
 from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -315,7 +316,22 @@ async def lifespan(app: FastAPI):
     await key_store.stop()
 
 
+# Fixed, not config-driven: there's exactly one browser client that ever
+# calls this cross-origin (tony.ryanzrau.dev), and CORS is a security
+# boundary, not a deployment knob. It also has to be a module-level constant
+# rather than read from CONFIG -- add_middleware() runs at import time,
+# before main() has parsed --config.
+ALLOWED_ORIGINS = ["https://tony.ryanzrau.dev"]
+LOCAL_DEV_ORIGIN_REGEX = r"http://localhost:\d+"
+
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=LOCAL_DEV_ORIGIN_REGEX,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 
 @app.get("/health")
