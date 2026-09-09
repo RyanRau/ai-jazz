@@ -1,5 +1,16 @@
-import { useEffect, useState } from "react";
-import { Alert, Button, Card, Flexbox, Header, Text, TextAreaInput, TextInput } from "bluestar";
+import { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Button,
+  Card,
+  Dropdown,
+  Flexbox,
+  Header,
+  Icon,
+  Text,
+  TextAreaInput,
+  TextInput,
+} from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { getOrCreatePlaygroundKey, mintPlaygroundKey, clearPlaygroundKey } from "./playgroundKey";
 
@@ -9,6 +20,9 @@ import { getOrCreatePlaygroundKey, mintPlaygroundKey, clearPlaygroundKey } from 
 // home-server/llm-gateway) -- until then, requests here will fail to reach
 // it, which is expected, not a bug in this page.
 const GATEWAY_URL = import.meta.env.VITE_LLM_GATEWAY_URL ?? "https://llm.ryanzrau.dev";
+
+type ModelInfo = { id: string; vision: boolean };
+type ImageAttachment = { name: string; dataUrl: string };
 
 /**
  * A one-off prompt tester: pastes straight through to the gateway's own
@@ -27,11 +41,16 @@ export function PlaygroundPage() {
   const record = useAuthRecord();
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
+  // null = not loaded yet, "unavailable" = the gateway couldn't be reached
+  // (fall back to a plain text field rather than blocking model entry).
+  const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
   const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [image, setImage] = useState<ImageAttachment | null>(null);
   const [response, setResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!record) return;
@@ -40,7 +59,61 @@ export function PlaygroundPage() {
       .catch(() => setKeyError("Couldn't set up your personal key. Try reloading."));
   }, [record]);
 
+  useEffect(() => {
+    if (!apiKey) return;
+    fetch(`${GATEWAY_URL}/v1/models`, { headers: { Authorization: `Bearer ${apiKey}` } })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data: { data: { id: string; vision?: boolean }[] }) =>
+        setModels(data.data.map((m) => ({ id: m.id, vision: m.vision === true })))
+      )
+      .catch(() => setModels("unavailable"));
+  }, [apiKey]);
+
+  const modelList = models === "unavailable" || models === null ? null : models;
+  const selectedModel = modelList?.find((m) => m.id === model);
+  // Unknown until a specific model is picked and its capabilities are known
+  // (the gateway's own default could be anything) -- only actively block
+  // the attach control once we know for sure it won't work.
+  const visionUnsupported = selectedModel !== undefined && !selectedModel.vision;
+
+  function onModelChange(value: string | null) {
+    const next = value ?? "";
+    setModel(next);
+    // Switching to a model that can't take images makes a pending
+    // attachment stale -- clear it here, at the point it happens, rather
+    // than watching the derived flag from an effect. Goes through
+    // removeImage() so the native file input's own displayed filename
+    // clears too, not just our copy of it in state.
+    if (modelList?.find((m) => m.id === next)?.vision === false) removeImage();
+  }
+
+  function onFileSelected(file: File | undefined) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setImage({ name: file.name, dataUrl: reader.result });
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function removeImage() {
+    setImage(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   async function sendWith(key: string, retryOn401: boolean): Promise<void> {
+    const content = image
+      ? [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: image.dataUrl } },
+        ]
+      : prompt;
+
     const r = await fetch(`${GATEWAY_URL}/v1/chat/completions`, {
       method: "POST",
       headers: {
@@ -49,7 +122,7 @@ export function PlaygroundPage() {
       },
       body: JSON.stringify({
         model: model.trim() || undefined,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content }],
       }),
     });
 
@@ -109,14 +182,30 @@ export function PlaygroundPage() {
         <Text variant="caption">
           Sends one chat completion directly to {GATEWAY_URL} using your personal key — created
           automatically the first time you visit, so there's nothing to paste in. It's a real key
-          like any other: manage or revoke it on the Keys page.
+          like any other and shows up on the Keys page, marked as your default so it can't be
+          revoked from under this page.
         </Text>
-        <TextInput
-          label="Model"
-          value={model}
-          onChange={setModel}
-          placeholder="leave blank for the gateway's default"
-        />
+        {modelList ? (
+          <Dropdown
+            label="Model"
+            options={[
+              { label: "Gateway default", value: "" },
+              ...modelList.map((m) => ({
+                label: m.vision ? `${m.id} (vision)` : m.id,
+                value: m.id,
+              })),
+            ]}
+            value={model}
+            onChange={onModelChange}
+          />
+        ) : (
+          <TextInput
+            label="Model"
+            value={model}
+            onChange={setModel}
+            placeholder="leave blank for the gateway's default"
+          />
+        )}
         <TextAreaInput
           label="Prompt"
           value={prompt}
@@ -124,6 +213,33 @@ export function PlaygroundPage() {
           rows={6}
           placeholder="Ask it something"
         />
+        <Flexbox direction="column" gap={8}>
+          <Flexbox gap={4} alignItems="center">
+            <Icon name="image" size={16} />
+            <Text variant="label">Image (optional)</Text>
+          </Flexbox>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            disabled={visionUnsupported}
+            onChange={(e) => onFileSelected(e.target.files?.[0])}
+          />
+          {visionUnsupported && (
+            <Text variant="caption">&ldquo;{model}&rdquo; doesn&apos;t support image input.</Text>
+          )}
+          {image && (
+            <Flexbox gap={8} alignItems="center">
+              <img
+                src={image.dataUrl}
+                alt={image.name}
+                style={{ maxWidth: 80, maxHeight: 80, borderRadius: 4 }}
+              />
+              <Text variant="caption">{image.name}</Text>
+              <Button label="Remove" variant="secondary" density="dense" onClick={removeImage} />
+            </Flexbox>
+          )}
+        </Flexbox>
         <Flexbox gap={8} alignItems="center">
           <Button
             label={sending ? "Sending…" : "Send"}
