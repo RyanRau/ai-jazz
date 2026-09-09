@@ -85,4 +85,5 @@ passes through untouched — no gateway change needed.
   per-model port pool instead of a single swap slot.
 - `model_idle_timeout_seconds: 0` keeps the loaded model resident indefinitely.
 - Streaming passed through as SSE.
-- `llama-server` crash on startup → gateway returns 500 with the failure, not a hang.
+- `llama-server` crash on startup → gateway returns 500 with the failure (including
+  a tail of its stderr), not a hang.

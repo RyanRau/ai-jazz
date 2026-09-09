@@ -8,9 +8,9 @@ import asyncio
 import os
 import secrets
 import signal
-import subprocess
 import sys
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -59,7 +59,7 @@ class ModelManager:
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
-        self.process: Optional[subprocess.Popen] = None
+        self.process: Optional[asyncio.subprocess.Process] = None
         self.current_model_name: Optional[str] = None
         self.active_requests = 0
         self.last_used = time.time()
@@ -68,6 +68,8 @@ class ModelManager:
         self.llama_host = cfg["llama_server"]["host"]
         self.llama_port = cfg["llama_server"]["port"]
         self.base_url = f"http://{self.llama_host}:{self.llama_port}"
+        self._stderr_task: Optional[asyncio.Task] = None
+        self._stderr_tail: deque = deque(maxlen=40)
 
     async def acquire(self, model_cfg: dict):
         async with self.cv:
@@ -101,28 +103,31 @@ class ModelManager:
             async with self.cv:
                 if self.process and self.active_requests == 0 and time.time() - self.last_used > timeout:
                     print(f"[gateway] unloading '{self.current_model_name}' (idle)")
-                    self._stop_process()
+                    await self._stop_process()
                     self.current_model_name = None
 
-    def shutdown(self):
-        self._stop_process()
+    async def shutdown(self):
+        await self._stop_process()
 
     async def _swap(self, model_cfg: dict):
         print(f"[gateway] swap: {self.current_model_name} -> {model_cfg['name']}")
-        self._stop_process()
+        await self._stop_process()
         await self._start_process(model_cfg)
         self.current_model_name = model_cfg["name"]
 
-    def _stop_process(self):
+    async def _stop_process(self):
         if self.process is None:
             return
-        self.process.terminate()
+        process, self.process = self.process, None
+        if self._stderr_task:
+            self._stderr_task.cancel()
+            self._stderr_task = None
+        process.terminate()
         try:
-            self.process.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait(timeout=15)
-        self.process = None
+            await asyncio.wait_for(process.wait(), timeout=15)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
 
     async def _start_process(self, model_cfg: dict):
         argv = [
@@ -141,16 +146,28 @@ class ModelManager:
             else:
                 argv += [flag, str(value)]
 
-        self.process = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self._stderr_tail.clear()
+        self.process = await asyncio.create_subprocess_exec(
+            *argv, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE
+        )
+        self._stderr_task = asyncio.create_task(self._drain_stderr(self.process))
         await self._wait_healthy()
+
+    async def _drain_stderr(self, process: "asyncio.subprocess.Process"):
+        assert process.stderr is not None
+        async for line in process.stderr:
+            self._stderr_tail.append(line.decode(errors="replace").rstrip())
 
     async def _wait_healthy(self):
         timeout = self.cfg["llama_server"].get("startup_timeout_seconds", 180)
         deadline = time.time() + timeout
         async with httpx.AsyncClient() as client:
             while time.time() < deadline:
-                if self.process.poll() is not None:
-                    raise RuntimeError(f"llama-server exited early (code {self.process.returncode})")
+                if self.process.returncode is not None:
+                    tail = "\n".join(self._stderr_tail) or "(no output captured)"
+                    raise RuntimeError(
+                        f"llama-server exited early (code {self.process.returncode}):\n{tail}"
+                    )
                 try:
                     r = await client.get(f"{self.base_url}/health", timeout=3)
                     if r.status_code == 200:
@@ -171,7 +188,7 @@ async def lifespan(app: FastAPI):
     reaper = asyncio.create_task(manager.start_idle_reaper())
     yield
     reaper.cancel()
-    manager.shutdown()
+    await manager.shutdown()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -179,7 +196,13 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "loaded_model": manager.current_model_name if manager else None}
+    if manager is None or manager.process is None:
+        return {"status": "ok", "loaded_model": None, "process_alive": False}
+    return {
+        "status": "ok",
+        "loaded_model": manager.current_model_name,
+        "process_alive": manager.process.returncode is None,
+    }
 
 
 @app.get("/v1/models", dependencies=[Depends(check_api_key)])
@@ -201,19 +224,25 @@ async def chat_completions(request: Request):
     body["model"] = model_cfg["name"]  # normalize alias -> real name before forwarding
 
     await manager.acquire(model_cfg)
+    timeout = CONFIG["server"].get("request_timeout_seconds", 300)
+    client = httpx.AsyncClient(base_url=manager.base_url, timeout=timeout)
+
+    if body.get("stream"):
+        # manager.release() runs inside the generator's finally, once the stream
+        # actually finishes -- releasing here would let a swap start mid-stream.
+        return await _proxy_stream(client, body, manager.release)
+
     try:
-        timeout = CONFIG["server"].get("request_timeout_seconds", 300)
-        client = httpx.AsyncClient(base_url=manager.base_url, timeout=timeout)
-        if body.get("stream"):
-            return await _proxy_stream(client, body)
         r = await client.post("/v1/chat/completions", json=body)
-        await client.aclose()
         return JSONResponse(r.json(), status_code=r.status_code)
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"Upstream llama-server error: {e}")
     finally:
+        await client.aclose()
         await manager.release()
 
 
-async def _proxy_stream(client: httpx.AsyncClient, body: dict) -> StreamingResponse:
+async def _proxy_stream(client: httpx.AsyncClient, body: dict, release) -> StreamingResponse:
     async def gen():
         try:
             async with client.stream("POST", "/v1/chat/completions", json=body) as r:
@@ -221,6 +250,7 @@ async def _proxy_stream(client: httpx.AsyncClient, body: dict) -> StreamingRespo
                     yield chunk
         finally:
             await client.aclose()
+            await release()
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
