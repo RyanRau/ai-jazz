@@ -352,6 +352,13 @@ ambient card shadow.
 
 An empty `NumberInput` yields `null`, never `NaN`.
 
+`Dropdown` is custom-rendered, not a native `<select>` — a bare `<select>`
+keeps its own OS popup and doesn't fully respect the shared control
+border/radius in every browser, clashing with `TextInput`/`TextAreaInput`
+next to it. Built on the native Popover API, the same way `Menu` is
+(light-dismiss, Esc-to-close, top-layer stacking for free). Same props
+either way — nothing to change at call sites.
+
 `FormInputLayout` is exported for wrapping a custom control so it matches the
 rest; it takes a render function receiving `{ id, describedBy, invalid }`.
 
