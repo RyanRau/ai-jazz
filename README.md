@@ -10,8 +10,8 @@ Add an app to `deploy.yml`, push to `main`, and it's live.
 
 ```
 apps/
-  ryanzrau/            # Personal site               → ryanzrau.dev
-  hub/                 # Cross-app dashboard + shared settings page → hub.ryanzrau.dev
+  ryanzrau/            # Personal site → ryanzrau.dev; signed-in sidebar adds
+                       # the app catalog, admin console, and settings page
   stash/               # Household inventory with sharing → stash.ryanzrau.dev
   tony/                # LLM dashboard (home-lab)     → tony.ryanzrau.dev
   pocketbase/          # Shared backend (auth + data) → api.ryanzrau.dev
