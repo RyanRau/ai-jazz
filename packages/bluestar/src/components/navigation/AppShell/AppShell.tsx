@@ -10,8 +10,14 @@ const MOBILE_QUERY = `(max-width: ${breakpoints.sm}px)`;
 const canUseDOM = typeof window !== "undefined" && typeof document !== "undefined";
 
 export type AppShellProps = {
-  /** App name shown at the left of the header. */
-  title: string;
+  /**
+   * App name shown at the left of the header. Omit along with
+   * `appSwitcher`/`nav`/`account` to skip the header entirely — the right
+   * call once branding and an app switcher live in `SideNav`'s own `top`
+   * slot instead, which reads as the app's real chrome the way a header
+   * bar duplicating the same name doesn't.
+   */
+  title?: string;
   /** Rendered immediately after `title` — e.g. a `Menu`-based dropdown for switching between apps. */
   appSwitcher?: ReactNode;
   /** Nav links or buttons, placed right of the title. */
@@ -102,6 +108,10 @@ export default function AppShell({
   // The permanent rail only renders on a wide-enough viewport; on mobile the
   // same sideNav content moves into the drawer below instead.
   const showRail = Boolean(sideNav) && !isMobile;
+  // Nothing to show up top -- an app with branding + an app switcher living
+  // in SideNav's own `top` slot has no reason left for a second, redundant
+  // bar repeating the same app name above it.
+  const hasHeaderContent = Boolean(title || appSwitcher || nav || account);
 
   // Raw CSS text, not a `css`-generated class name: `css()` returns a class
   // name string, and embedding that as literal text inside another `css`
@@ -131,65 +141,72 @@ export default function AppShell({
         color: ${theme.colors.text};
       `}
     >
-      <header
-        className={css`
-          border-bottom: 1px solid ${theme.colors.border};
-          background-color: ${theme.colors.surface};
-          flex-shrink: 0;
-          /* Vertical breathing room for when title+nav wrap to two lines on
-             a narrow viewport — a fixed height would clip the wrapped row.
-             Horizontal padding lives here (not on a centred inner wrapper)
-             since the header itself now spans the full viewport width. */
-          padding: 8px 16px;
-        `}
-      >
-        <Flexbox
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          flexWrap="wrap"
-          gap={16}
-          width="100%"
-          style={{ minHeight: 56 }}
+      {sideNav && isMobile && (
+        <button
+          type="button"
+          aria-label="Open navigation"
+          onClick={() => setMobileNavRequestedOpen(true)}
+          className={css`
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 1;
+            background-color: ${theme.colors.background};
+            border: 1px solid ${theme.colors.border};
+            box-shadow: ${theme.shadow.sm};
+            cursor: pointer;
+            display: flex;
+            padding: 8px;
+            border-radius: ${theme.radius.md};
+            color: ${theme.colors.text};
+            &:hover {
+              background-color: ${theme.colors.surfaceHover};
+            }
+            &:focus-visible {
+              outline: 2px solid ${theme.colors.focusRing};
+              outline-offset: 2px;
+            }
+          `}
         >
-          <Flexbox direction="row" alignItems="center" gap={4}>
-            {sideNav && isMobile && (
-              <button
-                type="button"
-                aria-label="Open navigation"
-                onClick={() => setMobileNavRequestedOpen(true)}
-                className={css`
-                  background: none;
-                  border: none;
-                  cursor: pointer;
-                  display: flex;
-                  padding: 10px;
-                  margin: -10px -10px -10px -6px;
-                  border-radius: ${theme.radius.sm};
-                  color: ${theme.colors.text};
-                  &:hover {
-                    background-color: ${theme.colors.surfaceHover};
-                  }
-                  &:focus-visible {
-                    outline: 2px solid ${theme.colors.focusRing};
-                    outline-offset: 2px;
-                  }
-                `}
-              >
-                <Icon name="menu" size={20} />
-              </button>
-            )}
-            <Header variant="h3">{title}</Header>
-            {appSwitcher}
-          </Flexbox>
-          {(nav || account) && (
-            <Flexbox direction="row" alignItems="center" flexWrap="wrap" gap={16}>
-              {nav}
-              {account}
+          <Icon name="menu" size={20} />
+        </button>
+      )}
+
+      {hasHeaderContent && (
+        <header
+          className={css`
+            border-bottom: 1px solid ${theme.colors.border};
+            background-color: ${theme.colors.surface};
+            flex-shrink: 0;
+            /* Vertical breathing room for when title+nav wrap to two lines on
+               a narrow viewport — a fixed height would clip the wrapped row.
+               Horizontal padding lives here (not on a centred inner wrapper)
+               since the header itself now spans the full viewport width. */
+            padding: 8px 16px;
+          `}
+        >
+          <Flexbox
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            flexWrap="wrap"
+            gap={16}
+            width="100%"
+            style={{ minHeight: 56 }}
+          >
+            <Flexbox direction="row" alignItems="center" gap={4}>
+              {title && <Header variant="h3">{title}</Header>}
+              {appSwitcher}
             </Flexbox>
-          )}
-        </Flexbox>
-      </header>
+            {(nav || account) && (
+              <Flexbox direction="row" alignItems="center" flexWrap="wrap" gap={16}>
+                {nav}
+                {account}
+              </Flexbox>
+            )}
+          </Flexbox>
+        </header>
+      )}
 
       <div
         className={css`

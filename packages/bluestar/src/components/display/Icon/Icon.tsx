@@ -18,7 +18,8 @@ export type IconName =
   | "chat"
   | "menu"
   | "image"
-  | "upload";
+  | "upload"
+  | "switch";
 
 export type IconProps = {
   name: IconName;

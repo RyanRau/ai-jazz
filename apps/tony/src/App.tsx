@@ -51,7 +51,6 @@ function App() {
 
   return (
     <AppShell
-      title="Tony"
       sideNav={
         <SideNav
           items={[
@@ -61,7 +60,7 @@ function App() {
           ]}
           activeKey={tab}
           onSelect={(key) => setTab(key as Tab)}
-          top={<AppSwitcher />}
+          top={<AppSwitcher appName="Tony" />}
           footer={
             <Flexbox direction="column" gap={12}>
               <ThemeToggle />
