@@ -731,13 +731,15 @@ chrome needs a way to change the theme.
 #### `ThemePicker`
 
 No props. A `palette`-icon button opening a `Modal` with the full theme:
-the same Auto/Light/Dark `SegmentedControl` as `ThemeToggle`, plus a custom
-accent color — four presets or any color via a native color input. Both
-apply live through `useColorScheme`/`useCustomAccent`, no separate save
-step. The accent is a viewer preference rather than an app default, so it
-persists to `sessionStorage` (cleared when the tab closes) rather than
-`colorScheme`'s longer-lived `localStorage` — see `ThemeProvider`'s
-`customAccentStorageKey`. Every app uses this in `SideNav`'s `footer` slot;
+the same Auto/Light/Dark `SegmentedControl` as `ThemeToggle`, plus an accent
+color section with its own `SegmentedControl` toggling between "Presets"
+(the default swatch plus four preset colors) and "Custom" (any color via a
+native color input). Both apply live through `useColorScheme`/
+`useCustomAccent`, no separate save step. The accent is a viewer preference
+rather than an app default, so it persists to `sessionStorage` (cleared when
+the tab closes) rather than `colorScheme`'s longer-lived `localStorage` —
+see `ThemeProvider`'s `customAccentStorageKey`. Every app renders this
+inline in `AccountMenu`'s icon row, next to the Settings button;
 `ThemeToggle` stays around for a plain inline toggle elsewhere.
 
 #### `ListRow`

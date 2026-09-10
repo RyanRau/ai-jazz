@@ -9,6 +9,8 @@ import Icon from "../../display/Icon/Icon";
 import Text from "../../text/Text/Text";
 import Flexbox from "../../layout/Flexbox/Flexbox";
 
+type AccentMode = "preset" | "custom";
+
 // Matches defaultTheme.colors.primary (theme.ts) — a literal hex, since the
 // native color input's own value can't be a var(--bs-…) reference.
 const DEFAULT_ACCENT = "#7da7d9";
@@ -52,6 +54,7 @@ export default function ThemePicker() {
 
   const isPreset = customAccent !== null && PRESET_ACCENTS.some((p) => p.value === customAccent);
   const isCustomColor = customAccent !== null && !isPreset;
+  const [mode, setMode] = useState<AccentMode>(isCustomColor ? "custom" : "preset");
 
   return (
     <>
@@ -83,70 +86,76 @@ export default function ThemePicker() {
 
           <Flexbox direction="column" gap={8}>
             <Text variant="label">Accent color</Text>
-            <Flexbox direction="row" gap={8} flexWrap="wrap" alignItems="center">
-              <button
-                type="button"
-                aria-label="Default accent"
-                aria-pressed={customAccent === null}
-                onClick={() => setCustomAccent(null)}
-                className={swatchClass(theme, theme.colors.primary, customAccent === null)}
-              >
-                {customAccent === null && <Icon name="check" size={14} color="#fff" />}
-              </button>
+            <SegmentedControl
+              options={[
+                { label: "Presets", value: "preset" },
+                { label: "Custom", value: "custom" },
+              ]}
+              value={mode}
+              onChange={setMode}
+            />
 
-              {PRESET_ACCENTS.map((preset) => (
+            {mode === "preset" ? (
+              <Flexbox direction="row" gap={8} flexWrap="wrap" alignItems="center">
                 <button
-                  key={preset.value}
                   type="button"
-                  aria-label={preset.label}
-                  aria-pressed={customAccent === preset.value}
-                  onClick={() => setCustomAccent(preset.value)}
-                  className={swatchClass(theme, preset.value, customAccent === preset.value)}
+                  aria-label="Default accent"
+                  aria-pressed={customAccent === null}
+                  onClick={() => setCustomAccent(null)}
+                  className={swatchClass(theme, theme.colors.primary, customAccent === null)}
                 >
-                  {customAccent === preset.value && <Icon name="check" size={14} color="#fff" />}
+                  {customAccent === null && <Icon name="check" size={14} color="#fff" />}
                 </button>
-              ))}
 
-              <label
-                className={css`
-                  position: relative;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  width: 28px;
-                  height: 28px;
-                  border-radius: ${theme.radius.full};
-                  background-color: ${isCustomColor ? customAccent : "transparent"};
-                  border: ${
-                    isCustomColor
-                      ? `2px solid ${theme.colors.text}`
-                      : `1.5px dashed ${theme.colors.borderStrong}`
-                  };
-                  cursor: pointer;
-                  overflow: hidden;
-                `}
-              >
-                <Icon
-                  name={isCustomColor ? "check" : "plus"}
-                  size={14}
-                  color={isCustomColor ? "#fff" : theme.colors.textMuted}
-                />
-                <input
-                  type="color"
-                  aria-label="Custom accent color"
-                  value={customAccent ?? DEFAULT_ACCENT}
-                  onChange={(e) => setCustomAccent(e.target.value)}
+                {PRESET_ACCENTS.map((preset) => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    aria-label={preset.label}
+                    aria-pressed={customAccent === preset.value}
+                    onClick={() => setCustomAccent(preset.value)}
+                    className={swatchClass(theme, preset.value, customAccent === preset.value)}
+                  >
+                    {customAccent === preset.value && <Icon name="check" size={14} color="#fff" />}
+                  </button>
+                ))}
+              </Flexbox>
+            ) : (
+              <Flexbox direction="row" gap={12} alignItems="center">
+                <label
                   className={css`
-                    position: absolute;
-                    inset: 0;
-                    width: 100%;
-                    height: 100%;
-                    opacity: 0;
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: ${theme.radius.full};
+                    background-color: ${isCustomColor ? customAccent : DEFAULT_ACCENT};
+                    border: 2px solid ${theme.colors.text};
                     cursor: pointer;
+                    overflow: hidden;
+                    flex-shrink: 0;
                   `}
-                />
-              </label>
-            </Flexbox>
+                >
+                  <input
+                    type="color"
+                    aria-label="Custom accent color"
+                    value={customAccent ?? DEFAULT_ACCENT}
+                    onChange={(e) => setCustomAccent(e.target.value)}
+                    className={css`
+                      position: absolute;
+                      inset: 0;
+                      width: 100%;
+                      height: 100%;
+                      opacity: 0;
+                      cursor: pointer;
+                    `}
+                  />
+                </label>
+                <Text variant="caption">Pick any color — it's remembered for this tab.</Text>
+              </Flexbox>
+            )}
           </Flexbox>
         </Flexbox>
       </Modal>

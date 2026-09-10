@@ -1,12 +1,11 @@
 import type { CSSProperties } from "react";
-import { Avatar, Button, Flexbox, Icon, Text } from "bluestar";
+import { Avatar, Button, Flexbox, Icon, Text, ThemePicker } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { pb, signOut } from "./pb";
 
 // hub.ryanzrau.dev hosts the one shared settings page — same hardcoded-URL
 // convention pb.ts.tpl already uses for the shared backend.
 const SETTINGS_URL = "https://hub.ryanzrau.dev/settings";
-const ADMIN_URL = "https://hub.ryanzrau.dev/admin";
 
 const truncateStyle: CSSProperties = {
   overflow: "hidden",
@@ -57,20 +56,7 @@ export function AccountMenu() {
         >
           <Icon name="settings" size={16} />
         </Button>
-        {record.is_admin && (
-          <Button
-            label="Admin"
-            aria-label="Admin"
-            appearance="text"
-            variant="secondary"
-            density="dense"
-            onClick={() => {
-              window.location.href = ADMIN_URL;
-            }}
-          >
-            <Icon name="user" size={16} />
-          </Button>
-        )}
+        <ThemePicker />
         <Button
           label="Log out"
           aria-label="Log out"

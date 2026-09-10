@@ -1,15 +1,5 @@
 import { useState } from "react";
-import {
-  AppShell,
-  Button,
-  Card,
-  Flexbox,
-  Header,
-  Modal,
-  SideNav,
-  Text,
-  ThemePicker,
-} from "bluestar";
+import { AppShell, Button, Card, Flexbox, Header, Modal, SideNav, Text } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
@@ -22,17 +12,7 @@ function App() {
   if (record) {
     return (
       <AppShell
-        sideNav={
-          <SideNav
-            top={<AppSwitcher appName="Ryan Rau" />}
-            footer={
-              <Flexbox direction="column" gap={12}>
-                <ThemePicker />
-                <AccountMenu />
-              </Flexbox>
-            }
-          />
-        }
+        sideNav={<SideNav top={<AppSwitcher appName="Ryan Rau" />} footer={<AccountMenu />} />}
       >
         <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
           <Card padding={24}>

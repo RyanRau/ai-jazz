@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import { type Theme, defaultTheme, darkTheme } from "./theme";
 import { emitGlobalStyles, themeToVars, varRefs } from "./cssVars";
@@ -139,8 +147,15 @@ export function ThemeProvider({
   );
 
   // Follow the prop when it changes, so the scheme can be driven from outside
-  // (a Storybook toolbar, an app's own settings screen) and not just seeded.
+  // (a Storybook toolbar, an app's own settings screen) — but not on mount,
+  // where the initial state above already resolved the stored choice and a
+  // static "auto" prop would otherwise clobber it on every page load.
+  const mountedRef = useRef(false);
   useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
     setSchemeState(colorScheme);
   }, [colorScheme]);
 
