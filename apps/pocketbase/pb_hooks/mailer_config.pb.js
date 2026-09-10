@@ -26,7 +26,11 @@ onBootstrap((e) => {
     username: $os.getenv("SMTP_USERNAME") || "",
     password: $os.getenv("SMTP_PASSWORD") || "",
     authMethod: "PLAIN",
-    tls: true,
+    // PocketBase's `tls` field means "enforce implicit TLS from the first
+    // byte" (the port-465 flow), NOT "use TLS". `false` is what makes it
+    // send StartTLS after a plain connection -- the flow SMTP_PORT=587
+    // (this repo's documented, Zoho-compatible default) actually needs.
+    tls: false,
     localName: "",
   };
 
