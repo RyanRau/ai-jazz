@@ -9,8 +9,12 @@ work.
 
 ```
 apps/              # Deployable apps (Dockerfile + nginx.conf per app)
-  ryanzrau/        # Personal site → ryanzrau.dev
-  hub/             # Cross-app dashboard + shared settings page → hub.ryanzrau.dev
+  ryanzrau/        # Personal site → ryanzrau.dev; signed-in sidebar adds
+                   # the app catalog (/apps) and admin console (/admin)
+  hub/             # Shared settings page → hub.ryanzrau.dev; its app
+                   # catalog and admin console are being phased out in
+                   # favor of ryanzrau's /apps and /admin (still live and
+                   # deployed during the transition)
   stash/           # Household inventory with sharing → stash.ryanzrau.dev
   tony/            # LLM dashboard (home-lab) → tony.ryanzrau.dev
   pocketbase/      # Shared backend: auth + data + admin UI → api.ryanzrau.dev

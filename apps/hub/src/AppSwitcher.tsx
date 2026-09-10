@@ -6,11 +6,13 @@ import { pb } from "./pb";
 
 type SwitcherApp = { name: string; url: string; icon?: string; description?: string };
 
-// Every user can always get back to the hub, even though it isn't itself a
-// registry_apps row.
-const HUB: SwitcherApp = {
-  name: "Hub",
-  url: "https://hub.ryanzrau.dev",
+// Every user can always get back to the app catalog, even though it isn't
+// itself a registry_apps row. Points at ryanzrau.dev/apps rather than the
+// old hub.ryanzrau.dev subdomain — hub is being phased out now that this
+// page (and /admin) live on the root domain instead.
+const HOME: SwitcherApp = {
+  name: "Apps",
+  url: "https://ryanzrau.dev/apps",
   icon: "🏠",
   description: "Manage your apps and account.",
 };
@@ -51,7 +53,7 @@ export function AppSwitcher({ appName }: { appName: string }) {
 
   if (!record) return null;
 
-  const entries = [HUB, ...apps];
+  const entries = [HOME, ...apps];
 
   return (
     <Flexbox
