@@ -322,6 +322,21 @@ Accepts all native `<button>` props except `disabled`.
 `Button`'s props, but `onClick: () => Promise<void>`. Disables and spins until the
 promise settles, including on rejection.
 
+#### `SegmentedControl`
+
+| Prop       | Type                            | Default  |
+| ---------- | ------------------------------- | -------- |
+| `options`  | `{ label: string; value: T }[]` | required |
+| `value`    | `T`                             | required |
+| `onChange` | `(value: T) => void`            | required |
+
+A dense, single-select toggle group for picking one of a small set of views
+(chart vs. table, a time range) — not a form field, so it takes no
+`label`/`description`. The selected segment lifts on a sunken track with a
+small functional shadow (`theme.shadow.sm`) — the same
+lift-to-indicate-state convention `SideNav`'s collapse handle uses, not an
+ambient card shadow.
+
 ### Form controls
 
 | Component       | Value type                                   | Extra props                                                                                                                         |
@@ -483,6 +498,21 @@ dataviz skill's script, different hexes per color scheme.
 `"outline"` — transparent background, colored border and text; the flat
 status-chip look).
 
+#### `ChatBubble`
+
+| Prop      | Type                                                | Default      |
+| --------- | --------------------------------------------------- | ------------ |
+| `role`    | `"user" \| "assistant"`                             | required     |
+| `content` | `string`                                            | required     |
+| `status`  | `"pending" \| "streaming" \| "complete" \| "error"` | `"complete"` |
+
+One message in a chat thread. User bubbles are right-aligned and filled with
+the accent color; assistant bubbles are left-aligned, bordered, on
+`surface` — the same solid-vs-outlined distinction `Button`'s `solid`/
+`outline` appearances draw elsewhere. `"pending"`/`"streaming"` show a
+spinner + "Generating…" below the content (and a placeholder "…" while
+`content` is still empty); `"error"` shows "Generation failed".
+
 #### `Table`
 
 Generic over the row type, so `cell` receives a typed row.
@@ -640,6 +670,24 @@ state persists to `localStorage` the same way `useColorScheme` persists its
 own choice — pass `storageKey={null}` to disable that. The active item is a
 3px left accent bar + tinted background, not a solid fill — the same
 flat-selection language `Tabs` uses for the underline.
+
+#### `ListRow`
+
+| Prop       | Type         | Default  |
+| ---------- | ------------ | -------- |
+| `title`    | `string`     | required |
+| `subtitle` | `string`     | —        |
+| `badge`    | `ReactNode`  | —        |
+| `muted`    | `boolean`    | `false`  |
+| `selected` | `boolean`    | required |
+| `onClick`  | `() => void` | required |
+
+One row in a selectable master-detail list — an API key list, a chat list.
+Selection reads the same way `SideNav`'s does: a left accent bar + tinted
+background, so "this is the current pick" looks the same everywhere in the
+library, not just in the permanent app rail. `muted` dims the title (a
+revoked/archived row that stays clickable) and takes precedence over the
+selected color.
 
 #### `Tabs`
 

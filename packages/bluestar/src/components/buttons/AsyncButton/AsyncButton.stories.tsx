@@ -51,7 +51,8 @@ export const Outline: Story = {
   parameters: {
     docs: {
       description: {
-        story: "The label and spinner match the accent color, not `textOnAccent`, on non-solid appearances.",
+        story:
+          "The label and spinner match the accent color, not `textOnAccent`, on non-solid appearances.",
       },
     },
   },

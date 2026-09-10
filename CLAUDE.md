@@ -40,13 +40,24 @@ which defeats the purpose of the repo.
 
 1. **React + TypeScript + Vite**, built to static files and served by nginx.
 2. **`bluestar`** for all UI. Consume it via `"bluestar": "file:../../packages/bluestar"`.
-   If a component is missing, **add it to bluestar** — do not write a one-off
-   component inside an app. See `packages/PACKAGES.md` for the real prop APIs
-   (they are theme-driven and differ from typical component libraries: `Text`
-   takes a `variant`, spacing is a numeric pixel union, buttons take `isDisabled`
-   and `variant` — `type` is the native HTML attribute). Forms use `useForm` +
-   `field(name)` rather than a `useState` per field, and the theme ships dark
-   mode via `colorScheme` / `useColorScheme`.
+   **bluestar owns every common/core UI primitive** — buttons, inputs, cards,
+   badges, selectable list rows, toggles, dialogs, and so on. An app's own
+   `src/` should only ever hold genuinely app-specific _composition_
+   (business logic, data wiring, a page layout built from bluestar pieces),
+   never a hand-rolled visual primitive. If a component is missing, **add it
+   to bluestar** — do not write a one-off inside an app, and do not
+   re-implement the same small piece (a list row, a segmented toggle) in two
+   places in the same app instead of lifting it out. Before building
+   something that looks like a button/card/list/dialog/etc. from raw
+   `<div>`/`<button>` and inline styles or a local `css` call, check
+   `packages/PACKAGES.md` for an existing component first — a hand-rolled
+   equivalent existing already is the most common way this rule gets broken.
+   See `packages/PACKAGES.md` for the real prop APIs (they are theme-driven
+   and differ from typical component libraries: `Text` takes a `variant`,
+   spacing is a numeric pixel union, buttons take `isDisabled` and `variant`
+   — `type` is the native HTML attribute). Forms use `useForm` + `field(name)`
+   rather than a `useState` per field, and the theme ships dark mode via
+   `colorScheme` / `useColorScheme`.
 3. **PocketBase** (`apps/pocketbase`) for auth, data, and file storage. One
    shared instance for every app; a new app gets a collection, not a new
    database. See `apps/pocketbase/README.md`.

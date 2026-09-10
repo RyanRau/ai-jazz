@@ -10,6 +10,7 @@ export * from "./components/layout/Divider";
 // Buttons
 export * from "./components/buttons/Button";
 export * from "./components/buttons/AsyncButton";
+export * from "./components/buttons/SegmentedControl";
 
 // Feedback
 export * from "./components/feedback/Spinner";
@@ -26,6 +27,7 @@ export * from "./components/display/Table";
 export * from "./components/display/StatTile";
 export * from "./components/display/LineChart";
 export * from "./components/display/BarChart";
+export * from "./components/display/ChatBubble";
 
 // Overlay
 export * from "./components/overlay/Modal";
@@ -41,6 +43,7 @@ export * from "./components/navigation/SideNav";
 export * from "./components/navigation/Tabs";
 export * from "./components/navigation/Breadcrumbs";
 export * from "./components/navigation/Pagination";
+export * from "./components/navigation/ListRow";
 
 // Text
 export * from "./components/text/Header";
