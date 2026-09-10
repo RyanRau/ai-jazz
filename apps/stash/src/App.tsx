@@ -107,10 +107,9 @@ function App() {
 
   return (
     <AppShell
-      title="Stash"
       sideNav={
         <SideNav
-          top={<AppSwitcher />}
+          top={<AppSwitcher appName="Stash" />}
           footer={
             <Flexbox direction="column" gap={12}>
               <ThemeToggle />

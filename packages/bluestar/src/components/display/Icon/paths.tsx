@@ -109,4 +109,12 @@ export const iconPaths: Record<IconName, React.ReactNode> = {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     </>
   ),
+  switch: (
+    <>
+      <path d="M8 3 4 7l4 4" />
+      <path d="M4 7h16" />
+      <path d="m16 21 4-4-4-4" />
+      <path d="M20 17H4" />
+    </>
+  ),
 };

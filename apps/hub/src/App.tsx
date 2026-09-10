@@ -131,7 +131,7 @@ function App() {
       onSelect={(key) => {
         window.location.href = key === "apps" ? "/" : `/${key}`;
       }}
-      top={<AppSwitcher />}
+      top={<AppSwitcher appName="Hub" />}
       footer={
         <Flexbox direction="column" gap={12}>
           <ThemeToggle />
@@ -143,7 +143,7 @@ function App() {
 
   if (onSettingsPath) {
     return (
-      <AppShell title="Settings" sideNav={sideNav} maxWidth={640}>
+      <AppShell sideNav={sideNav} maxWidth={640}>
         <SettingsPage record={record} />
       </AppShell>
     );
@@ -151,7 +151,7 @@ function App() {
 
   if (onAdminPath) {
     return (
-      <AppShell title="Admin" sideNav={sideNav}>
+      <AppShell sideNav={sideNav}>
         {record.is_admin ? (
           <AdminPage />
         ) : (
@@ -165,39 +165,42 @@ function App() {
   }
 
   return (
-    <AppShell title="Apps" sideNav={sideNav}>
-      {!apps ? (
-        <Spinner />
-      ) : apps.length === 0 ? (
-        <Text variant="body">No apps have been granted to your account yet — ask the admin.</Text>
-      ) : (
-        <Flexbox direction="row" flexWrap="wrap" gap={16}>
-          {apps.map((a) => (
-            <div key={a.id} className={cardWrapperClass}>
-              <Card padding={20}>
-                <div className={appCardClass}>
-                  <Flexbox direction="row" alignItems="center" gap={8}>
-                    {a.icon && (
-                      <span aria-hidden style={{ fontSize: 20, flexShrink: 0 }}>
-                        {a.icon}
-                      </span>
+    <AppShell sideNav={sideNav}>
+      <Flexbox direction="column" gap={16}>
+        <Header variant="h2">Apps</Header>
+        {!apps ? (
+          <Spinner />
+        ) : apps.length === 0 ? (
+          <Text variant="body">No apps have been granted to your account yet — ask the admin.</Text>
+        ) : (
+          <Flexbox direction="row" flexWrap="wrap" gap={16}>
+            {apps.map((a) => (
+              <div key={a.id} className={cardWrapperClass}>
+                <Card padding={20}>
+                  <div className={appCardClass}>
+                    <Flexbox direction="row" alignItems="center" gap={8}>
+                      {a.icon && (
+                        <span aria-hidden style={{ fontSize: 20, flexShrink: 0 }}>
+                          {a.icon}
+                        </span>
+                      )}
+                      <div className={truncateClass}>
+                        <Header variant="h3">{a.name}</Header>
+                      </div>
+                    </Flexbox>
+                    {a.description && (
+                      <div className={clampClass}>
+                        <Text variant="body">{a.description}</Text>
+                      </div>
                     )}
-                    <div className={truncateClass}>
-                      <Header variant="h3">{a.name}</Header>
-                    </div>
-                  </Flexbox>
-                  {a.description && (
-                    <div className={clampClass}>
-                      <Text variant="body">{a.description}</Text>
-                    </div>
-                  )}
-                  <Link href={a.url}>Open →</Link>
-                </div>
-              </Card>
-            </div>
-          ))}
-        </Flexbox>
-      )}
+                    <Link href={a.url}>Open →</Link>
+                  </div>
+                </Card>
+              </div>
+            ))}
+          </Flexbox>
+        )}
+      </Flexbox>
     </AppShell>
   );
 }

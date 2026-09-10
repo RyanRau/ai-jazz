@@ -22,10 +22,9 @@ function App() {
   if (record) {
     return (
       <AppShell
-        title="Ryan Rau"
         sideNav={
           <SideNav
-            top={<AppSwitcher />}
+            top={<AppSwitcher appName="Ryan Rau" />}
             footer={
               <Flexbox direction="column" gap={12}>
                 <ThemeToggle />

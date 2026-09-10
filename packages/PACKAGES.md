@@ -352,6 +352,13 @@ ambient card shadow.
 
 An empty `NumberInput` yields `null`, never `NaN`.
 
+`Dropdown` is custom-rendered, not a native `<select>` — a bare `<select>`
+keeps its own OS popup and doesn't fully respect the shared control
+border/radius in every browser, clashing with `TextInput`/`TextAreaInput`
+next to it. Built on the native Popover API, the same way `Menu` is
+(light-dismiss, Esc-to-close, top-layer stacking for free). Same props
+either way — nothing to change at call sites.
+
 `FormInputLayout` is exported for wrapping a custom control so it matches the
 rest; it takes a render function receiving `{ id, describedBy, invalid }`.
 
@@ -434,11 +441,11 @@ A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `chevronLeft`,
 `chevronRight`, `check`, `user`, `plus`, `trash`, `search`, `externalLink`,
-`image`, `key`, `chat`, `menu`, `upload`, `grid` (`key`/`chat`/`menu` are
-hand-drawn for this repo, not adapted from Lucide). `color` defaults to
-`"currentColor"` so it inherits surrounding text/button color for free —
-pass `label` only for an icon standing alone with no adjacent text (it's
-decorative/`aria-hidden` otherwise).
+`image`, `key`, `chat`, `menu`, `upload`, `grid`, `switch` (`key`/`chat`/
+`menu`/`switch` are hand-drawn for this repo, not adapted from Lucide).
+`color` defaults to `"currentColor"` so it inherits surrounding text/button
+color for free — pass `label` only for an icon standing alone with no
+adjacent text (it's decorative/`aria-hidden` otherwise).
 
 #### `StatTile`
 
@@ -497,6 +504,21 @@ dataviz skill's script, different hexes per color scheme.
 `"neutral"`); `emphasis`: `"outline" | "subtle" | "solid"` (default
 `"outline"` — transparent background, colored border and text; the flat
 status-chip look).
+
+#### `StatusDot`
+
+| Prop      | Type                                             | Default     |
+| --------- | ------------------------------------------------ | ----------- |
+| `variant` | `"neutral" \| "success" \| "warning" \| "error"` | `"neutral"` |
+| `label`   | `string`                                         | —           |
+| `pulse`   | `boolean`                                        | `false`     |
+
+A small colored dot, optionally with a text label beside it — a
+live/offline/warning indicator (a server's reachability, a connection
+state) too minor for a full `Badge` pill. Shares `Badge`'s variant naming
+and colors so the two read as the same status language. `pulse` adds a
+soft expanding ring, for a state that's live right now — skip it for a
+static state like "offline".
 
 #### `ChatBubble`
 
@@ -612,7 +634,7 @@ Native anchor props plus `variant` (`"primary" | "muted"`) and `external` (adds
 
 | Prop          | Type        | Default  |
 | ------------- | ----------- | -------- |
-| `title`       | `string`    | required |
+| `title`       | `string`    | —        |
 | `appSwitcher` | `ReactNode` | —        |
 | `nav`         | `ReactNode` | —        |
 | `account`     | `ReactNode` | —        |
@@ -623,33 +645,36 @@ Native anchor props plus `variant` (`"primary" | "muted"`) and `external` (adds
 
 Full-width header (title pinned left, `nav` then `account` pinned right —
 `account` is always the rightmost element), centred content column below it,
-optional footer. `appSwitcher` renders immediately after `title` — a `Menu` +
-`Icon name="chevronDown"` dropdown for jumping between apps a user has access
-to is the intended use (each app's own `AppSwitcher.tsx`, scaffolded like
-`AccountMenu.tsx`, builds this). `account` is meant for a profile pill (see
-`Avatar` + `Menu`); `nav` is nav links/buttons.
+optional footer. **The header only renders at all when it has something to
+show** — `title`, `appSwitcher`, `nav`, or `account`. An app whose branding
+and app switcher already live in `SideNav`'s own `top` slot (see below) has
+no reason to pass any of these, and gets no header at all: just the rail and
+content, without a second bar repeating the same app name above it. `title`
+without a `sideNav` (e.g. a public landing page with nothing to switch
+between) still works exactly as before — pass it and the header renders.
 
 `sideNav` (typically a `SideNav`) is locked to the true left edge, below the
-header, spanning its own full height — not inside the centred content
-column. Passing it flips the shell into a scroll-locked layout: the header,
-sideNav, and footer stay fixed in place and only `children` scrolls. Omit it
-(the default) for the normal behavior, where the whole page scrolls as one —
-every app without this prop is completely unaffected by its existence.
+header (if any), spanning its own full height — not inside the centred
+content column. Passing it flips the shell into a scroll-locked layout: the
+header, sideNav, and footer stay fixed in place and only `children` scrolls.
+Omit it (the default) for the normal behavior, where the whole page scrolls
+as one — every app without this prop is completely unaffected by its
+existence.
 
 Below the `sm` breakpoint (480px), the permanent rail disappears entirely —
-a hamburger button appears in the header instead (before `title`), opening
-the same `sideNav` content as an overlay drawer (a native `<dialog>`, same
-`showModal()` technique as `Modal`: focus trapping, top-layer, Esc-to-close
-for free) rather than eating permanent width on a phone-sized screen. A
-visible close (×) button floats just outside the drawer's right edge —
-`showModal()` makes the header's hamburger inert while open, and there's no
-Esc key on a touchscreen, so backdrop-tap and Esc aren't the only ways out.
-One known simplification: selecting a page from the drawer does not
-auto-close it — there's no plumbing between an opaque `sideNav` node and
-AppShell's drawer state to detect "that click was a navigation, not a
-collapse-toggle," so it stays open until dismissed. Nothing here needs
-wiring from the app; it's automatic based on `sideNav` being passed and the
-viewport width.
+a small floating menu button (fixed to the top-left corner, independent of
+whether a header renders) opens the same `sideNav` content as an overlay
+drawer (a native `<dialog>`, same `showModal()` technique as `Modal`: focus
+trapping, top-layer, Esc-to-close for free) rather than eating permanent
+width on a phone-sized screen. A visible close (×) button floats just
+outside the drawer's right edge — `showModal()` makes the floating menu
+button inert while open, and there's no Esc key on a touchscreen, so
+backdrop-tap and Esc aren't the only ways out. One known simplification:
+selecting a page from the drawer does not auto-close it — there's no
+plumbing between an opaque `sideNav` node and AppShell's drawer state to
+detect "that click was a navigation, not a collapse-toggle," so it stays
+open until dismissed. Nothing here needs wiring from the app; it's automatic
+based on `sideNav` being passed and the viewport width.
 
 #### `SideNav`
 
@@ -673,13 +698,14 @@ own choice — pass `storageKey={null}` to disable that. The active item is a
 3px left accent bar + tinted background, not a solid fill — the same
 flat-selection language `Tabs` uses for the underline.
 
-`top` (an app switcher) and `footer` (an account/profile block, pinned
-above a top border) turn the rail into the app's whole chrome — the header
-is then free to carry just the page title, no account avatar or app
-switcher of its own. Both are hidden while collapsed rather than squeezed
-into 64px — expand to reach them. `items` is optional: a single-page app
-can render `SideNav` for just its `top`/`footer` chrome with an empty (or
-omitted) `items` array and nothing to switch between.
+`top` and `footer` turn the rail into the app's whole chrome, so `AppShell`
+needs no header at all (see its own doc above) — `top` is each app's own
+`AppSwitcher.tsx` (branding + a `switch`-icon `Menu` for jumping to another
+app, scaffolded like `AccountMenu.tsx`), `footer` an account/profile block
+pinned above a top border. Both are hidden while collapsed rather than
+squeezed into 64px — expand to reach them. `items` is optional: a
+single-page app can render `SideNav` for just its `top`/`footer` chrome with
+an empty (or omitted) `items` array and nothing to switch between.
 
 #### `ThemeToggle`
 

@@ -11,7 +11,6 @@ import {
   Header,
   ListRow,
   Spinner,
-  StatTile,
   Text,
   TextAreaInput,
   useTheme,
@@ -20,9 +19,7 @@ import { pb } from "./pb";
 import { useAuthRecord } from "./useAuth";
 import { getOrCreatePlaygroundKey, mintPlaygroundKey } from "./playgroundKey";
 import { formatDate } from "./usageHelpers";
-
-// Same convention as PlaygroundPage.tsx.
-const GATEWAY_URL = import.meta.env.VITE_LLM_GATEWAY_URL ?? "https://llm.ryanzrau.dev";
+import { GATEWAY_URL } from "./gateway";
 
 type ChatSummary = { id: string; title: string; model: string; created: string; updated: string };
 type MessageStatus = "pending" | "streaming" | "complete" | "error";
@@ -117,11 +114,8 @@ export function ChatPage() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
   const sendingRef = useRef(false);
-  const timerRef = useRef<number | null>(null);
-  const startRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
@@ -200,26 +194,9 @@ export function ChatPage() {
 
   useEffect(() => {
     return () => {
-      if (timerRef.current !== null) window.clearInterval(timerRef.current);
       abortRef.current?.abort();
     };
   }, []);
-
-  function startTimer() {
-    startRef.current = performance.now();
-    setElapsedMs(0);
-    timerRef.current = window.setInterval(() => {
-      setElapsedMs(performance.now() - startRef.current);
-    }, 100);
-  }
-
-  function stopTimer() {
-    if (timerRef.current !== null) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setElapsedMs(performance.now() - startRef.current);
-  }
 
   function newChat() {
     abortRef.current?.abort();
@@ -245,7 +222,6 @@ export function ChatPage() {
     setError(null);
     setSending(true);
     sendingRef.current = true;
-    startTimer();
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -356,7 +332,6 @@ export function ChatPage() {
         );
       }
     } finally {
-      stopTimer();
       setSending(false);
       sendingRef.current = false;
       abortRef.current = null;
@@ -489,16 +464,13 @@ export function ChatPage() {
                   <Text variant="caption">Still generating…</Text>
                 </Flexbox>
               )}
-              {elapsedMs !== null && sending && (
-                <StatTile label="Response time" value={formatElapsed(elapsedMs)} />
-              )}
               {!sending &&
                 lastMessage?.role === "assistant" &&
-                lastMessage.status === "complete" && (
-                  <StatTile
-                    label="Response time"
-                    value={lastMessage.response_ms ? formatElapsed(lastMessage.response_ms) : "—"}
-                  />
+                lastMessage.status === "complete" &&
+                lastMessage.response_ms > 0 && (
+                  <Text variant="caption">
+                    Responded in {formatElapsed(lastMessage.response_ms)}
+                  </Text>
                 )}
             </Flexbox>
           </Flexbox>

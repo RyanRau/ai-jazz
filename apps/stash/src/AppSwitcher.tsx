@@ -19,8 +19,14 @@ const HUB: SwitcherApp = {
  * Kept in app code rather than bluestar, same reason AccountMenu is: it
  * needs the `pocketbase` package directly, and bluestar must not depend on
  * it (see packages/bluestar/AUDIT.md).
+ *
+ * Doubles as branding for `SideNav`'s `top` slot -- `appName` renders even
+ * with nothing to switch to, so the sidebar always says which app you're
+ * in without a separate header bar repeating the same name above it. The
+ * switch icon (and its menu) only appears once there's actually another
+ * app to jump to.
  */
-export function AppSwitcher() {
+export function AppSwitcher({ appName }: { appName: string }) {
   const record = useAuthRecord();
   const theme = useTheme();
   const [apps, setApps] = useState<SwitcherApp[]>([]);
@@ -46,50 +52,51 @@ export function AppSwitcher() {
   if (!record) return null;
 
   const entries = [HUB, ...apps];
-  if (entries.length <= 1) return null;
 
   return (
-    // A column Flexbox rather than the row AppShell's header used to hold
-    // this in: with only one child, its default cross-axis stretch is what
-    // makes Menu's own (shrink-to-fit) trigger button fill the sidebar's
-    // width — Menu itself stays untouched, so a future compact trigger
-    // elsewhere isn't forced to stretch too.
-    <Flexbox direction="column" width="100%">
-      <Menu
-        trigger={
-          <div
-            className={css`
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              width: 100%;
-              padding: 10px 12px;
-              border-radius: ${theme.radius.sm};
+    <Flexbox
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      width="100%"
+      style={{ padding: "10px 12px" }}
+    >
+      <Text variant="label">{appName}</Text>
+      {entries.length > 1 && (
+        <Menu
+          trigger={
+            <div
+              className={css`
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 6px;
+                border-radius: ${theme.radius.sm};
 
-              &:hover {
-                background-color: ${theme.colors.surfaceHover};
-              }
-            `}
-          >
-            <Text variant="label">Switch apps</Text>
-            <Icon name="chevronDown" size={14} color={theme.colors.textMuted} />
-          </div>
-        }
-        triggerLabel="Switch apps"
-        width={280}
-      >
-        <Flexbox direction="column" gap={4}>
-          {entries.map((app) => (
-            <MenuItem
-              key={app.url}
-              href={app.url}
-              icon={app.icon}
-              title={app.name}
-              subtitle={app.description}
-            />
-          ))}
-        </Flexbox>
-      </Menu>
+                &:hover {
+                  background-color: ${theme.colors.surfaceHover};
+                }
+              `}
+            >
+              <Icon name="switch" size={16} color={theme.colors.textMuted} />
+            </div>
+          }
+          triggerLabel="Switch apps"
+          width={280}
+        >
+          <Flexbox direction="column" gap={4}>
+            {entries.map((app) => (
+              <MenuItem
+                key={app.url}
+                href={app.url}
+                icon={app.icon}
+                title={app.name}
+                subtitle={app.description}
+              />
+            ))}
+          </Flexbox>
+        </Menu>
+      )}
     </Flexbox>
   );
 }
