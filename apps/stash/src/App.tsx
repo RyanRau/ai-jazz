@@ -15,7 +15,6 @@ import {
   Table,
   Text,
   TextInput,
-  ThemePicker,
   useForm,
 } from "bluestar";
 import { useAuthRecord } from "./useAuth";
@@ -106,19 +105,7 @@ function App() {
   if (granted === null) return null;
 
   return (
-    <AppShell
-      sideNav={
-        <SideNav
-          top={<AppSwitcher appName="Stash" />}
-          footer={
-            <Flexbox direction="column" gap={12}>
-              <ThemePicker />
-              <AccountMenu />
-            </Flexbox>
-          }
-        />
-      }
-    >
+    <AppShell sideNav={<SideNav top={<AppSwitcher appName="Stash" />} footer={<AccountMenu />} />}>
       <Flexbox direction="column" gap={24}>
         <Card padding={20}>
           <Form form={form}>

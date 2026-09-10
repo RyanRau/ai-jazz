@@ -10,7 +10,6 @@ import {
   SideNav,
   Spinner,
   Text,
-  ThemePicker,
   breakpoints,
 } from "bluestar";
 import type { SideNavItem } from "bluestar";
@@ -132,12 +131,7 @@ function App() {
         window.location.href = key === "apps" ? "/" : `/${key}`;
       }}
       top={<AppSwitcher appName="Hub" />}
-      footer={
-        <Flexbox direction="column" gap={12}>
-          <ThemePicker />
-          <AccountMenu />
-        </Flexbox>
-      }
+      footer={<AccountMenu />}
     />
   );
 
