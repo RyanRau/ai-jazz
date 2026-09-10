@@ -505,6 +505,21 @@ dataviz skill's script, different hexes per color scheme.
 `"outline"` — transparent background, colored border and text; the flat
 status-chip look).
 
+#### `StatusDot`
+
+| Prop      | Type                                             | Default     |
+| --------- | ------------------------------------------------ | ----------- |
+| `variant` | `"neutral" \| "success" \| "warning" \| "error"` | `"neutral"` |
+| `label`   | `string`                                         | —           |
+| `pulse`   | `boolean`                                        | `false`     |
+
+A small colored dot, optionally with a text label beside it — a
+live/offline/warning indicator (a server's reachability, a connection
+state) too minor for a full `Badge` pill. Shares `Badge`'s variant naming
+and colors so the two read as the same status language. `pulse` adds a
+soft expanding ring, for a state that's live right now — skip it for a
+static state like "offline".
+
 #### `ChatBubble`
 
 | Prop      | Type                                                | Default      |

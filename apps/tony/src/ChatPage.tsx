@@ -19,9 +19,7 @@ import { pb } from "./pb";
 import { useAuthRecord } from "./useAuth";
 import { getOrCreatePlaygroundKey, mintPlaygroundKey } from "./playgroundKey";
 import { formatDate } from "./usageHelpers";
-
-// Same convention as PlaygroundPage.tsx.
-const GATEWAY_URL = import.meta.env.VITE_LLM_GATEWAY_URL ?? "https://llm.ryanzrau.dev";
+import { GATEWAY_URL } from "./gateway";
 
 type ChatSummary = { id: string; title: string; model: string; created: string; updated: string };
 type MessageStatus = "pending" | "streaming" | "complete" | "error";

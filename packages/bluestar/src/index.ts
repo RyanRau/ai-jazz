@@ -28,6 +28,7 @@ export * from "./components/display/StatTile";
 export * from "./components/display/LineChart";
 export * from "./components/display/BarChart";
 export * from "./components/display/ChatBubble";
+export * from "./components/display/StatusDot";
 
 // Overlay
 export * from "./components/overlay/Modal";

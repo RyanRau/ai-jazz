@@ -4,6 +4,7 @@ import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
 import { AppSwitcher } from "./AppSwitcher";
+import { GatewayStatus } from "./GatewayStatus";
 import { ChatPage } from "./ChatPage";
 import { KeysPage } from "./KeysPage";
 import { PlaygroundPage } from "./PlaygroundPage";
@@ -60,7 +61,14 @@ function App() {
           ]}
           activeKey={tab}
           onSelect={(key) => setTab(key as Tab)}
-          top={<AppSwitcher appName="Tony" />}
+          top={
+            <Flexbox direction="column" gap={4}>
+              <AppSwitcher appName="Tony" />
+              <div style={{ padding: "0 12px" }}>
+                <GatewayStatus />
+              </div>
+            </Flexbox>
+          }
           footer={
             <Flexbox direction="column" gap={12}>
               <ThemeToggle />
