@@ -7,15 +7,18 @@ import {
   Button,
   Card,
   Checkbox,
+  ConfirmDialog,
   Flexbox,
   Form,
   Header,
+  Icon,
   Modal,
   Spinner,
   SubmitButton,
   Table,
   Text,
   TextInput,
+  TokenSelect,
   useForm,
   useToast,
 } from "bluestar";
@@ -130,6 +133,67 @@ function InviteForm({
   );
 }
 
+function ManageUserModal({
+  user,
+  apps,
+  grantedAppIds,
+  isSaving,
+  onToggle,
+  onDelete,
+  onClose,
+}: {
+  user: AdminUser;
+  apps: AdminApp[];
+  grantedAppIds: string[];
+  isSaving: boolean;
+  onToggle: (appId: string, granted: boolean) => void;
+  onDelete: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const isSelf = user.id === pb.authStore.record?.id;
+
+  return (
+    <Flexbox direction="column" gap={20}>
+      <TokenSelect
+        label="App access"
+        isDisabled={isSaving}
+        options={apps.map((a) => ({ label: a.name, value: a.id }))}
+        value={grantedAppIds}
+        onChange={(next) => {
+          next.filter((id) => !grantedAppIds.includes(id)).forEach((id) => onToggle(id, true));
+          grantedAppIds.filter((id) => !next.includes(id)).forEach((id) => onToggle(id, false));
+        }}
+      />
+      <Flexbox direction="row" justifyContent="space-between" alignItems="center">
+        {!isSelf ? (
+          <Button
+            label="Delete user"
+            variant="destructive"
+            appearance="outline"
+            onClick={() => setConfirmOpen(true)}
+          />
+        ) : (
+          <span />
+        )}
+        <Button label="Done" variant="secondary" onClick={onClose} />
+      </Flexbox>
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={async () => {
+          await onDelete();
+          onClose();
+        }}
+        title="Delete user"
+        message={`Delete ${user.name || user.email}? This can't be undone.`}
+        confirmLabel="Delete"
+      />
+    </Flexbox>
+  );
+}
+
 export function AdminPage() {
   const toast = useToast();
   const [data, setData] = useState<AccessData | null>(null);
@@ -137,6 +201,7 @@ export function AdminPage() {
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteKey, setInviteKey] = useState(0);
+  const [manageUserId, setManageUserId] = useState<string | null>(null);
 
   function refresh() {
     pb.send<AccessData>("/api/custom/admin/access", { method: "GET" }).then((res) => {
@@ -162,7 +227,7 @@ export function AdminPage() {
         body: { user: userId, app: appId, granted: next },
       });
     } catch {
-      // Revert on failure — the checkbox already flipped optimistically above.
+      // Revert on failure — the value already flipped optimistically above.
       setGranted((prev) => {
         const copy = new Set(prev);
         if (next) copy.delete(key);
@@ -179,7 +244,42 @@ export function AdminPage() {
     }
   }
 
+  async function deleteUser(userId: string) {
+    try {
+      await pb.send("/api/custom/admin/delete-user", { method: "POST", body: { id: userId } });
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof ClientResponseError ? error.message : "Couldn't delete user.");
+      throw error;
+    }
+  }
+
+  async function resend(user: AdminUser) {
+    try {
+      const res = await pb.send<{ link: string; sent: boolean }>("/api/custom/admin/invite", {
+        method: "POST",
+        body: { email: user.email, apps: [] },
+      });
+      if (res.sent) {
+        toast.success(`Invite resent to ${user.email}`);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(res.link);
+        toast.success("Email sending isn't configured — link copied to clipboard.");
+      } catch {
+        toast.error(
+          "Email sending isn't configured, and the link couldn't be copied automatically."
+        );
+      }
+    } catch (error) {
+      toast.error(error instanceof ClientResponseError ? error.message : "Couldn't resend invite.");
+    }
+  }
+
   if (!data) return <Spinner />;
+
+  const manageUser = data.users.find((u) => u.id === manageUserId) ?? null;
 
   return (
     <Card padding={24}>
@@ -211,37 +311,51 @@ export function AdminPage() {
                 </Flexbox>
               ),
             },
-            ...data.apps.map((app) => ({
-              header: app.name,
-              align: "center" as const,
+            {
+              header: "Apps",
               cell: (u: AdminUser) => {
-                const key = grantKey(u.id, app.id);
+                const userApps = data.apps.filter((a) => granted.has(grantKey(u.id, a.id)));
+                if (userApps.length === 0) {
+                  return (
+                    <Text variant="caption" color="inherit">
+                      None
+                    </Text>
+                  );
+                }
                 return (
-                  <Checkbox
-                    label={`${app.name} access for ${u.name || u.email}`}
-                    hideLabel
-                    value={granted.has(key)}
-                    isDisabled={pending.has(key)}
-                    onChange={(value) => toggle(u.id, app.id, value)}
-                  />
+                  <Flexbox direction="row" gap={4} flexWrap="wrap">
+                    {userApps.map((a) => (
+                      <Badge key={a.id} variant="neutral" emphasis="subtle">
+                        {a.name}
+                      </Badge>
+                    ))}
+                  </Flexbox>
                 );
               },
-            })),
+            },
+            {
+              header: "",
+              align: "center" as const,
+              cell: (u: AdminUser) => (
+                <Button
+                  label={`Manage ${u.name || u.email}`}
+                  appearance="text"
+                  density="dense"
+                  onClick={() => setManageUserId(u.id)}
+                >
+                  <Icon name="edit" size={16} label={`Manage ${u.name || u.email}`} />
+                </Button>
+              ),
+            },
             {
               header: "",
               cell: (u: AdminUser) =>
-                u.id !== pb.authStore.record?.id && (
+                !u.verified && (
                   <AsyncButton
-                    label="Delete"
-                    variant="destructive"
+                    label="Resend"
+                    variant="secondary"
                     density="dense"
-                    onClick={async () => {
-                      await pb.send("/api/custom/admin/delete-user", {
-                        method: "POST",
-                        body: { id: u.id },
-                      });
-                      refresh();
-                    }}
+                    onClick={() => resend(u)}
                   />
                 ),
             },
@@ -261,6 +375,26 @@ export function AdminPage() {
             refresh();
           }}
         />
+      </Modal>
+
+      <Modal
+        isOpen={manageUser !== null}
+        onClose={() => setManageUserId(null)}
+        title={manageUser ? `Manage ${manageUser.name || manageUser.email}` : ""}
+      >
+        {manageUser && (
+          <ManageUserModal
+            user={manageUser}
+            apps={data.apps}
+            grantedAppIds={data.apps
+              .filter((a) => granted.has(grantKey(manageUser.id, a.id)))
+              .map((a) => a.id)}
+            isSaving={data.apps.some((a) => pending.has(grantKey(manageUser.id, a.id)))}
+            onToggle={(appId, next) => toggle(manageUser.id, appId, next)}
+            onDelete={() => deleteUser(manageUser.id)}
+            onClose={() => setManageUserId(null)}
+          />
+        )}
       </Modal>
     </Card>
   );

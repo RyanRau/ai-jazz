@@ -64,6 +64,7 @@ export * from "./components/form/Switch";
 export * from "./components/form/RadioGroup";
 export * from "./components/form/Dropdown";
 export * from "./components/form/FileDropzone";
+export * from "./components/form/TokenSelect";
 
 // Form state
 export * from "./form";

@@ -362,8 +362,14 @@ ambient card shadow.
 | `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                                                                                                       |
 | `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`                                                                                         |
 | `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                                                                                            |
+| `TokenSelect`   | `string[]`                                   | `options: { label, value }[]`, `addLabel` (default `"Add"`)                                                                         |
 
 An empty `NumberInput` yields `null`, never `NaN`.
+
+`TokenSelect` renders selected values as removable `Badge` pills plus a
+"+ Add" `Menu` picker listing the remaining options — a discrete-choice
+tokenizer for a small, closed list (e.g. which apps a user can access),
+not a free-text/autocomplete combobox.
 
 `Dropdown` is custom-rendered, not a native `<select>` — a bare `<select>`
 keeps its own OS popup and doesn't fully respect the shared control
@@ -454,7 +460,8 @@ A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `chevronLeft`,
 `chevronRight`, `check`, `user`, `plus`, `trash`, `search`, `externalLink`,
-`image`, `key`, `chat`, `menu`, `upload`, `grid`, `switch`, `palette`
+`image`, `key`, `chat`, `menu`, `upload`, `grid`, `switch`, `palette`,
+`edit`
 (`key`/`chat`/`menu`/`switch`/`palette` are hand-drawn for this repo, not
 adapted from Lucide).
 `color` defaults to `"currentColor"` so it inherits surrounding text/button

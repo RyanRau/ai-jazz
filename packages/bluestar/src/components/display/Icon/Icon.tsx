@@ -20,7 +20,8 @@ export type IconName =
   | "menu"
   | "image"
   | "upload"
-  | "switch";
+  | "switch"
+  | "edit";
 
 export type IconProps = {
   name: IconName;
