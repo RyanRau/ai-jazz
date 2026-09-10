@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Flexbox, Icon, Menu, MenuItem } from "bluestar";
+import { css } from "goober";
+import { Flexbox, Icon, Menu, MenuItem, Text, useTheme } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { pb } from "./pb";
 
@@ -21,6 +22,7 @@ const HUB: SwitcherApp = {
  */
 export function AppSwitcher() {
   const record = useAuthRecord();
+  const theme = useTheme();
   const [apps, setApps] = useState<SwitcherApp[]>([]);
 
   useEffect(() => {
@@ -47,18 +49,47 @@ export function AppSwitcher() {
   if (entries.length <= 1) return null;
 
   return (
-    <Menu trigger={<Icon name="chevronDown" size={16} />} triggerLabel="Switch apps" width={320}>
-      <Flexbox direction="column" gap={4}>
-        {entries.map((app) => (
-          <MenuItem
-            key={app.url}
-            href={app.url}
-            icon={app.icon}
-            title={app.name}
-            subtitle={app.description}
-          />
-        ))}
-      </Flexbox>
-    </Menu>
+    // A column Flexbox rather than the row AppShell's header used to hold
+    // this in: with only one child, its default cross-axis stretch is what
+    // makes Menu's own (shrink-to-fit) trigger button fill the sidebar's
+    // width — Menu itself stays untouched, so a future compact trigger
+    // elsewhere isn't forced to stretch too.
+    <Flexbox direction="column" width="100%">
+      <Menu
+        trigger={
+          <div
+            className={css`
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              width: 100%;
+              padding: 10px 12px;
+              border-radius: ${theme.radius.sm};
+
+              &:hover {
+                background-color: ${theme.colors.surfaceHover};
+              }
+            `}
+          >
+            <Text variant="label">Switch apps</Text>
+            <Icon name="chevronDown" size={14} color={theme.colors.textMuted} />
+          </div>
+        }
+        triggerLabel="Switch apps"
+        width={280}
+      >
+        <Flexbox direction="column" gap={4}>
+          {entries.map((app) => (
+            <MenuItem
+              key={app.url}
+              href={app.url}
+              icon={app.icon}
+              title={app.name}
+              subtitle={app.description}
+            />
+          ))}
+        </Flexbox>
+      </Menu>
+    </Flexbox>
   );
 }

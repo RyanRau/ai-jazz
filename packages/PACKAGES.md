@@ -434,8 +434,8 @@ A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `chevronLeft`,
 `chevronRight`, `check`, `user`, `plus`, `trash`, `search`, `externalLink`,
-`image`, `key`, `chat`, `menu`, `upload` (`key`/`chat`/`menu` are hand-drawn
-for this repo, not adapted from Lucide). `color` defaults to
+`image`, `key`, `chat`, `menu`, `upload`, `grid` (`key`/`chat`/`menu` are
+hand-drawn for this repo, not adapted from Lucide). `color` defaults to
 `"currentColor"` so it inherits surrounding text/button color for free —
 pass `label` only for an icon standing alone with no adjacent text (it's
 decorative/`aria-hidden` otherwise).
@@ -655,9 +655,11 @@ viewport width.
 
 | Prop         | Type                    | Default                        |
 | ------------ | ----------------------- | ------------------------------ |
-| `items`      | `SideNavItem[]`         | required                       |
-| `activeKey`  | `string`                | required                       |
-| `onSelect`   | `(key: string) => void` | required                       |
+| `items`      | `SideNavItem[]`         | `[]`                           |
+| `activeKey`  | `string`                | `""`                           |
+| `onSelect`   | `(key: string) => void` | no-op                          |
+| `top`        | `ReactNode`             | —                              |
+| `footer`     | `ReactNode`             | —                              |
 | `storageKey` | `string \| null`        | `"bluestar-sidenav-collapsed"` |
 
 `SideNavItem` is `{ key, label, icon? }`. A collapsible left rail for an
@@ -670,6 +672,21 @@ state persists to `localStorage` the same way `useColorScheme` persists its
 own choice — pass `storageKey={null}` to disable that. The active item is a
 3px left accent bar + tinted background, not a solid fill — the same
 flat-selection language `Tabs` uses for the underline.
+
+`top` (an app switcher) and `footer` (an account/profile block, pinned
+above a top border) turn the rail into the app's whole chrome — the header
+is then free to carry just the page title, no account avatar or app
+switcher of its own. Both are hidden while collapsed rather than squeezed
+into 64px — expand to reach them. `items` is optional: a single-page app
+can render `SideNav` for just its `top`/`footer` chrome with an empty (or
+omitted) `items` array and nothing to switch between.
+
+#### `ThemeToggle`
+
+No props. A three-way Auto/Light/Dark `SegmentedControl` wired straight to
+`useColorScheme` — there's exactly one color scheme per page, so nothing to
+parameterize. Drop it in `SideNav`'s `footer` slot, or anywhere else app
+chrome needs a way to change the theme.
 
 #### `ListRow`
 

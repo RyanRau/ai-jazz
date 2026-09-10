@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { css } from "goober";
 import { useTheme } from "../../../theme";
 import Flexbox from "../../layout/Flexbox/Flexbox";
@@ -14,9 +15,22 @@ export type SideNavItem = {
 };
 
 export type SideNavProps = {
-  items: SideNavItem[];
-  activeKey: string;
-  onSelect: (key: string) => void;
+  /** Defaults to `[]` — a chrome-only rail (just `top`/`footer`) is a real case for a single-page app with nothing to switch between. */
+  items?: SideNavItem[];
+  activeKey?: string;
+  onSelect?: (key: string) => void;
+  /**
+   * Rendered above the nav items — an app switcher, a brand mark. Hidden
+   * (not just squeezed) while collapsed, same as `footer`: arbitrary content
+   * can't shrink to the 64px icon-only rail the way a `SideNavItem`'s own
+   * label does.
+   */
+  top?: ReactNode;
+  /**
+   * Rendered pinned to the bottom of the rail, above a top border — an
+   * account/profile block. Hidden while collapsed; expand to reach it.
+   */
+  footer?: ReactNode;
   /** localStorage key for remembering the collapsed state. Pass `null` to disable persistence. */
   storageKey?: string | null;
 };
@@ -37,6 +51,13 @@ function readStored(storageKey: string | null | undefined): boolean {
  * which locks it to the true left edge and its own height rather than
  * placing it inside the centred content column.
  *
+ * `top` (an app switcher, a brand mark) and `footer` (an account/profile
+ * block, pinned to the bottom above a divider) turn the rail into the full
+ * app chrome — the header is then free to carry just the page title, no
+ * account avatar or app switcher of its own. `items` is optional: a
+ * single-page app can render `SideNav` for just its `top`/`footer` chrome
+ * with nothing to switch between.
+ *
  * The collapse toggle is a small circular handle straddling the rail's
  * right border at vertical centre -- the convention most dashboard
  * component libraries (Bootstrap, Tailwind UI) use, rather than a
@@ -46,9 +67,11 @@ function readStored(storageKey: string | null | undefined): boolean {
  * persists its own choice.
  */
 export default function SideNav({
-  items,
-  activeKey,
-  onSelect,
+  items = [],
+  activeKey = "",
+  onSelect = () => {},
+  top,
+  footer,
   storageKey = "bluestar-sidenav-collapsed",
 }: SideNavProps) {
   const theme = useTheme();
@@ -73,6 +96,16 @@ export default function SideNav({
         transition: width 0.15s ease;
       `}
     >
+      {top && !collapsed && (
+        <div
+          className={css`
+            padding: 8px 8px 0 8px;
+          `}
+        >
+          {top}
+        </div>
+      )}
+
       <Flexbox direction="column" gap={4} style={{ padding: 8, flex: 1, overflow: "hidden" }}>
         {items.map((item) => {
           const isActive = item.key === activeKey;
@@ -131,6 +164,17 @@ export default function SideNav({
           );
         })}
       </Flexbox>
+
+      {footer && !collapsed && (
+        <div
+          className={css`
+            padding: 12px 8px;
+            border-top: 1px solid ${theme.colors.border};
+          `}
+        >
+          {footer}
+        </div>
+      )}
 
       <button
         type="button"
