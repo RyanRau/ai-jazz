@@ -140,6 +140,14 @@ generic, not Zoho-specific; any standard SMTP provider works the same way.
 Once configured, that mailer is available to _any_ hook in this file, for
 any app, not just invites.
 
+The hook always connects via StartTLS on `SMTP_PORT=587` — the port
+Zoho (and most providers) expect for that flow. If a provider needs
+implicit TLS instead (port 465), `mailer_config.pb.js`'s hard-coded
+`tls: false` needs to flip along with the port. A send failure is never
+fatal to the invite request (it just falls back to link-only), but it is
+logged — check Admin UI → Logs (`https://api.ryanzrau.dev/_/`) for the
+actual SMTP error if `sent` keeps coming back `false`.
+
 **Once this hook is deployed, these env vars are the sole source of truth
 for SMTP settings** — a superuser who hand-edits SMTP in the Admin UI
 (Settings → Mail) will have that change reverted on the next restart. Set

@@ -207,6 +207,9 @@ routerAdd(
         sent = true;
       } catch (err) {
         sent = false;
+        // A send failure never fails the request (the link is always
+        // returned), but it must not be silent -- check Admin UI -> Logs.
+        e.app.logger().error("invite email send failed", "error", err, "to", email);
       }
     }
 
