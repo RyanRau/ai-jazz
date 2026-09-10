@@ -50,6 +50,20 @@ function getColors(variant: ButtonVariant, theme: Theme) {
   }
 }
 
+/**
+ * The label/icon color `Button` itself renders for a given variant +
+ * appearance — exported so `AsyncButton` and `SubmitButton` can color their
+ * own extra children (a spinner) to match instead of hardcoding
+ * `textOnAccent`, which goes invisible on `"outline"`/`"text"` appearances.
+ */
+export function resolveButtonTextColor(
+  theme: Theme,
+  variant: ButtonVariant = "primary",
+  appearance: ButtonAppearance = "solid"
+): string {
+  return appearance === "solid" ? theme.colors.textOnAccent : getColors(variant, theme).accent;
+}
+
 export default function Button({
   label,
   children,

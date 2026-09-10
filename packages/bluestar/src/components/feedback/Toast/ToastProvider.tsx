@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import type { ReactNode } from "react";
 import Alert from "../Alert/Alert";
 import type { AlertVariant } from "../Alert/Alert";
+import { useTheme } from "../../../theme";
 
 export type ToastOptions = {
   variant?: AlertVariant;
@@ -31,6 +32,7 @@ export type ToastProviderProps = {
 
 /** Wrap the app once; call `useToast()` anywhere beneath it. */
 export function ToastProvider({ children, position = "bottom-right" }: ToastProviderProps) {
+  const theme = useTheme();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
   // Timers are cleared on manual dismiss so a late timeout can't remove a
@@ -107,14 +109,25 @@ export function ToastProvider({ children, position = "bottom-right" }: ToastProv
         `}
       >
         {toasts.map((toast) => (
-          <Alert
+          // Alert itself stays flat/border-only for its usual job (an inline
+          // page banner) — but a toast floats untethered over unrelated
+          // content with no border to anchor it against, so it's the one
+          // place that genuinely needs the elevation a card doesn't.
+          <div
             key={toast.id}
-            variant={toast.variant ?? "info"}
-            title={toast.title}
-            onDismiss={() => dismiss(toast.id)}
+            className={css`
+              border-radius: ${theme.radius.md};
+              box-shadow: ${theme.shadow.lg};
+            `}
           >
-            {toast.message}
-          </Alert>
+            <Alert
+              variant={toast.variant ?? "info"}
+              title={toast.title}
+              onDismiss={() => dismiss(toast.id)}
+            >
+              {toast.message}
+            </Alert>
+          </div>
         ))}
       </div>
     </ToastContext.Provider>

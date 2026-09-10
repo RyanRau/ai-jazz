@@ -1,5 +1,5 @@
 import { useState } from "react";
-import Button from "../Button/Button";
+import Button, { resolveButtonTextColor } from "../Button/Button";
 import type { ButtonProps } from "../Button/Button";
 import Spinner from "../../feedback/Spinner/Spinner";
 import Text from "../../text/Text/Text";
@@ -13,9 +13,17 @@ export type AsyncButtonProps = Omit<ButtonProps, "onClick"> & {
   onClick: () => Promise<void>;
 };
 
-export default function AsyncButton({ label, onClick, isDisabled, ...props }: AsyncButtonProps) {
+export default function AsyncButton({
+  label,
+  onClick,
+  isDisabled,
+  variant = "primary",
+  appearance = "solid",
+  ...props
+}: AsyncButtonProps) {
   const [loading, setLoading] = useState(false);
   const theme = useTheme();
+  const textColor = resolveButtonTextColor(theme, variant, appearance);
 
   async function handleClick() {
     if (loading) return;
@@ -28,11 +36,18 @@ export default function AsyncButton({ label, onClick, isDisabled, ...props }: As
   }
 
   return (
-    <Button {...props} label={label} onClick={handleClick} isDisabled={loading || isDisabled}>
-      <Text variant="label" color={theme.colors.textOnAccent}>
+    <Button
+      {...props}
+      variant={variant}
+      appearance={appearance}
+      label={label}
+      onClick={handleClick}
+      isDisabled={loading || isDisabled}
+    >
+      <Text variant="label" color={textColor}>
         {label}
       </Text>
-      {loading && <Spinner size={14} color={theme.colors.textOnAccent} />}
+      {loading && <Spinner size={14} color={textColor} />}
     </Button>
   );
 }

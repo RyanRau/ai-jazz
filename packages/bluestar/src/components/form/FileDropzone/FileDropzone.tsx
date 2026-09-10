@@ -110,7 +110,7 @@ export default function FileDropzone({
                     width: 40,
                     height: 40,
                     objectFit: "cover",
-                    borderRadius: 6,
+                    borderRadius: theme.radius.sm,
                     flexShrink: 0,
                   }}
                 />
