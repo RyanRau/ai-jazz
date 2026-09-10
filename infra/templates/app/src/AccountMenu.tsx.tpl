@@ -2,10 +2,9 @@ import { Avatar, Button, Flexbox, Icon, Link, Menu, Text } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { pb, signOut } from "./pb";
 
-// hub.ryanzrau.dev hosts the one shared settings page — same hardcoded-URL
+// ryanzrau.dev hosts the one shared settings page — same hardcoded-URL
 // convention pb.ts.tpl already uses for the shared backend.
-const SETTINGS_URL = "https://hub.ryanzrau.dev/settings";
-const ADMIN_URL = "https://hub.ryanzrau.dev/admin";
+const SETTINGS_URL = "https://ryanzrau.dev/settings";
 
 /**
  * Kept in app code rather than bluestar: it needs `pb.authStore.record` and
@@ -34,16 +33,6 @@ export function AccountMenu() {
             </Text>
           </Flexbox>
         </Link>
-        {record.is_admin && (
-          <Link href={ADMIN_URL} variant="muted" style={{ padding: "0 8px" }}>
-            <Flexbox direction="row" alignItems="center" gap={8}>
-              <Icon name="user" size={16} />
-              <Text variant="body" color="inherit">
-                Admin
-              </Text>
-            </Flexbox>
-          </Link>
-        )}
         <Button label="Log out" variant="secondary" density="dense" onClick={signOut}>
           <Flexbox direction="row" alignItems="center" gap={8}>
             <Icon name="logOut" size={16} />

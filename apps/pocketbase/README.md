@@ -100,12 +100,12 @@ The SDK persists the auth token in `localStorage` and refreshes it automatically
 ## Auth
 
 Signup is **closed** — the baseline migration sets the `users` collection's
-`createRule` to `null`. Onboard a real person through hub's `/admin` page
-("Invite user"), not the admin UI: it creates a `verified: false` stub,
-lets you pre-grant app access, and returns an activation link (mailed
-automatically if SMTP is configured — see "Email (optional)" below —
-always shown for you to copy otherwise). The invitee sets their own
-password and name at `hub.ryanzrau.dev/activate`, backed by
+`createRule` to `null`. Onboard a real person through ryanzrau.dev's
+`/admin` page ("Invite user"), not the admin UI: it creates a
+`verified: false` stub, lets you pre-grant app access, and returns an
+activation link (mailed automatically if SMTP is configured — see "Email
+(optional)" below — always shown for you to copy otherwise). The invitee
+sets their own password and name at `ryanzrau.dev/activate`, backed by
 `POST /api/custom/admin/invite` and `GET /api/custom/admin/access` in
 `pb_hooks/admin.pb.js`. Creating a user by hand in the admin UI (Collections
 → users → New record) still works — mainly useful for a machine/service
