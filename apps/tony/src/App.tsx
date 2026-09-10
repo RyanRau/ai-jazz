@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppShell, EmptyState, Flexbox, SideNav, ThemeToggle } from "bluestar";
+import { AppShell, EmptyState, Flexbox, SideNav, ThemePicker } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
@@ -71,7 +71,7 @@ function App() {
           }
           footer={
             <Flexbox direction="column" gap={12}>
-              <ThemeToggle />
+              <ThemePicker />
               <AccountMenu />
             </Flexbox>
           }

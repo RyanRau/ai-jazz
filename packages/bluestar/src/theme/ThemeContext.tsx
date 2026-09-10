@@ -50,6 +50,9 @@ type ThemeContextValue = {
   scheme: ColorScheme;
   resolved: ResolvedColorScheme;
   setScheme: (scheme: ColorScheme) => void;
+  /** A viewer-picked accent color overriding `theme.colors.primary`, or `null` for the theme's own default. */
+  customAccent: string | null;
+  setCustomAccent: (color: string | null) => void;
 };
 
 const fallback: ThemeContextValue = {
@@ -57,6 +60,8 @@ const fallback: ThemeContextValue = {
   scheme: "auto",
   resolved: "light",
   setScheme: () => {},
+  customAccent: null,
+  setCustomAccent: () => {},
 };
 
 const ThemeContext = createContext<ThemeContextValue>(fallback);
@@ -77,6 +82,13 @@ export type ThemeProviderProps = {
   baseline?: boolean;
   /** localStorage key for remembering an explicit choice. Pass null to disable. */
   storageKey?: string | null;
+  /**
+   * sessionStorage key for remembering a custom accent color (set via
+   * `useCustomAccent`'s `setCustomAccent`) — cleared when the tab closes,
+   * unlike `storageKey`'s localStorage persistence for `colorScheme`. Pass
+   * null to disable.
+   */
+  customAccentStorageKey?: string | null;
   children: ReactNode;
 };
 
@@ -91,16 +103,39 @@ function readStored(storageKey: string | null | undefined): ColorScheme | null {
   }
 }
 
+function readStoredAccent(storageKey: string | null | undefined): string | null {
+  if (!canUseDOM || !storageKey) return null;
+  try {
+    return window.sessionStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The hover shade for a viewer-picked accent, following the same
+ * light-darkens/dark-lightens convention `theme.ts`'s two palettes hand-pick
+ * per color — `color-mix` resolves at paint time, so this needs no palette
+ * math, just the right mix target per scheme.
+ */
+function accentHoverFor(accent: string, mode: "light" | "dark"): string {
+  return `color-mix(in srgb, ${accent} 85%, ${mode === "light" ? "black" : "white"})`;
+}
+
 export function ThemeProvider({
   theme,
   darkTheme: darkOverrides,
   colorScheme = "auto",
   baseline = true,
   storageKey = "bluestar-color-scheme",
+  customAccentStorageKey = "bluestar-custom-accent",
   children,
 }: ThemeProviderProps) {
   const [scheme, setSchemeState] = useState<ColorScheme>(
     () => readStored(storageKey) ?? colorScheme
+  );
+  const [customAccent, setCustomAccentState] = useState<string | null>(() =>
+    readStoredAccent(customAccentStorageKey)
   );
 
   // Follow the prop when it changes, so the scheme can be driven from outside
@@ -123,8 +158,29 @@ export function ThemeProvider({
   const depth = useContext(DepthContext);
   const isRoot = depth === 0;
 
-  const light = useMemo(() => deepMerge(defaultTheme, theme), [theme]);
-  const dark = useMemo(() => deepMerge(darkTheme, darkOverrides), [darkOverrides]);
+  // The viewer's own live pick wins over whatever the app hard-coded via
+  // `theme`/`darkTheme` — it's deep-merged on last, in both palettes.
+  const accentOverride = useCallback(
+    (mode: "light" | "dark"): DeepPartial<Theme> | undefined =>
+      customAccent
+        ? {
+            colors: {
+              primary: customAccent,
+              focusRing: customAccent,
+              primaryHover: accentHoverFor(customAccent, mode),
+            },
+          }
+        : undefined,
+    [customAccent]
+  );
+  const light = useMemo(
+    () => deepMerge(deepMerge(defaultTheme, theme), accentOverride("light")),
+    [theme, accentOverride]
+  );
+  const dark = useMemo(
+    () => deepMerge(deepMerge(darkTheme, darkOverrides), accentOverride("dark")),
+    [darkOverrides, accentOverride]
+  );
 
   // One call, deliberately: a second `glob` would replace this one rather than
   // add to it. Re-running on a theme change replaces cleanly.
@@ -164,6 +220,20 @@ export function ThemeProvider({
     [storageKey]
   );
 
+  const setCustomAccent = useCallback(
+    (next: string | null) => {
+      setCustomAccentState(next);
+      if (!canUseDOM || !customAccentStorageKey) return;
+      try {
+        if (next) window.sessionStorage.setItem(customAccentStorageKey, next);
+        else window.sessionStorage.removeItem(customAccentStorageKey);
+      } catch {
+        // Not being able to remember the choice shouldn't break the picker.
+      }
+    },
+    [customAccentStorageKey]
+  );
+
   const value = useMemo<ThemeContextValue>(
     () => ({
       // Components read variable references, never literals — that is what lets
@@ -172,8 +242,10 @@ export function ThemeProvider({
       scheme,
       resolved: scheme === "auto" ? (systemDark ? "dark" : "light") : scheme,
       setScheme,
+      customAccent,
+      setCustomAccent,
     }),
-    [light, scheme, systemDark, setScheme]
+    [light, scheme, systemDark, setScheme, customAccent, setCustomAccent]
   );
 
   return (
@@ -194,4 +266,10 @@ export function useTheme(): Theme {
 export function useColorScheme() {
   const { scheme, resolved, setScheme } = useContext(ThemeContext);
   return { scheme, resolved, setScheme };
+}
+
+/** Read and change the viewer's custom accent color override. `null` means the theme's own default. */
+export function useCustomAccent() {
+  const { customAccent, setCustomAccent } = useContext(ThemeContext);
+  return { customAccent, setCustomAccent };
 }

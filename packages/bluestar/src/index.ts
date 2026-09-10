@@ -46,6 +46,7 @@ export * from "./components/navigation/Breadcrumbs";
 export * from "./components/navigation/Pagination";
 export * from "./components/navigation/ListRow";
 export * from "./components/navigation/ThemeToggle";
+export * from "./components/navigation/ThemePicker";
 
 // Text
 export * from "./components/text/Header";

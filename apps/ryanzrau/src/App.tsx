@@ -8,7 +8,7 @@ import {
   Modal,
   SideNav,
   Text,
-  ThemeToggle,
+  ThemePicker,
 } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
@@ -27,7 +27,7 @@ function App() {
             top={<AppSwitcher appName="Ryan Rau" />}
             footer={
               <Flexbox direction="column" gap={12}>
-                <ThemeToggle />
+                <ThemePicker />
                 <AccountMenu />
               </Flexbox>
             }

@@ -10,7 +10,7 @@ import {
   SideNav,
   Spinner,
   Text,
-  ThemeToggle,
+  ThemePicker,
   breakpoints,
 } from "bluestar";
 import type { SideNavItem } from "bluestar";
@@ -134,7 +134,7 @@ function App() {
       top={<AppSwitcher appName="Hub" />}
       footer={
         <Flexbox direction="column" gap={12}>
-          <ThemeToggle />
+          <ThemePicker />
           <AccountMenu />
         </Flexbox>
       }
