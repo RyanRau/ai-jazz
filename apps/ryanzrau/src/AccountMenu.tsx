@@ -1,4 +1,5 @@
-import { Avatar, Button, Flexbox, Icon, Link, Menu, Text } from "bluestar";
+import type { CSSProperties } from "react";
+import { Avatar, Button, Flexbox, Icon, Text } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { pb, signOut } from "./pb";
 
@@ -7,10 +8,20 @@ import { pb, signOut } from "./pb";
 const SETTINGS_URL = "https://hub.ryanzrau.dev/settings";
 const ADMIN_URL = "https://hub.ryanzrau.dev/admin";
 
+const truncateStyle: CSSProperties = {
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
 /**
  * Kept in app code rather than bluestar: it needs `pb.authStore.record` and
  * `pb.files.getURL`, and bluestar must not depend on the `pocketbase` package
  * (see packages/bluestar/AUDIT.md) — same reason `LoginForm` lives here too.
+ *
+ * Meant for `SideNav`'s `footer` slot — an always-visible block rather than
+ * a dropdown, so it doesn't need `Menu`'s downward-opening panel to fit
+ * below a trigger that's pinned at the very bottom of the viewport.
  */
 export function AccountMenu() {
   const record = useAuthRecord();
@@ -20,42 +31,57 @@ export function AccountMenu() {
   const avatarSrc = record.avatar ? pb.files.getURL(record, record.avatar) : undefined;
 
   return (
-    <Menu
-      trigger={<Avatar src={avatarSrc} name={name} />}
-      triggerLabel={`Account menu for ${name}`}
-    >
-      <Flexbox direction="column" gap={12}>
-        <Flexbox direction="column" gap={4} style={{ padding: "4px 8px" }}>
-          <Text variant="label">{record.name || "—"}</Text>
-          <Text variant="caption">{record.email}</Text>
+    <Flexbox direction="column" gap={8}>
+      <Flexbox direction="row" alignItems="center" gap={8}>
+        <Avatar src={avatarSrc} name={name} size={32} />
+        <Flexbox direction="column" style={{ minWidth: 0 }}>
+          <div style={truncateStyle}>
+            <Text variant="label">{name}</Text>
+          </div>
+          <div style={truncateStyle}>
+            <Text variant="caption">{record.email}</Text>
+          </div>
         </Flexbox>
-        <Link href={SETTINGS_URL} variant="muted" style={{ padding: "0 8px" }}>
-          <Flexbox direction="row" alignItems="center" gap={8}>
-            <Icon name="settings" size={16} />
-            <Text variant="body" color="inherit">
-              Settings
-            </Text>
-          </Flexbox>
-        </Link>
+      </Flexbox>
+
+      <Flexbox direction="row" gap={4}>
+        <Button
+          label="Settings"
+          aria-label="Settings"
+          appearance="text"
+          variant="secondary"
+          density="dense"
+          onClick={() => {
+            window.location.href = SETTINGS_URL;
+          }}
+        >
+          <Icon name="settings" size={16} />
+        </Button>
         {record.is_admin && (
-          <Link href={ADMIN_URL} variant="muted" style={{ padding: "0 8px" }}>
-            <Flexbox direction="row" alignItems="center" gap={8}>
-              <Icon name="user" size={16} />
-              <Text variant="body" color="inherit">
-                Admin
-              </Text>
-            </Flexbox>
-          </Link>
+          <Button
+            label="Admin"
+            aria-label="Admin"
+            appearance="text"
+            variant="secondary"
+            density="dense"
+            onClick={() => {
+              window.location.href = ADMIN_URL;
+            }}
+          >
+            <Icon name="user" size={16} />
+          </Button>
         )}
-        <Button label="Log out" variant="secondary" density="dense" onClick={signOut}>
-          <Flexbox direction="row" alignItems="center" gap={8}>
-            <Icon name="logOut" size={16} />
-            <Text variant="label" color="inherit">
-              Log out
-            </Text>
-          </Flexbox>
+        <Button
+          label="Log out"
+          aria-label="Log out"
+          appearance="text"
+          variant="secondary"
+          density="dense"
+          onClick={signOut}
+        >
+          <Icon name="logOut" size={16} />
         </Button>
       </Flexbox>
-    </Menu>
+    </Flexbox>
   );
 }

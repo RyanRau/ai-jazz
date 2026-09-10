@@ -59,7 +59,7 @@ export default function Menu({ trigger, triggerLabel, children, width = 240 }: M
           border: none;
           padding: 0;
           cursor: pointer;
-          border-radius: ${theme.radius.full};
+          border-radius: ${theme.radius.sm};
           &:focus-visible {
             outline: 2px solid ${theme.colors.focusRing};
             outline-offset: 2px;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppShell, EmptyState, Flexbox, SideNav } from "bluestar";
+import { AppShell, EmptyState, Flexbox, SideNav, ThemeToggle } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
@@ -52,8 +52,6 @@ function App() {
   return (
     <AppShell
       title="Tony"
-      appSwitcher={<AppSwitcher />}
-      account={<AccountMenu />}
       sideNav={
         <SideNav
           items={[
@@ -63,6 +61,13 @@ function App() {
           ]}
           activeKey={tab}
           onSelect={(key) => setTab(key as Tab)}
+          top={<AppSwitcher />}
+          footer={
+            <Flexbox direction="column" gap={12}>
+              <ThemeToggle />
+              <AccountMenu />
+            </Flexbox>
+          }
         />
       }
     >

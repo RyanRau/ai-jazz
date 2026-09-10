@@ -10,10 +10,12 @@ import {
   Form,
   Modal,
   NumberInput,
+  SideNav,
   SubmitButton,
   Table,
   Text,
   TextInput,
+  ThemeToggle,
   useForm,
 } from "bluestar";
 import { useAuthRecord } from "./useAuth";
@@ -104,7 +106,20 @@ function App() {
   if (granted === null) return null;
 
   return (
-    <AppShell title="Stash" appSwitcher={<AppSwitcher />} account={<AccountMenu />}>
+    <AppShell
+      title="Stash"
+      sideNav={
+        <SideNav
+          top={<AppSwitcher />}
+          footer={
+            <Flexbox direction="column" gap={12}>
+              <ThemeToggle />
+              <AccountMenu />
+            </Flexbox>
+          }
+        />
+      }
+    >
       <Flexbox direction="column" gap={24}>
         <Card padding={20}>
           <Form form={form}>

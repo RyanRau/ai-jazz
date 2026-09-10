@@ -7,10 +7,13 @@ import {
   Flexbox,
   Header,
   Link,
+  SideNav,
   Spinner,
   Text,
+  ThemeToggle,
   breakpoints,
 } from "bluestar";
+import type { SideNavItem } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
@@ -113,14 +116,34 @@ function App() {
     );
   }
 
+  // One rail for all three destinations -- current section comes from the
+  // pathname (hub has no client-side router), navigating is a real page
+  // load like the rest of the app already does.
+  const navItems: SideNavItem[] = [
+    { key: "apps", label: "Apps", icon: "grid" },
+    { key: "settings", label: "Settings", icon: "settings" },
+    ...(record.is_admin ? [{ key: "admin", label: "Admin", icon: "user" } as SideNavItem] : []),
+  ];
+  const sideNav = (
+    <SideNav
+      items={navItems}
+      activeKey={onSettingsPath ? "settings" : onAdminPath ? "admin" : "apps"}
+      onSelect={(key) => {
+        window.location.href = key === "apps" ? "/" : `/${key}`;
+      }}
+      top={<AppSwitcher />}
+      footer={
+        <Flexbox direction="column" gap={12}>
+          <ThemeToggle />
+          <AccountMenu />
+        </Flexbox>
+      }
+    />
+  );
+
   if (onSettingsPath) {
     return (
-      <AppShell
-        title="Settings"
-        appSwitcher={<AppSwitcher />}
-        account={<AccountMenu />}
-        maxWidth={640}
-      >
+      <AppShell title="Settings" sideNav={sideNav} maxWidth={640}>
         <SettingsPage record={record} />
       </AppShell>
     );
@@ -128,7 +151,7 @@ function App() {
 
   if (onAdminPath) {
     return (
-      <AppShell title="Admin" appSwitcher={<AppSwitcher />} account={<AccountMenu />}>
+      <AppShell title="Admin" sideNav={sideNav}>
         {record.is_admin ? (
           <AdminPage />
         ) : (
@@ -142,7 +165,7 @@ function App() {
   }
 
   return (
-    <AppShell title="Apps" appSwitcher={<AppSwitcher />} account={<AccountMenu />}>
+    <AppShell title="Apps" sideNav={sideNav}>
       {!apps ? (
         <Spinner />
       ) : apps.length === 0 ? (
