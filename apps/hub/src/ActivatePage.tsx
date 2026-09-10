@@ -47,8 +47,20 @@ export function ActivatePage() {
           .confirmPasswordReset(token!, values.password, values.passwordConfirm);
       } catch (error) {
         if (error instanceof ClientResponseError) {
+          // PocketBase's real detail lives at data.token.message (e.g. "Invalid
+          // or expired token.") -- the top-level message is a generic "An error
+          // occurred while validating the submitted data." Same
+          // error.response["data"] access SettingsPage.tsx already uses for
+          // per-field errors. Fall back to the top-level message for anything
+          // that isn't token-shaped, so a wrong URL or a CORS failure doesn't
+          // masquerade as an expired link.
+          const fieldErrors = error.response["data"] as
+            Record<string, { message?: string }> | undefined;
+          const tokenMessage = fieldErrors?.token?.message;
           setTokenError(
-            "This invite link is invalid or has expired. Ask your admin to send a new one."
+            tokenMessage
+              ? "This invite link is invalid or has expired. Ask your admin to send a new one."
+              : error.message
           );
           return;
         }

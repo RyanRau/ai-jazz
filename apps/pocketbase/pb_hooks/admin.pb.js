@@ -217,3 +217,41 @@ routerAdd(
   },
   $apis.requireAuth()
 );
+
+// Delete a user row -- covers both cancelling a pending invite (a
+// never-activated stub) and removing an activated user; both are just a
+// users row (see GET /access's verified flag, above). Body: { id }.
+routerAdd(
+  "POST",
+  "/api/custom/admin/delete-user",
+  (e) => {
+    const auth = e.requestInfo().auth;
+    if (!auth || auth.get("is_admin") !== true) {
+      throw new ForbiddenError("Admin access required.");
+    }
+
+    const body = e.requestInfo().body;
+    const userId = (body.id || "").trim();
+    if (!userId) {
+      throw new BadRequestError("id is required.");
+    }
+    if (userId === auth.id) {
+      throw new BadRequestError("You can't delete your own account.");
+    }
+
+    const record = e.app.findRecordById("users", userId);
+
+    // registry_grants' `user` relation has no cascadeDelete (see
+    // pb_migrations/1788918210_registry_apps_and_grants.js), so clear a
+    // user's grants explicitly before deleting the row they reference.
+    const grants = e.app.findRecordsByFilter("registry_grants", "user = {:userId}", "", 0, 0, {
+      userId: userId,
+    });
+    grants.forEach((g) => e.app.delete(g));
+
+    e.app.delete(record);
+
+    return e.json(200, { ok: true });
+  },
+  $apis.requireAuth()
+);
