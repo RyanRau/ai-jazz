@@ -110,6 +110,31 @@ reuses the running process.
 `llama-server` build accepts `reasoning_budget` in the request body, that already
 passes through untouched — no gateway change needed.
 
+## Web search (optional)
+
+Set `web_search.searxng_url` in `config.yaml` to a running SearXNG instance
+(see `config.example.yaml`) and `/v1/chat/send` starts offering the model a
+`web_search` tool automatically — nothing else to configure. Leave it unset
+and Chat behaves exactly as before.
+
+SearXNG's default `settings.yml` only enables the `html` output format; the
+JSON API this needs will 403 until you add `json` to `search.formats` and set
+a `secret_key`:
+
+```yaml
+search:
+  formats:
+    - html
+    - json
+server:
+  secret_key: "generate-one-with-openssl-rand-hex-32"
+```
+
+Whether a given model actually emits correct `tool_calls` depends on its
+chat template — every model in `config.example.yaml` already runs with
+`jinja: true`, which is required for this, but isn't a guarantee for every
+GGUF.
+
 ## Routes
 
 | Route                       | Auth | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |

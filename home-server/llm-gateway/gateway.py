@@ -473,6 +473,53 @@ def _contains_image(body: dict) -> bool:
     return False
 
 
+WEB_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": (
+            "Search the web for current information. Use this for anything "
+            "time-sensitive or that may have changed since training."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The search query."}
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+
+async def _web_search(query: str) -> list[dict]:
+    """Queries the configured SearXNG instance and returns the top results
+    as plain dicts. Any failure (SearXNG down, misconfigured, network error)
+    degrades to an empty result list rather than failing the chat turn."""
+    searxng_url = (CONFIG.get("web_search") or {}).get("searxng_url")
+    if not searxng_url:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"{searxng_url.rstrip('/')}/search",
+                params={"q": query, "format": "json"},
+            )
+            r.raise_for_status()
+            data = r.json()
+    except httpx.HTTPError as e:
+        print(f"[gateway] web search failed: {e}")
+        return []
+    return [
+        {
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "snippet": item.get("content", ""),
+        }
+        for item in (data.get("results") or [])[:5]
+    ]
+
+
 async def _append_chat_message(
     message_id: str,
     content: str,
@@ -501,6 +548,9 @@ async def _append_chat_message(
         print(f"[gateway] failed to persist chat message {message_id}: {e}")
 
 
+MAX_TOOL_ROUNDS = 3
+
+
 async def _generate_chat_response(
     model_cfg: dict,
     body: dict,
@@ -515,41 +565,108 @@ async def _generate_chat_response(
     periodically persists the accumulated text to PocketBase so a later
     visit sees it too. Puts `None` on the queue when done, as the
     end-of-stream sentinel for a live relay.
+
+    Loops up to MAX_TOOL_ROUNDS times when web search is configured: a round
+    that ends in a tool call runs the search and feeds the results back as a
+    `tool` message for the next round, instead of treating that round as the
+    final answer. Tool-call chunks carry no `delta.content`, so the frontend
+    (which only ever looks at `delta.content`) silently ignores them -- no
+    special client-side handling needed.
     """
     FLUSH_INTERVAL = 0.75
 
-    leftover = b""
     usage: dict = {}
     content_parts: list[str] = []
     last_flush = time.time()
     start = time.time()
     acquired = False
     client: Optional[httpx.AsyncClient] = None
+
+    searxng_url = (CONFIG.get("web_search") or {}).get("searxng_url")
+    if searxng_url:
+        body = {**body, "tools": [WEB_SEARCH_TOOL]}
+
     try:
         await manager.acquire(model_cfg)
         acquired = True
         timeout = CONFIG["server"].get("request_timeout_seconds", 300)
         client = httpx.AsyncClient(base_url=manager.base_url, timeout=timeout)
-        async with client.stream("POST", "/v1/chat/completions", json=body) as r:
-            async for chunk in r.aiter_bytes():
-                await queue.put(chunk)
-                events, leftover = _parse_sse_json_lines(chunk, leftover)
-                for ev in events:
-                    if ev.get("usage"):
-                        usage = ev["usage"]
-                    choices = ev.get("choices") or []
-                    delta = (
-                        (choices[0].get("delta") or {}).get("content")
-                        if choices
-                        else None
-                    )
-                    if delta:
-                        content_parts.append(delta)
-                if time.time() - last_flush > FLUSH_INTERVAL:
-                    await _append_chat_message(
-                        assistant_message_id, "".join(content_parts), "streaming"
-                    )
-                    last_flush = time.time()
+
+        for round_num in range(MAX_TOOL_ROUNDS):
+            if round_num == MAX_TOOL_ROUNDS - 1:
+                body.pop("tools", None)  # force a text answer on the last round
+
+            leftover = b""
+            tool_calls: dict[int, dict] = {}
+            async with client.stream("POST", "/v1/chat/completions", json=body) as r:
+                async for chunk in r.aiter_bytes():
+                    await queue.put(chunk)
+                    events, leftover = _parse_sse_json_lines(chunk, leftover)
+                    for ev in events:
+                        if ev.get("usage"):
+                            usage = ev["usage"]
+                        choices = ev.get("choices") or []
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta") or {}
+                        if delta.get("content"):
+                            content_parts.append(delta["content"])
+                        for tc in delta.get("tool_calls") or []:
+                            slot = tool_calls.setdefault(
+                                tc.get("index", 0),
+                                {"id": "", "name": "", "arguments": ""},
+                            )
+                            if tc.get("id"):
+                                slot["id"] = tc["id"]
+                            fn = tc.get("function") or {}
+                            if fn.get("name"):
+                                slot["name"] += fn["name"]
+                            if fn.get("arguments"):
+                                slot["arguments"] += fn["arguments"]
+                    if time.time() - last_flush > FLUSH_INTERVAL:
+                        await _append_chat_message(
+                            assistant_message_id, "".join(content_parts), "streaming"
+                        )
+                        last_flush = time.time()
+
+            if not tool_calls:
+                break  # final answer for this turn
+
+            ordered = [tool_calls[i] for i in sorted(tool_calls)]
+            body["messages"] = body["messages"] + [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": tc["id"] or f"call_{i}",
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": tc["arguments"],
+                            },
+                        }
+                        for i, tc in enumerate(ordered)
+                    ],
+                }
+            ]
+            for i, tc in enumerate(ordered):
+                try:
+                    args = json.loads(tc["arguments"] or "{}")
+                except ValueError:
+                    args = {}
+                results = (
+                    await _web_search(args.get("query", ""))
+                    if tc["name"] == "web_search"
+                    else []
+                )
+                body["messages"].append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc["id"] or f"call_{i}",
+                        "content": json.dumps(results),
+                    }
+                )
 
         await _append_chat_message(
             assistant_message_id,
