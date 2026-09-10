@@ -141,9 +141,16 @@ The deploy resolves build args from secrets by name — no workflow edit needed.
 
 **Adding a runtime env var:**
 
-1. Add it to the app's `environment` map in `deploy.yml`
-2. Set the value in `/opt/apps/.env` on the droplet (auto-loaded by docker
-   compose; must be readable by `deploy` — `chown deploy:deploy`, `chmod 600`)
+1. Add it to the app's `environment` map in `deploy.yml` as `NAME: "${NAME}"`
+2. Add a GitHub secret **with exactly that name**
+
+A production deploy (a push to `main`) resolves every referenced name from a
+same-named secret — same convention as `build_args` — and writes them into a
+fresh `/opt/apps/.env` on the droplet, `chmod 600`. No SSH, no workflow edit.
+A missing secret just leaves that var empty rather than failing the deploy,
+since these vars are meant to be optional. Test deploys don't touch
+`/opt/apps/.env` — it's one droplet-wide file production also depends on, so
+only `main` writes it.
 
 ### Internal Services
 

@@ -100,13 +100,50 @@ The SDK persists the auth token in `localStorage` and refreshes it automatically
 ## Auth
 
 Signup is **closed** — the baseline migration sets the `users` collection's
-`createRule` to `null`. Create accounts in the admin UI (Collections → users →
-New record).
+`createRule` to `null`. Onboard a real person through hub's `/admin` page
+("Invite user"), not the admin UI: it creates a `verified: false` stub,
+lets you pre-grant app access, and returns an activation link (mailed
+automatically if SMTP is configured — see "Email (optional)" below —
+always shown for you to copy otherwise). The invitee sets their own
+password and name at `hub.ryanzrau.dev/activate`, backed by
+`POST /api/custom/admin/invite` and `GET /api/custom/admin/access` in
+`pb_hooks/admin.pb.js`. Creating a user by hand in the admin UI (Collections
+→ users → New record) still works — mainly useful for a machine/service
+account, which has no activation flow to speak of.
 
 For machine clients (n8n, scripts, other services), create a dedicated
 least-privilege user and authenticate with
 `POST /api/collections/users/auth-with-password`, then send the returned token in
 the `Authorization` header. Never hand out superuser credentials.
+
+## Email (optional)
+
+Hub's invite feature always works link-only, with no setup. Configuring
+SMTP additionally emails the invite link automatically. Add these as GitHub
+repo secrets, with exactly these names — a production deploy resolves them
+automatically into `/opt/apps/.env` on the droplet (see `pocketbase`'s
+`environment` map in `deploy.yml`, and `infra/README.md`'s "Runtime
+secrets") — no SSH needed. All optional, all unset by default:
+
+| Variable              | Example (Zoho Mail)                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `SMTP_HOST`           | `smtp.zoho.com`                                                                                                            |
+| `SMTP_PORT`           | `587`                                                                                                                      |
+| `SMTP_USERNAME`       | your Zoho address                                                                                                          |
+| `SMTP_PASSWORD`       | an app-specific password (required if the account has 2FA enabled — a regular login password won't authenticate over SMTP) |
+| `SMTP_SENDER_ADDRESS` | usually the same as `SMTP_USERNAME`                                                                                        |
+| `SMTP_SENDER_NAME`    | e.g. `Ryan Rau Apps`                                                                                                       |
+
+`pb_hooks/mailer_config.pb.js` reads these at boot and configures
+PocketBase's own settings-level SMTP client (`$app.newMailClient()`) —
+generic, not Zoho-specific; any standard SMTP provider works the same way.
+Once configured, that mailer is available to _any_ hook in this file, for
+any app, not just invites.
+
+**Once this hook is deployed, these env vars are the sole source of truth
+for SMTP settings** — a superuser who hand-edits SMTP in the Admin UI
+(Settings → Mail) will have that change reverted on the next restart. Set
+it here, not there.
 
 ## Operations
 

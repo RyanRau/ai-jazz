@@ -144,11 +144,18 @@ crontab -e
 ## 7. Runtime secrets
 
 Apps with an `environment` map in `deploy.yml` read `${VAR}` values from
-`/opt/apps/.env`, which docker compose loads automatically:
+`/opt/apps/.env`, which docker compose loads automatically. This file isn't
+hand-maintained: a **production** deploy (a push to `main`) collects every
+`${VAR}` name referenced across every enabled app's `environment` map
+(`infra/collect_env_vars.py`), resolves each from a same-named GitHub
+secret — same by-name convention `build_args` already uses — and writes a
+fresh `/opt/apps/.env` on the droplet, `chmod 600` (set both on the runner
+before the copy, and again on the droplet as defense-in-depth). A missing
+secret just leaves that var empty rather than failing the deploy.
 
-```bash
-sudo chown deploy:deploy /opt/apps/.env && sudo chmod 600 /opt/apps/.env
-```
+Test deploys never touch this file — it's one droplet-wide file production
+also depends on, so only `main` writes it (mirrors "main is the whole
+truth," the same principle the test-app retirement step already applies).
 
 This file is plaintext on the droplet and is the blast radius of a droplet
 compromise — keep it to what's actually needed.

@@ -156,6 +156,42 @@ jobs:
             echo "=== Pushed $IMAGE ==="
           done
 
+      # Runtime env vars (e.g. SMTP_*) are resolved from same-named GitHub
+      # secrets the same way build_args are, and written into a fresh
+      # /opt/apps/.env on every production deploy -- production only, since
+      # /opt/apps/.env is one droplet-wide file also read by the test
+      # Compose project; a test run on an arbitrary branch has no business
+      # overwriting what production depends on. See infra/collect_env_vars.py
+      # and CLAUDE.md's "Adding a runtime env var".
+      - name: Resolve runtime env vars from secrets
+        if: env.TARGET == 'production' && steps.select.outputs.apps != ''
+        env:
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          set -euo pipefail
+          : > .env
+          chmod 600 .env
+          for name in $(python3 infra/collect_env_vars.py); do
+            value=$(jq -r --arg k "$name" '.[$k] // empty' <<< "$ALL_SECRETS")
+            if [ -z "$value" ]; then
+              echo "::warning::runtime env var '${name}' has no matching GitHub secret — it will be empty on the droplet"
+            fi
+            echo "${name}=${value}" >> .env
+          done
+
+      # scp-action transfers via tar, which preserves the 600 mode set above,
+      # so the file lands 600 on the droplet directly -- no permissive window.
+      - name: Copy runtime env vars to droplet
+        if: env.TARGET == 'production' && steps.select.outputs.apps != ''
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: deploy
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          source: ".env"
+          target: "/opt/apps"
+          overwrite: true
+
       # Nothing selected means nothing that reaches the droplet changed (a
       # docs-only push), so skip the deploy rather than restart every container.
       - name: Deploy to droplet
@@ -168,6 +204,18 @@ jobs:
           script: |
             set -e
             cd /opt/apps
+
+            # Existence guard: the copy step above always creates and lands
+            # .env by this point (even an empty one, if no app currently
+            # declares a runtime env var -- a valid state, not an error), so
+            # a missing file here means that step silently failed. That
+            # should be a loud deploy failure, not containers quietly
+            # starting with no runtime secrets.
+            if [ ! -f .env ]; then
+              echo "::error::.env missing on droplet after the copy step"
+              exit 1
+            fi
+            chmod 600 .env  # defense-in-depth; the copy step already lands it 600
 
             git pull origin main
 

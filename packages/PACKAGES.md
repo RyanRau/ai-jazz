@@ -316,16 +316,16 @@ promise settles, including on rejection.
 
 ### Form controls
 
-| Component       | Value type                                   | Extra props                                                                                                                    |
-| --------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `TextInput`     | `string`                                     | `placeholder`, `type` (`text\|email\|password\|url\|tel`)                                                                      |
-| `NumberInput`   | `number \| null`                             | `min`, `max`, `step`, `placeholder`                                                                                            |
-| `TextAreaInput` | `string`                                     | `rows` (default `4`), `placeholder`                                                                                            |
-| `Checkbox`      | `boolean`                                    | `label` is the text beside the box; `hideLabel` visually hides it (sr-only) for dense grids where the label would be redundant |
-| `Switch`        | `boolean`                                    | same shape as `Checkbox`, toggle UI                                                                                            |
-| `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                                                                                                  |
-| `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`                                                                                    |
-| `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                                                                                       |
+| Component       | Value type                                   | Extra props                                                                                                                         |
+| --------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `TextInput`     | `string`                                     | `placeholder`, `type` (`text\|email\|password\|url\|tel`), `readOnly` for a copyable but non-editable value (e.g. a generated link) |
+| `NumberInput`   | `number \| null`                             | `min`, `max`, `step`, `placeholder`                                                                                                 |
+| `TextAreaInput` | `string`                                     | `rows` (default `4`), `placeholder`                                                                                                 |
+| `Checkbox`      | `boolean`                                    | `label` is the text beside the box; `hideLabel` visually hides it (sr-only) for dense grids where the label would be redundant      |
+| `Switch`        | `boolean`                                    | same shape as `Checkbox`, toggle UI                                                                                                 |
+| `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                                                                                                       |
+| `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`                                                                                         |
+| `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                                                                                            |
 
 An empty `NumberInput` yields `null`, never `NaN`.
 
