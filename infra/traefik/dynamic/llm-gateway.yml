@@ -1,0 +1,49 @@
+# Static Traefik route for home-server/llm-gateway.
+#
+# Every other app on this droplet is discovered by Traefik through Docker
+# labels (see infra/generate-compose.py's make_service_labels()) -- this one
+# can't be, since it isn't a container Traefik can see at all. gateway.py
+# runs on a Mac at home, reachable from this droplet only over the WireGuard
+# tunnel to the UniFi router (see home-server/llm-gateway/README.md and the
+# tunnel setup notes). This file is Traefik's file provider equivalent of
+# what make_service_labels() generates for a normal app -- same security
+# headers, same rate limit, just written by hand since there's no container
+# label to generate them from.
+#
+# The backend URL below is the Mac's real LAN IP, reachable because the
+# UniFi router routes/allows traffic from this tunnel to it -- update it if
+# that IP ever changes (it's a DHCP reservation in UniFi, not likely to
+# drift, but not physically pinned either).
+http:
+  routers:
+    llm-gateway:
+      rule: "Host(`llm.ryanzrau.dev`)"
+      entrypoints:
+        - websecure
+      tls:
+        certResolver: le
+      service: llm-gateway
+      middlewares:
+        - llm-gateway-security
+        - llm-gateway-ratelimit
+
+  middlewares:
+    llm-gateway-security:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        customFrameOptionsValue: SAMEORIGIN
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+    llm-gateway-ratelimit:
+      rateLimit:
+        average: 100
+        burst: 50
+
+  services:
+    llm-gateway:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.1.72:8000"
