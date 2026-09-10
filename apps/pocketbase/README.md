@@ -118,9 +118,11 @@ the `Authorization` header. Never hand out superuser credentials.
 ## Email (optional)
 
 Hub's invite feature always works link-only, with no setup. Configuring
-SMTP additionally emails the invite link automatically. Set these in
-`/opt/apps/.env` on the droplet (see `pocketbase`'s `environment` map in
-`deploy.yml`) — all optional, all unset by default:
+SMTP additionally emails the invite link automatically. Add these as GitHub
+repo secrets, with exactly these names — a production deploy resolves them
+automatically into `/opt/apps/.env` on the droplet (see `pocketbase`'s
+`environment` map in `deploy.yml`, and `infra/README.md`'s "Runtime
+secrets") — no SSH needed. All optional, all unset by default:
 
 | Variable              | Example (Zoho Mail)                                                                                                        |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------- |

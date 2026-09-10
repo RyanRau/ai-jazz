@@ -24,6 +24,11 @@ CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", REPO_ROOT / "deploy.yml"))
 APP_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 SUBDOMAIN_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 BUILD_ARG_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+# Bare ${NAME} only -- must match infra/collect_env_vars.py's VAR_REF_RE
+# exactly, since that script silently skips anything this doesn't accept
+# (e.g. Compose's ${VAR:-default} form).
+ENV_VALUE_RE = re.compile(r"^\$\{[A-Z_][A-Z0-9_]*\}$")
+STRAY_VAR_RE = re.compile(r"\$\{")
 
 TOP_LEVEL_KEYS = {
     "domain",
@@ -61,6 +66,38 @@ def warn(message):
     warnings.append(message)
 
 
+def check_environment(where, environment):
+    if environment is None:
+        return
+    if not isinstance(environment, dict):
+        error(f"{where}.environment: must be a mapping of NAME: value")
+        return
+    for key, value in environment.items():
+        if not isinstance(value, str) or not ENV_VALUE_RE.match(value):
+            error(
+                f"{where}.environment.{key}: '{value}' must be exactly '${{VAR_NAME}}' "
+                "(resolved from a same-named GitHub secret at deploy -- no default-value syntax)"
+            )
+
+
+def check_no_var_refs(where, field, value):
+    # Compose substitutes ${VAR} anywhere in the rendered YAML, not just
+    # under `environment:` -- a stray reference elsewhere would validate
+    # cleanly and get silently substituted at `docker compose up` time,
+    # invisible to infra/collect_env_vars.py, which only scans `environment`.
+    if isinstance(value, str):
+        if STRAY_VAR_RE.search(value):
+            error(
+                f"{where}.{field}: '{value}' -- \\${{VAR}} syntax is only supported in 'environment'"
+            )
+    elif isinstance(value, list):
+        for item in value:
+            check_no_var_refs(where, field, item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            check_no_var_refs(where, field, item)
+
+
 def check_top_level(config):
     for key in ("domain", "registry", "letsencrypt_email"):
         if not config.get(key):
@@ -83,6 +120,9 @@ def check_services(config):
         for key in svc:
             if key not in SERVICE_KEYS:
                 warn(f"{where}: unknown key '{key}' — ignored by generate-compose.py")
+        check_environment(where, svc.get("environment"))
+        check_no_var_refs(where, "volumes", svc.get("volumes"))
+        check_no_var_refs(where, "healthcheck", svc.get("healthcheck"))
 
 
 def check_volumes(where, volumes):
@@ -183,13 +223,13 @@ def check_app(name, app, config, claimed):
         for arg in build_args:
             if not isinstance(arg, str) or not BUILD_ARG_RE.match(arg):
                 error(f"{where}.build_args: '{arg}' must be UPPER_SNAKE_CASE")
+    check_no_var_refs(where, "build_args", build_args)
 
-    environment = app.get("environment")
-    if environment is not None and not isinstance(environment, dict):
-        error(f"{where}.environment: must be a mapping of NAME: value")
+    check_environment(where, app.get("environment"))
 
     if app.get("volumes") is not None:
         check_volumes(where, app["volumes"])
+    check_no_var_refs(where, "volumes", app.get("volumes"))
 
     for dep, condition in (app.get("depends_on") or {}).items():
         if dep not in (config.get("services") or {}):
@@ -200,11 +240,13 @@ def check_app(name, app, config, claimed):
             error(
                 f"{where}.depends_on.{dep}: condition should be e.g. 'service_healthy'"
             )
+    check_no_var_refs(where, "depends_on", app.get("depends_on"))
 
     healthcheck = app.get("healthcheck")
     if healthcheck is not None:
         if not isinstance(healthcheck, dict) or "test" not in healthcheck:
             error(f"{where}.healthcheck: must be a mapping containing 'test'")
+    check_no_var_refs(where, "healthcheck", healthcheck)
 
     rate_limit = app.get("rate_limit")
     if rate_limit is not None:
