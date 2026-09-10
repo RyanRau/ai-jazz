@@ -71,11 +71,12 @@ Beyond PocketBase's built-in `users` (two extra fields: `is_admin` — dashboard
 admin rights; `is_service` — marks a machine/service account like the
 llm-gateway, checked in hooks instead of granted broader access):
 
-| Collection                          | What it's for                                                                                                                                                                                                                                                                                          |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `registry_apps` / `registry_grants` | Cross-app dashboard registry — the catalog of apps and who may see which one. Any signed-in user can read `registry_apps`; `registry_grants` is superuser-write-only (Admin UI), user-read-own-rows-only. `hub` reads `registry_grants` to know what to show; `stash`/`tony` gate access the same way. |
-| `stash_items`                       | `stash`'s inventory rows — owner-scoped, with view-only sharing via `shared_with` (a list of user ids) resolved through `pb_hooks/stash_shareable_users.pb.js`.                                                                                                                                        |
-| `llm_api_keys` / `llm_usage_logs`   | API keys and per-request usage for `home-server/llm-gateway`. Both are superuser-only via unset rules — every read/write goes through `pb_hooks/llm.pb.js` instead, so a plaintext key exists only in its one creation response (only its hash and a short prefix are ever stored).                    |
+| Collection                          | What it's for                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `registry_apps` / `registry_grants` | Cross-app dashboard registry — the catalog of apps and who may see which one. Any signed-in user can read `registry_apps`; `registry_grants` is superuser-write-only (Admin UI), user-read-own-rows-only. `hub` reads `registry_grants` to know what to show; `stash`/`tony` gate access the same way.                                     |
+| `stash_items`                       | `stash`'s inventory rows — owner-scoped, with view-only sharing via `shared_with` (a list of user ids) resolved through `pb_hooks/stash_shareable_users.pb.js`.                                                                                                                                                                            |
+| `llm_api_keys` / `llm_usage_logs`   | API keys and per-request usage for `home-server/llm-gateway`. Both are superuser-only via unset rules — every read/write goes through `pb_hooks/llm.pb.js` instead, so a plaintext key exists only in its one creation response (only its hash and a short prefix are ever stored).                                                        |
+| `llm_chats` / `llm_chat_messages`   | Persistent chat history for `tony`'s Chat page. Both are superuser-only via unset rules, owner-only with no admin override (unlike the two above), all access through `pb_hooks/chat.pb.js`. `content` is AES-encrypted at rest (`$security.encrypt`/`decrypt`, key from the `CHAT_ENCRYPTION_KEY` env var — see "Runtime secrets" below). |
 
 ## Talking to it from an app
 
@@ -125,6 +126,14 @@ tar cron.
 **Upgrades:** `PB_VERSION` is pinned in the `Dockerfile`. PocketBase is pre-1.0
 and ships breaking changes between minor versions — read the release notes and
 take a backup before bumping.
+
+**Runtime secrets:** `deploy.yml` declares `CHAT_ENCRYPTION_KEY` (the AES key
+`pb_hooks/chat.pb.js` uses to encrypt chat message content at rest) as an
+`environment` entry, read from `/opt/apps/.env` on the droplet — see
+`infra/README.md`'s "Runtime secrets" section for how that file is set up. A
+missing key falls back to a hardcoded dev-only value, so don't skip this in
+production or every chat message is encrypted with a key anyone can read out
+of this repo.
 
 ## Local development
 

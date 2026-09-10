@@ -127,6 +127,38 @@ routerAdd(
   $apis.requireAuth()
 );
 
+// Rename a key. Body: { id, label }. Admin: any key. Otherwise: only your
+// own -- same ownership check as revoke.
+routerAdd(
+  "POST",
+  "/api/custom/llm/keys/rename",
+  (e) => {
+    const auth = e.requestInfo().auth;
+    if (!auth) {
+      throw new ForbiddenError("Sign-in required.");
+    }
+
+    const body = e.requestInfo().body;
+    const id = (body.id || "").trim();
+    const label = (body.label || "").trim();
+    if (!id) {
+      throw new BadRequestError("id is required.");
+    }
+    if (!label) {
+      throw new BadRequestError("label is required.");
+    }
+    const record = e.app.findRecordById("llm_api_keys", id);
+    const isAdmin = auth.get("is_admin") === true;
+    if (!isAdmin && record.getString("user") !== auth.id) {
+      throw new ForbiddenError("You don't own this key.");
+    }
+    record.set("label", label);
+    e.app.save(record);
+    return e.json(200, { id: record.id, label: record.getString("label") });
+  },
+  $apis.requireAuth()
+);
+
 // Usage rows for the tony dashboard. Admin: every row. Otherwise: only rows
 // for keys you own. Optional ?key=<id> narrows to one key (still subject to
 // the same ownership check).
@@ -174,7 +206,9 @@ routerAdd(
 
 // Gateway-facing: the active (non-revoked) key hashes, for the gateway's
 // local validation cache. Never returns key_prefix/label -- the gateway
-// only needs hash -> id.
+// only needs hash -> id, plus the owning user id so it can attribute
+// anything it creates on a caller's behalf (e.g. chat rows) to the right
+// person.
 routerAdd(
   "GET",
   "/api/custom/llm/keys/active",
@@ -185,7 +219,11 @@ routerAdd(
     }
 
     const records = e.app.findRecordsByFilter("llm_api_keys", "revoked_at = ''", "", 0, 0);
-    const keys = records.map((r) => ({ id: r.id, key_hash: r.getString("key_hash") }));
+    const keys = records.map((r) => ({
+      id: r.id,
+      key_hash: r.getString("key_hash"),
+      user: r.getString("user"),
+    }));
     return e.json(200, { keys: keys });
   },
   $apis.requireAuth()

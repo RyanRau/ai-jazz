@@ -332,6 +332,21 @@ An empty `NumberInput` yields `null`, never `NaN`.
 `FormInputLayout` is exported for wrapping a custom control so it matches the
 rest; it takes a render function receiving `{ id, describedBy, invalid }`.
 
+#### `FileDropzone`
+
+| Prop       | Type                                        | Default                                  |
+| ---------- | ------------------------------------------- | ---------------------------------------- |
+| `value`    | `{ name: string; dataUrl: string } \| null` | required                                 |
+| `onChange` | `(value) => void`                           | required                                 |
+| `accept`   | `string`                                    | — (native `accept`, e.g. `"image/*"`)    |
+| `prompt`   | `string`                                    | `"Drag a file here, or click to browse"` |
+
+Drag-and-drop with a click-to-browse fallback (a `<label>` over a
+visually-hidden native input, so keyboard/click semantics come free). Reads
+the file to a data URL itself and hands back `{ name, dataUrl }` — the
+caller never touches `FileReader`. Shows a thumbnail for an image value, an
+upload icon otherwise, plus a Remove button once a file's selected.
+
 ### Feedback
 
 #### `Alert`
@@ -396,8 +411,8 @@ A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `check`,
 `user`, `plus`, `trash`, `search`, `externalLink`, `image`, `key`, `chat`,
-`menu` (`key`/`chat`/`menu` are hand-drawn for this repo, not adapted from
-Lucide). `color` defaults to `"currentColor"` so it inherits
+`menu`, `upload` (`key`/`chat`/`menu` are hand-drawn for this repo, not adapted
+from Lucide). `color` defaults to `"currentColor"` so it inherits
 surrounding text/button color for free — pass `label` only for an icon
 standing alone with no adjacent text (it's decorative/`aria-hidden`
 otherwise).
@@ -437,6 +452,21 @@ table view. Colors are caller-supplied — pick a categorical pair with the
 dataviz skill's `scripts/validate_palette.js` and pass different hexes for
 light vs. dark mode (`useColorScheme().resolved`); a pair validated against
 one surface can fail against the other.
+
+#### `BarChart`
+
+| Prop          | Type                    | Default              |
+| ------------- | ----------------------- | -------------------- |
+| `series`      | `BarChartSeries[]`      | required             |
+| `height`      | `number`                | `260`                |
+| `formatValue` | `(n: number) => string` | `n.toLocaleString()` |
+
+Same props shape as `LineChart` (`BarChartSeries` is the same `{ key, label,
+color, points }` shape) — the two are interchangeable views over identical
+data, e.g. a day-by-day comparison next to a trend line. Grouped, top-rounded
+bars per category, a legend, a hover highlight + tooltip, and the same
+"Show table" toggle. Same color-pair rule as `LineChart`: validate with the
+dataviz skill's script, different hexes per color scheme.
 
 #### `Badge`
 

@@ -25,6 +25,7 @@ export * from "./components/display/Badge";
 export * from "./components/display/Table";
 export * from "./components/display/StatTile";
 export * from "./components/display/LineChart";
+export * from "./components/display/BarChart";
 
 // Overlay
 export * from "./components/overlay/Modal";
@@ -52,6 +53,7 @@ export * from "./components/form/Checkbox";
 export * from "./components/form/Switch";
 export * from "./components/form/RadioGroup";
 export * from "./components/form/Dropdown";
+export * from "./components/form/FileDropzone";
 
 // Form state
 export * from "./form";

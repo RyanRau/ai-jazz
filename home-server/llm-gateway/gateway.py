@@ -53,12 +53,14 @@ def resolve_model(model_field: Optional[str]) -> dict:
 
 def check_api_key(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-) -> str:
-    """Returns the matched key's PocketBase record id, for usage attribution."""
-    key_id = creds and key_store.check(creds.credentials)
-    if not key_id:
+) -> dict:
+    """Returns the matched key's PocketBase record id and owning user id --
+    usage attribution needs the former, the chat routes need the latter to
+    attribute a new chat/message to the right person."""
+    entry = creds and key_store.check(creds.credentials)
+    if not entry:
         raise HTTPException(401, "Invalid or missing API key")
-    return key_id
+    return {"key_id": entry["id"], "user_id": entry["user"]}
 
 
 class KeyStore:
@@ -76,7 +78,7 @@ class KeyStore:
         self.refresh_interval = auth_cfg.get("key_refresh_seconds", 60)
         self.flush_interval = auth_cfg.get("usage_flush_seconds", 20)
         self._token: Optional[str] = None
-        self._active_hashes: dict[str, str] = {}  # sha256(key) -> PocketBase record id
+        self._active_hashes: dict[str, dict] = {}  # sha256(key) -> {"id", "user"}
         self._usage_queue: asyncio.Queue = asyncio.Queue(maxsize=10_000)
         self._client = httpx.AsyncClient(
             base_url=auth_cfg["pocketbase_url"].rstrip("/"), timeout=10
@@ -94,7 +96,7 @@ class KeyStore:
                 task.cancel()
         await self._client.aclose()
 
-    def check(self, presented_key: str) -> Optional[str]:
+    def check(self, presented_key: str) -> Optional[dict]:
         digest = hashlib.sha256(presented_key.encode()).hexdigest()
         return self._active_hashes.get(digest)
 
@@ -137,7 +139,8 @@ class KeyStore:
             try:
                 r = await self._request("GET", "/api/custom/llm/keys/active")
                 self._active_hashes = {
-                    row["key_hash"]: row["id"] for row in r.json()["keys"]
+                    row["key_hash"]: {"id": row["id"], "user": row.get("user", "")}
+                    for row in r.json()["keys"]
                 }
             except httpx.HTTPError as e:
                 print(f"[gateway] key refresh failed, keeping cached keys: {e}")
@@ -362,7 +365,8 @@ async def list_models():
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: Request, key_id: str = Depends(check_api_key)):
+async def chat_completions(request: Request, auth: dict = Depends(check_api_key)):
+    key_id = auth["key_id"]
     body = await request.json()
     model_cfg = resolve_model(body.get("model"))
 
@@ -400,6 +404,33 @@ async def chat_completions(request: Request, key_id: str = Depends(check_api_key
         await manager.release()
 
 
+def _parse_sse_json_lines(
+    new_bytes: bytes, leftover: bytes
+) -> tuple[list[dict], bytes]:
+    """Splits `leftover + new_bytes` into complete lines, JSON-parses any
+    `data: {...}` line (skipping keepalives/`[DONE]`), and returns the
+    parsed objects plus whatever trailing partial line should carry over to
+    the next call. Shared by every place that needs to look *inside* an
+    SSE stream without disturbing the raw bytes also being relayed
+    downstream unmodified.
+    """
+    buf = leftover + new_bytes
+    *lines, new_leftover = buf.split(b"\n")
+    parsed: list[dict] = []
+    for line in lines:
+        line = line.strip()
+        if not line.startswith(b"data:"):
+            continue
+        payload = line[len(b"data:") :].strip()
+        if payload in (b"", b"[DONE]"):
+            continue
+        try:
+            parsed.append(json.loads(payload))
+        except ValueError:
+            continue
+    return parsed, new_leftover
+
+
 async def _proxy_stream(
     client: httpx.AsyncClient, body: dict, release, key_id: str
 ) -> StreamingResponse:
@@ -414,23 +445,11 @@ async def _proxy_stream(
                     yield chunk
                     # Look for a `usage` field in each SSE chunk (OpenAI-style
                     # servers put it in the final one) without buffering the
-                    # whole stream -- only an unterminated trailing line
-                    # carries over to the next chunk.
-                    leftover += chunk
-                    *lines, leftover = leftover.split(b"\n")
-                    for line in lines:
-                        line = line.strip()
-                        if not line.startswith(b"data:"):
-                            continue
-                        payload = line[len(b"data:") :].strip()
-                        if payload in (b"", b"[DONE]"):
-                            continue
-                        try:
-                            parsed = json.loads(payload)
-                        except ValueError:
-                            continue
-                        if parsed.get("usage"):
-                            usage = parsed["usage"]
+                    # whole stream.
+                    events, leftover = _parse_sse_json_lines(chunk, leftover)
+                    for ev in events:
+                        if ev.get("usage"):
+                            usage = ev["usage"]
         finally:
             await client.aclose()
             key_store.record_usage(
@@ -452,6 +471,176 @@ def _contains_image(body: dict) -> bool:
                 if isinstance(part, dict) and part.get("type") == "image_url":
                     return True
     return False
+
+
+async def _append_chat_message(
+    message_id: str,
+    content: str,
+    status: str,
+    tokens_in: int = 0,
+    tokens_out: int = 0,
+    response_ms: Optional[int] = None,
+):
+    """Persists the running (or final) content of a chat message via
+    PocketBase's service-account-only route. Best-effort: a failure here
+    logs and moves on rather than raising -- losing one periodic save
+    mid-stream shouldn't kill the generation, and the final "complete" call
+    is what actually matters for durability.
+    """
+    payload = {"message_id": message_id, "content": content, "status": status}
+    if status == "complete":
+        payload["tokens_in"] = tokens_in
+        payload["tokens_out"] = tokens_out
+        if response_ms is not None:
+            payload["response_ms"] = response_ms
+    try:
+        await key_store._request(
+            "POST", "/api/custom/llm/chats/messages/append", json=payload
+        )
+    except httpx.HTTPError as e:
+        print(f"[gateway] failed to persist chat message {message_id}: {e}")
+
+
+async def _generate_chat_response(
+    model_cfg: dict,
+    body: dict,
+    key_id: str,
+    assistant_message_id: str,
+    queue: "asyncio.Queue[Optional[bytes]]",
+):
+    """Runs as its own asyncio task, independent of the HTTP request that
+    started it -- this is deliberate, it's what lets generation keep going
+    (and get saved) after the caller disconnects. Republishes raw SSE
+    chunks to `queue` for whoever's currently watching (if anyone), and
+    periodically persists the accumulated text to PocketBase so a later
+    visit sees it too. Puts `None` on the queue when done, as the
+    end-of-stream sentinel for a live relay.
+    """
+    FLUSH_INTERVAL = 0.75
+
+    leftover = b""
+    usage: dict = {}
+    content_parts: list[str] = []
+    last_flush = time.time()
+    start = time.time()
+    acquired = False
+    client: Optional[httpx.AsyncClient] = None
+    try:
+        await manager.acquire(model_cfg)
+        acquired = True
+        timeout = CONFIG["server"].get("request_timeout_seconds", 300)
+        client = httpx.AsyncClient(base_url=manager.base_url, timeout=timeout)
+        async with client.stream("POST", "/v1/chat/completions", json=body) as r:
+            async for chunk in r.aiter_bytes():
+                await queue.put(chunk)
+                events, leftover = _parse_sse_json_lines(chunk, leftover)
+                for ev in events:
+                    if ev.get("usage"):
+                        usage = ev["usage"]
+                    choices = ev.get("choices") or []
+                    delta = (
+                        (choices[0].get("delta") or {}).get("content")
+                        if choices
+                        else None
+                    )
+                    if delta:
+                        content_parts.append(delta)
+                if time.time() - last_flush > FLUSH_INTERVAL:
+                    await _append_chat_message(
+                        assistant_message_id, "".join(content_parts), "streaming"
+                    )
+                    last_flush = time.time()
+
+        await _append_chat_message(
+            assistant_message_id,
+            "".join(content_parts),
+            "complete",
+            tokens_in=usage.get("prompt_tokens", 0),
+            tokens_out=usage.get("completion_tokens", 0),
+            response_ms=int((time.time() - start) * 1000),
+        )
+        key_store.record_usage(
+            key_id,
+            model_cfg["name"],
+            usage.get("prompt_tokens", 0),
+            usage.get("completion_tokens", 0),
+        )
+    except Exception as e:
+        print(f"[gateway] chat generation failed: {e}")
+        await _append_chat_message(
+            assistant_message_id, "".join(content_parts), "error"
+        )
+    finally:
+        # acquire()/the client can fail before either exists -- guard both,
+        # since a bare `finally` here previously left a message stuck at
+        # "pending" forever (and any live watcher hanging) on an acquire
+        # failure, which never entered the try block above.
+        if client is not None:
+            await client.aclose()
+        if acquired:
+            await manager.release()
+        await queue.put(None)
+
+
+@app.post("/v1/chat/send")
+async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
+    """Starts (or continues) a chat turn. Body: { chat_id?, model, messages }
+    -- same shape as /v1/chat/completions, just with an optional chat_id to
+    continue an existing conversation. The actual generation runs as a
+    standalone background task (see _generate_chat_response) that keeps
+    going even if this request's connection drops; this handler's SSE
+    response is just a live window onto it for as long as the caller stays
+    connected.
+    """
+    body = await request.json()
+    model_cfg = resolve_model(body.get("model"))
+
+    if _contains_image(body) and not model_cfg.get("vision"):
+        raise HTTPException(
+            400, f"Model '{model_cfg['name']}' does not support image input."
+        )
+
+    body["model"] = model_cfg["name"]
+    body["stream"] = True
+
+    messages = body.get("messages") or []
+    if not messages or messages[-1].get("role") != "user":
+        raise HTTPException(400, "messages must end with a user turn.")
+    user_content = messages[-1].get("content")
+    if not isinstance(user_content, str):
+        raise HTTPException(400, "Chat messages must be plain text.")
+
+    create = await key_store._request(
+        "POST",
+        "/api/custom/llm/chats/messages/create",
+        json={
+            "user_id": auth["user_id"],
+            "chat_id": body.get("chat_id") or "",
+            "model": model_cfg["name"],
+            "content": user_content,
+        },
+    )
+    ids = create.json()
+
+    queue: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
+    asyncio.create_task(
+        _generate_chat_response(
+            model_cfg, body, auth["key_id"], ids["assistant_message_id"], queue
+        )
+    )
+
+    async def relay():
+        # The ids arrive as their own first SSE event -- the client needs
+        # assistant_message_id to know what to poll if it leaves and comes
+        # back before generation finishes.
+        yield f"data: {json.dumps({'type': 'ids', **ids})}\n\n".encode()
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield chunk
+
+    return StreamingResponse(relay(), media_type="text/event-stream")
 
 
 def main():

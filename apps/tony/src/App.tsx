@@ -4,11 +4,12 @@ import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
 import { AppSwitcher } from "./AppSwitcher";
+import { ChatPage } from "./ChatPage";
 import { KeysPage } from "./KeysPage";
 import { PlaygroundPage } from "./PlaygroundPage";
 import { pb } from "./pb";
 
-type Tab = "playground" | "keys";
+type Tab = "chat" | "playground" | "keys";
 
 function App() {
   const record = useAuthRecord();
@@ -56,7 +57,8 @@ function App() {
       sideNav={
         <SideNav
           items={[
-            { key: "playground", label: "Playground", icon: "chat" },
+            { key: "chat", label: "Chat", icon: "chat" },
+            { key: "playground", label: "Playground", icon: "search" },
             { key: "keys", label: "Keys", icon: "key" },
           ]}
           activeKey={tab}
@@ -64,6 +66,7 @@ function App() {
         />
       }
     >
+      {tab === "chat" && <ChatPage />}
       {tab === "playground" && <PlaygroundPage />}
       {tab === "keys" && <KeysPage />}
     </AppShell>

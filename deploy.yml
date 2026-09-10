@@ -27,6 +27,12 @@ apps:
     subdomain: "api"
     enabled: true
     port: 8080
+    # AES key for chat.pb.js's encryption-at-rest of chat message content —
+    # see infra/README.md's "Runtime secrets" for how this reaches
+    # /opt/apps/.env. Without it, chat.pb.js falls back to a hardcoded
+    # dev-only key, which is fine locally but not in production.
+    environment:
+      CHAT_ENCRYPTION_KEY: "${CHAT_ENCRYPTION_KEY}"
     volumes:
       - pb_data:/pb/pb_data
     healthcheck:
