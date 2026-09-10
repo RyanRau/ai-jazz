@@ -5,6 +5,8 @@ export type IconName =
   | "logOut"
   | "close"
   | "chevronDown"
+  | "chevronLeft"
+  | "chevronRight"
   | "check"
   | "user"
   | "plus"

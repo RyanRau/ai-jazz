@@ -4,15 +4,22 @@ import { useTheme } from "../../../theme";
 
 export type BadgeVariant = "neutral" | "primary" | "success" | "warning" | "error";
 
+export type BadgeEmphasis = "outline" | "subtle" | "solid";
+
 export type BadgeProps = {
   children: ReactNode;
   /** Colour of the badge. Defaults to `"neutral"`. */
   variant?: BadgeVariant;
-  /** `"subtle"` tints the background; `"solid"` fills it. Defaults to `"subtle"`. */
-  emphasis?: "subtle" | "solid";
+  /**
+   * - `"outline"` — transparent background, colored border and text (default —
+   *   the flat status-chip look)
+   * - `"subtle"` — tints the background
+   * - `"solid"` — fills it
+   */
+  emphasis?: BadgeEmphasis;
 };
 
-export default function Badge({ children, variant = "neutral", emphasis = "subtle" }: BadgeProps) {
+export default function Badge({ children, variant = "neutral", emphasis = "outline" }: BadgeProps) {
   const theme = useTheme();
 
   const accent = {
@@ -23,7 +30,14 @@ export default function Badge({ children, variant = "neutral", emphasis = "subtl
     error: theme.colors.error,
   }[variant];
 
-  const solid = emphasis === "solid";
+  const background =
+    emphasis === "solid"
+      ? accent
+      : emphasis === "subtle"
+        ? `color-mix(in srgb, ${accent} 16%, ${theme.colors.background})`
+        : "transparent";
+  const border =
+    emphasis === "solid" ? "transparent" : `color-mix(in srgb, ${accent} 45%, transparent)`;
 
   return (
     <span
@@ -38,12 +52,9 @@ export default function Badge({ children, variant = "neutral", emphasis = "subtl
         font-weight: 600;
         line-height: 1.6;
         white-space: nowrap;
-        background-color: ${solid
-          ? accent
-          : `color-mix(in srgb, ${accent} 16%, ${theme.colors.background})`};
-        color: ${solid ? theme.colors.textOnAccent : accent};
-        border: 1px solid
-          ${solid ? "transparent" : `color-mix(in srgb, ${accent} 35%, transparent)`};
+        background-color: ${background};
+        color: ${emphasis === "solid" ? theme.colors.textOnAccent : accent};
+        border: 1px solid ${border};
       `}
     >
       {children}

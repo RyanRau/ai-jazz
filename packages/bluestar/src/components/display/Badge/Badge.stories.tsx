@@ -16,7 +16,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof Badge>;
 
-export const Subtle: Story = {
+export const Outline: Story = {
   render: () => (
     <Flexbox direction="row" gap={8} flexWrap="wrap" alignItems="center">
       <Badge>Draft</Badge>
@@ -24,6 +24,33 @@ export const Subtle: Story = {
       <Badge variant="success">Published</Badge>
       <Badge variant="warning">Review</Badge>
       <Badge variant="error">Failed</Badge>
+    </Flexbox>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: "The default — transparent background, colored border and text.",
+      },
+    },
+  },
+};
+
+export const Subtle: Story = {
+  render: () => (
+    <Flexbox direction="row" gap={8} flexWrap="wrap" alignItems="center">
+      <Badge emphasis="subtle">Draft</Badge>
+      <Badge emphasis="subtle" variant="primary">
+        Active
+      </Badge>
+      <Badge emphasis="subtle" variant="success">
+        Published
+      </Badge>
+      <Badge emphasis="subtle" variant="warning">
+        Review
+      </Badge>
+      <Badge emphasis="subtle" variant="error">
+        Failed
+      </Badge>
     </Flexbox>
   ),
 };

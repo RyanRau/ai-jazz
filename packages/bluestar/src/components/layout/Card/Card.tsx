@@ -7,11 +7,16 @@ type CardProps = {
   children: React.ReactNode;
   /** Padding in pixels on all sides. Defaults to `16`. */
   padding?: Spacing;
-  /** CSS box-shadow value. Pass `"none"` to remove. Defaults to `theme.shadow.md`. */
+  /**
+   * CSS box-shadow value. Defaults to `"none"` — the border is the surface's
+   * primary separator, flat-dashboard style. Pass `theme.shadow.sm/md/lg`
+   * for a card that should read as genuinely elevated (rare — reserve real
+   * shadow for overlays: menus, modals, popovers).
+   */
   shadow?: string;
 };
 
-export default function Card({ children, padding = 16, shadow }: CardProps) {
+export default function Card({ children, padding = 16, shadow = "none" }: CardProps) {
   const theme = useTheme();
 
   return (
@@ -21,7 +26,7 @@ export default function Card({ children, padding = 16, shadow }: CardProps) {
         border: 1px solid ${theme.colors.border};
         border-radius: ${theme.radius.md};
         padding: ${padding}px;
-        box-shadow: ${shadow ?? theme.shadow.md};
+        box-shadow: ${shadow};
       `}
     >
       {children}

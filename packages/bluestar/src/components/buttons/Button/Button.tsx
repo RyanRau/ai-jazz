@@ -6,6 +6,14 @@ import Text from "../../text/Text/Text";
 
 export type ButtonVariant = "primary" | "secondary" | "creation" | "destructive";
 
+/**
+ * Structural style, independent of `variant`'s color intent.
+ * - `"solid"` — filled background (default; the only appearance before this existed)
+ * - `"outline"` — transparent background, colored border and label
+ * - `"text"` — transparent background, no border — lowest emphasis
+ */
+export type ButtonAppearance = "solid" | "outline" | "text";
+
 export type ButtonProps = Omit<ComponentPropsWithoutRef<"button">, "disabled"> & {
   /** The text label. Used as content when no children are provided. */
   label: string;
@@ -17,6 +25,8 @@ export type ButtonProps = Omit<ComponentPropsWithoutRef<"button">, "disabled"> &
    * - `"destructive"` — red, warns of irreversible actions
    */
   variant?: ButtonVariant;
+  /** Structural style — solid fill, outlined, or text-only. Defaults to `"solid"`. */
+  appearance?: ButtonAppearance;
   /** Disables the button — applies reduced opacity and a not-allowed cursor. */
   isDisabled?: boolean;
   /**
@@ -30,13 +40,13 @@ export type ButtonProps = Omit<ComponentPropsWithoutRef<"button">, "disabled"> &
 function getColors(variant: ButtonVariant, theme: Theme) {
   switch (variant) {
     case "secondary":
-      return { bg: theme.colors.secondary, hover: theme.colors.secondaryHover };
+      return { accent: theme.colors.secondary, accentHover: theme.colors.secondaryHover };
     case "creation":
-      return { bg: theme.colors.success, hover: theme.colors.successHover };
+      return { accent: theme.colors.success, accentHover: theme.colors.successHover };
     case "destructive":
-      return { bg: theme.colors.error, hover: theme.colors.errorHover };
+      return { accent: theme.colors.error, accentHover: theme.colors.errorHover };
     default:
-      return { bg: theme.colors.primary, hover: theme.colors.primaryHover };
+      return { accent: theme.colors.primary, accentHover: theme.colors.primaryHover };
   }
 }
 
@@ -45,6 +55,7 @@ export default function Button({
   children,
   isDisabled,
   variant = "primary",
+  appearance = "solid",
   density = "normal",
   // Native button semantics. Defaults to "button" so a button inside a form
   // doesn't submit it by accident; pass "submit" deliberately (or use
@@ -53,12 +64,19 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const theme = useTheme();
-  const { bg, hover } = getColors(variant, theme);
-  const padding = density === "dense" ? "4px 10px" : "8px 16px";
+  const { accent, accentHover } = getColors(variant, theme);
+  // A 1.5px border eats into the outline appearance's box, so its padding
+  // is trimmed to match — otherwise it'd read visibly larger than solid/text
+  // buttons at the same density.
+  const borderWidth = appearance === "outline" ? 1.5 : 0;
+  const [paddingY, paddingX] = density === "dense" ? [4, 10] : [8, 16];
   // Comfortable touch targets: the label text plus its own padding lands
   // under the ~44px Apple/Google guideline, especially for "dense" — this
   // floors it without changing the visual padding.
   const minHeight = density === "dense" ? 36 : 44;
+
+  const textColor = appearance === "solid" ? theme.colors.textOnAccent : accent;
+  const tint = (pct: number) => `color-mix(in srgb, ${accent} ${pct}%, transparent)`;
 
   return (
     <button
@@ -66,24 +84,21 @@ export default function Button({
       disabled={isDisabled}
       className={css`
         border-radius: ${theme.radius.md};
-        border: none;
+        border: ${appearance === "outline" ? `${borderWidth}px solid ${accent}` : "none"};
         font-family: ${theme.fonts.body};
-        color: ${theme.colors.textOnAccent};
-        padding: ${padding};
+        color: ${textColor};
+        padding: ${paddingY - borderWidth}px ${paddingX - borderWidth}px;
         min-height: ${minHeight}px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        background-color: ${bg};
+        background-color: ${appearance === "solid" ? accent : "transparent"};
         cursor: pointer;
-        transition:
-          box-shadow 0.15s ease,
-          background-color 0.15s ease;
+        transition: background-color 0.15s ease;
 
         &:hover:not(:disabled) {
-          box-shadow: ${theme.shadow.md};
-          background-color: ${hover};
+          background-color: ${appearance === "solid" ? accentHover : tint(10)};
         }
 
         &:focus-visible {
@@ -99,7 +114,7 @@ export default function Button({
       {...props}
     >
       {children ?? (
-        <Text variant="label" color={theme.colors.textOnAccent}>
+        <Text variant="label" color={textColor}>
           {label}
         </Text>
       )}

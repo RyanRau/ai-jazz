@@ -75,6 +75,32 @@ export const Destructive: Story = {
   },
 };
 
+export const Outline: Story = {
+  args: {
+    label: "Outline",
+    appearance: "outline",
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: "Transparent background, colored border and label — the MUI 'Outlined' style.",
+      },
+    },
+  },
+};
+
+export const Text: Story = {
+  args: {
+    label: "Text",
+    appearance: "text",
+  },
+  parameters: {
+    docs: {
+      description: { story: "No border or fill — lowest emphasis, MUI's 'Text' style." },
+    },
+  },
+};
+
 export const Disabled: Story = {
   args: {
     label: "Unavailable",

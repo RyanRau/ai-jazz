@@ -32,11 +32,15 @@ export * from "./components/overlay/Modal";
 export * from "./components/overlay/ConfirmDialog";
 export * from "./components/overlay/Menu";
 export * from "./components/overlay/MenuItem";
+export * from "./components/overlay/Tooltip";
 
 // Navigation
 export * from "./components/navigation/Link";
 export * from "./components/navigation/AppShell";
 export * from "./components/navigation/SideNav";
+export * from "./components/navigation/Tabs";
+export * from "./components/navigation/Breadcrumbs";
+export * from "./components/navigation/Pagination";
 
 // Text
 export * from "./components/text/Header";
