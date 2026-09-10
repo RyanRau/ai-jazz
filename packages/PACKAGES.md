@@ -93,15 +93,28 @@ const { scheme, resolved, setScheme } = useColorScheme();
 setScheme("dark"); // persisted to localStorage
 ```
 
+```tsx
+const { customAccent, setCustomAccent } = useCustomAccent();
+// customAccent: string | null — a hex color overriding theme.colors.primary, or null for the theme's own default
+setCustomAccent("#8b7fd1"); // persisted to sessionStorage — cleared when the tab closes
+```
+
 ### `ThemeProvider` props
 
-| Prop          | Type                            | Default                   |
-| ------------- | ------------------------------- | ------------------------- |
-| `theme`       | `DeepPartial<Theme>`            | —                         |
-| `darkTheme`   | `DeepPartial<Theme>`            | —                         |
-| `colorScheme` | `"auto" \| "light" \| "dark"`   | `"auto"`                  |
-| `baseline`    | `boolean` (reset + body styles) | `true`                    |
-| `storageKey`  | `string \| null`                | `"bluestar-color-scheme"` |
+| Prop                     | Type                            | Default                    |
+| ------------------------ | ------------------------------- | -------------------------- |
+| `theme`                  | `DeepPartial<Theme>`            | —                          |
+| `darkTheme`              | `DeepPartial<Theme>`            | —                          |
+| `colorScheme`            | `"auto" \| "light" \| "dark"`   | `"auto"`                   |
+| `baseline`               | `boolean` (reset + body styles) | `true`                     |
+| `storageKey`             | `string \| null`                | `"bluestar-color-scheme"`  |
+| `customAccentStorageKey` | `string \| null`                | `"bluestar-custom-accent"` |
+
+`storageKey` (localStorage) remembers an explicit `colorScheme` choice
+across visits; `customAccentStorageKey` (sessionStorage — cleared when the
+tab closes) remembers a viewer's custom accent color from `useCustomAccent`
+for the rest of that session. Pass either as `null` to disable that
+persistence.
 
 Overrides are deep-merged over `defaultTheme` / `darkTheme`:
 
@@ -441,8 +454,9 @@ A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `chevronLeft`,
 `chevronRight`, `check`, `user`, `plus`, `trash`, `search`, `externalLink`,
-`image`, `key`, `chat`, `menu`, `upload`, `grid`, `switch` (`key`/`chat`/
-`menu`/`switch` are hand-drawn for this repo, not adapted from Lucide).
+`image`, `key`, `chat`, `menu`, `upload`, `grid`, `switch`, `palette`
+(`key`/`chat`/`menu`/`switch`/`palette` are hand-drawn for this repo, not
+adapted from Lucide).
 `color` defaults to `"currentColor"` so it inherits surrounding text/button
 color for free — pass `label` only for an icon standing alone with no
 adjacent text (it's decorative/`aria-hidden` otherwise).
@@ -713,6 +727,18 @@ No props. A three-way Auto/Light/Dark `SegmentedControl` wired straight to
 `useColorScheme` — there's exactly one color scheme per page, so nothing to
 parameterize. Drop it in `SideNav`'s `footer` slot, or anywhere else app
 chrome needs a way to change the theme.
+
+#### `ThemePicker`
+
+No props. A `palette`-icon button opening a `Modal` with the full theme:
+the same Auto/Light/Dark `SegmentedControl` as `ThemeToggle`, plus a custom
+accent color — four presets or any color via a native color input. Both
+apply live through `useColorScheme`/`useCustomAccent`, no separate save
+step. The accent is a viewer preference rather than an app default, so it
+persists to `sessionStorage` (cleared when the tab closes) rather than
+`colorScheme`'s longer-lived `localStorage` — see `ThemeProvider`'s
+`customAccentStorageKey`. Every app uses this in `SideNav`'s `footer` slot;
+`ThemeToggle` stays around for a plain inline toggle elsewhere.
 
 #### `ListRow`
 

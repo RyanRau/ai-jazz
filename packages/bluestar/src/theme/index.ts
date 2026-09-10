@@ -1,4 +1,10 @@
-export { ThemeProvider, useTheme, useColorScheme, deepMerge } from "./ThemeContext";
+export {
+  ThemeProvider,
+  useTheme,
+  useColorScheme,
+  useCustomAccent,
+  deepMerge,
+} from "./ThemeContext";
 export type {
   ThemeProviderProps,
   ColorScheme,

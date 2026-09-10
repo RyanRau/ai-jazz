@@ -15,7 +15,7 @@ import {
   Table,
   Text,
   TextInput,
-  ThemeToggle,
+  ThemePicker,
   useForm,
 } from "bluestar";
 import { useAuthRecord } from "./useAuth";
@@ -112,7 +112,7 @@ function App() {
           top={<AppSwitcher appName="Stash" />}
           footer={
             <Flexbox direction="column" gap={12}>
-              <ThemeToggle />
+              <ThemePicker />
               <AccountMenu />
             </Flexbox>
           }

@@ -117,4 +117,14 @@ export const iconPaths: Record<IconName, React.ReactNode> = {
       <path d="M20 17H4" />
     </>
   ),
+  // Hand-drawn, not adapted from Lucide: a paint palette's thumb-hole
+  // blob with a few colour-well dots.
+  palette: (
+    <>
+      <path d="M12 3a9 9 0 1 0 3.5 17.3c1-.4 1.3-1.7.6-2.5l-.2-.2c-.7-.8-.2-2.1.9-2.1H18a4 4 0 0 0 4-4c0-4.7-4.5-8.5-10-8.5Z" />
+      <circle cx="7.5" cy="10.5" r="1.2" />
+      <circle cx="11.5" cy="7.2" r="1.2" />
+      <circle cx="15.8" cy="8.5" r="1.2" />
+    </>
+  ),
 };

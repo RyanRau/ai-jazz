@@ -9,6 +9,7 @@ export type IconName =
   | "chevronRight"
   | "check"
   | "grid"
+  | "palette"
   | "user"
   | "plus"
   | "trash"
