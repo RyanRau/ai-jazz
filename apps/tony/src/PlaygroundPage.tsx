@@ -7,7 +7,6 @@ import {
   FileDropzone,
   Flexbox,
   Header,
-  StatTile,
   Text,
   TextAreaInput,
   TextInput,
@@ -244,8 +243,8 @@ export function PlaygroundPage() {
             isDisabled={sending || !apiKey || !prompt}
           />
           <Button label="Reset key" variant="secondary" density="dense" onClick={resetKey} />
-          {elapsedMs !== null && (
-            <StatTile label="Response time" value={formatElapsed(elapsedMs)} />
+          {!sending && elapsedMs !== null && (
+            <Text variant="caption">Responded in {formatElapsed(elapsedMs)}</Text>
           )}
         </Flexbox>
         {keyError && (
