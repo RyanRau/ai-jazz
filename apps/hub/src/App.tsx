@@ -17,6 +17,7 @@ import { AccountMenu } from "./AccountMenu";
 import { AppSwitcher } from "./AppSwitcher";
 import { SettingsPage } from "./SettingsPage";
 import { AdminPage } from "./AdminPage";
+import { ActivatePage } from "./ActivatePage";
 import { pb } from "./pb";
 
 type GrantedApp = { id: string; name: string; url: string; description?: string; icon?: string };
@@ -60,6 +61,7 @@ const clampClass = css`
 
 const onSettingsPath = window.location.pathname === "/settings";
 const onAdminPath = window.location.pathname === "/admin";
+const onActivatePath = window.location.pathname === "/activate";
 
 function App() {
   const record = useAuthRecord();
@@ -68,7 +70,7 @@ function App() {
   useEffect(() => {
     // Not rendered while signed out (see below), so a stale list here is
     // harmless — no need to reset it back to null on sign-out.
-    if (!record || onSettingsPath || onAdminPath) return;
+    if (!record || onSettingsPath || onAdminPath || onActivatePath) return;
     // Admins see every app in the catalog, not just their own grants —
     // registry_apps' listRule already permits any signed-in user to read
     // the full catalog, so this needs no backend change.
@@ -85,6 +87,18 @@ function App() {
       .getFullList({ expand: "app", requestKey: "hub-grants" })
       .then((grants) => setApps(grants.map((g) => g.expand!.app as GrantedApp)));
   }, [record]);
+
+  if (onActivatePath) {
+    // Reachable with no session -- an invited user has none by definition,
+    // so this has to come before the signed-out check below.
+    return (
+      <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
+        <Card padding={24}>
+          <ActivatePage />
+        </Card>
+      </Flexbox>
+    );
+  }
 
   if (!record) {
     return (

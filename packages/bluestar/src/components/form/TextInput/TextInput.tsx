@@ -9,6 +9,9 @@ export type TextInputProps = FormFieldProps & {
   placeholder?: string;
   /** Input mode, e.g. "email" or "password". Defaults to "text". */
   type?: "text" | "email" | "password" | "url" | "tel";
+  /** Value is shown and selectable but not editable — for a copyable
+   *  read-only field like a generated link. Defaults to `false`. */
+  readOnly?: boolean;
 };
 
 export default function TextInput({
@@ -23,6 +26,7 @@ export default function TextInput({
   placeholder,
   type = "text",
   isDisabled,
+  readOnly,
 }: TextInputProps) {
   const theme = useTheme();
 
@@ -43,6 +47,7 @@ export default function TextInput({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           disabled={isDisabled}
+          readOnly={readOnly}
           required={required}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}

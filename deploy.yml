@@ -29,6 +29,17 @@ apps:
     port: 8080
     volumes:
       - pb_data:/pb/pb_data
+    # Optional: enables hub's "invite user" feature to actually email the
+    # activation link instead of falling back to a copy/paste link. Unset
+    # in /opt/apps/.env until real SMTP creds exist -- see
+    # apps/pocketbase/README.md.
+    environment:
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT}"
+      SMTP_USERNAME: "${SMTP_USERNAME}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD}"
+      SMTP_SENDER_ADDRESS: "${SMTP_SENDER_ADDRESS}"
+      SMTP_SENDER_NAME: "${SMTP_SENDER_NAME}"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
       interval: 30s
