@@ -3,9 +3,9 @@ import { Avatar, Button, Flexbox, Icon, Text, ThemePicker } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { pb, signOut } from "./pb";
 
-// hub.ryanzrau.dev hosts the one shared settings page — same hardcoded-URL
+// ryanzrau.dev hosts the one shared settings page — same hardcoded-URL
 // convention pb.ts.tpl already uses for the shared backend.
-const SETTINGS_URL = "https://hub.ryanzrau.dev/settings";
+const SETTINGS_URL = "https://ryanzrau.dev/settings";
 
 const truncateStyle: CSSProperties = {
   overflow: "hidden",

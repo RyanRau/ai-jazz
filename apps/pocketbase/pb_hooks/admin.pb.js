@@ -180,7 +180,7 @@ routerAdd(
 
     const token = record.newPasswordResetToken();
     const link =
-      "https://hub.ryanzrau.dev/activate?token=" +
+      "https://ryanzrau.dev/activate?token=" +
       encodeURIComponent(token) +
       "&email=" +
       encodeURIComponent(email);

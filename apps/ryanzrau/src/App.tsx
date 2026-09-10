@@ -20,6 +20,8 @@ import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
 import { AppSwitcher } from "./AppSwitcher";
 import { AdminPage } from "./AdminPage";
+import { SettingsPage } from "./SettingsPage";
+import { ActivatePage } from "./ActivatePage";
 import { pb } from "./pb";
 
 type GrantedApp = { id: string; name: string; url: string; description?: string; icon?: string };
@@ -63,6 +65,8 @@ const clampClass = css`
 
 const onAppsPath = window.location.pathname === "/apps";
 const onAdminPath = window.location.pathname === "/admin";
+const onSettingsPath = window.location.pathname === "/settings";
+const onActivatePath = window.location.pathname === "/activate";
 
 function App() {
   const record = useAuthRecord();
@@ -88,13 +92,26 @@ function App() {
       .then((grants) => setApps(grants.map((g) => g.expand!.app as GrantedApp)));
   }, [record]);
 
+  if (onActivatePath) {
+    // Reachable with no session -- an invited user has none by definition,
+    // so this has to come before the signed-out check below.
+    return (
+      <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
+        <Card padding={24}>
+          <ActivatePage />
+        </Card>
+      </Flexbox>
+    );
+  }
+
   // The eventual resume — public regardless of sign-in state. Signed in
-  // adds the sidebar (Apps, Admin) around it; signed out it's just this.
+  // adds the sidebar (Apps, Settings, Admin) around it; signed out it's
+  // just this.
   const landing = (
     <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
       <Card padding={24}>
         <Flexbox direction="column" gap={8}>
-          <Header variant="h1">Ryan Rau</Header>
+          <Header variant="h1">Howdy 🤠</Header>
           <Text variant="body">
             Welcome! This is Ryan Rau's site.
             {!record && " Sign in to reach the dashboard and its apps."}
@@ -126,10 +143,8 @@ function App() {
     );
   }
 
-  // Migrated off hub.ryanzrau.dev -- hub still serves these too until it's
-  // fully retired (see CLAUDE.md's "Apps Still In Development" for how a
-  // subdomain gets demoted, not applicable here since hub stays enabled
-  // through the transition).
+  // Fully replaces hub.ryanzrau.dev, which no longer exists — this app now
+  // does everything hub once did.
   const navItems: SideNavItem[] = [
     { key: "apps", label: "Apps", icon: "grid" },
     ...(record.is_admin ? [{ key: "admin", label: "Admin", icon: "user" } as SideNavItem] : []),
@@ -145,6 +160,14 @@ function App() {
       footer={<AccountMenu />}
     />
   );
+
+  if (onSettingsPath) {
+    return (
+      <AppShell sideNav={sideNav} maxWidth={640}>
+        <SettingsPage record={record} />
+      </AppShell>
+    );
+  }
 
   if (onAdminPath) {
     return (

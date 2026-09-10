@@ -19,7 +19,7 @@ from anywhere shared):
 | `CookieAuthStore.ts` | Persists the PocketBase auth token as a `.ryanzrau.dev`-scoped cookie instead of `localStorage`, so signing in on any app signs you into all of them. |
 | `useAuth.ts`         | `useAuthRecord()` — the current signed-in user's record, or `null`, re-rendering on auth changes. |
 | `LoginForm.tsx`      | A real login form built from bluestar's `useForm`/`Form` — kept out of bluestar itself since bluestar must not depend on the `pocketbase` package. |
-| `AccountMenu.tsx`    | The avatar-pill dropdown (name/email, a link to the shared settings page at `hub.ryanzrau.dev/settings`, log out) that goes in `AppShell`'s `account` slot. |
+| `AccountMenu.tsx`    | The avatar-pill dropdown (name/email, a link to the shared settings page at `ryanzrau.dev/settings`, log out) that goes in `AppShell`'s `account` slot. |
 
 ## Local development
 

@@ -9,12 +9,10 @@ work.
 
 ```
 apps/              # Deployable apps (Dockerfile + nginx.conf per app)
-  ryanzrau/        # Personal site → ryanzrau.dev; signed-in sidebar adds
-                   # the app catalog (/apps) and admin console (/admin)
-  hub/             # Shared settings page → hub.ryanzrau.dev; its app
-                   # catalog and admin console are being phased out in
-                   # favor of ryanzrau's /apps and /admin (still live and
-                   # deployed during the transition)
+  ryanzrau/        # Personal site → ryanzrau.dev. Signed out: a public
+                   # landing page. Signed in: sidebar adds the app catalog
+                   # (/apps), admin console (/admin), and account settings
+                   # (/settings) — everything hub used to do, now here.
   stash/           # Household inventory with sharing → stash.ryanzrau.dev
   tony/            # LLM dashboard (home-lab) → tony.ryanzrau.dev
   pocketbase/      # Shared backend: auth + data + admin UI → api.ryanzrau.dev
