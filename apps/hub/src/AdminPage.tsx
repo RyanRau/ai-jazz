@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { ClientResponseError } from "pocketbase";
 import {
+  Alert,
+  AsyncButton,
   Badge,
   Button,
   Card,
@@ -31,7 +33,15 @@ function grantKey(userId: string, appId: string) {
 
 type InviteFormValues = { email: string; apps: Record<string, boolean> };
 
-function InviteForm({ apps, onDone }: { apps: AdminApp[]; onDone: () => void }) {
+function InviteForm({
+  apps,
+  pendingEmails,
+  onDone,
+}: {
+  apps: AdminApp[];
+  pendingEmails: Set<string>;
+  onDone: () => void;
+}) {
   const toast = useToast();
   const [result, setResult] = useState<InviteResult | null>(null);
 
@@ -92,9 +102,16 @@ function InviteForm({ apps, onDone }: { apps: AdminApp[]; onDone: () => void }) 
     );
   }
 
+  const isPendingResend = pendingEmails.has(form.values.email.trim().toLowerCase());
+
   return (
     <Form form={form}>
       <TextInput {...form.field("email")} label="Email" type="email" required />
+      {isPendingResend && (
+        <Alert variant="warning">
+          This email already has a pending invite — sending a new one invalidates that link.
+        </Alert>
+      )}
       <Flexbox direction="column" gap={8}>
         <Text variant="label">Grant access to</Text>
         {apps.map((app) => (
@@ -210,6 +227,24 @@ export function AdminPage() {
                 );
               },
             })),
+            {
+              header: "",
+              cell: (u: AdminUser) =>
+                u.id !== pb.authStore.record?.id && (
+                  <AsyncButton
+                    label="Delete"
+                    variant="destructive"
+                    density="dense"
+                    onClick={async () => {
+                      await pb.send("/api/custom/admin/delete-user", {
+                        method: "POST",
+                        body: { id: u.id },
+                      });
+                      refresh();
+                    }}
+                  />
+                ),
+            },
           ]}
         />
       </Flexbox>
@@ -218,6 +253,9 @@ export function AdminPage() {
         <InviteForm
           key={inviteKey}
           apps={data.apps}
+          pendingEmails={
+            new Set(data.users.filter((u) => !u.verified).map((u) => u.email.toLowerCase()))
+          }
           onDone={() => {
             setInviteOpen(false);
             refresh();
