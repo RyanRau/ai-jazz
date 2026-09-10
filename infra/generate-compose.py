@@ -73,6 +73,12 @@ def traefik_service(email):
             "--api.dashboard=false",
             "--providers.docker=true",
             "--providers.docker.exposedbydefault=false",
+            # Static routes to backends Traefik can't discover via Docker labels
+            # (nothing's running in a container it can see) -- currently just
+            # home-server/llm-gateway, reachable over the WireGuard tunnel to
+            # the home network. See infra/traefik/dynamic/.
+            "--providers.file.directory=/etc/traefik/dynamic",
+            "--providers.file.watch=true",
             "--entrypoints.web.address=:80",
             "--entrypoints.websecure.address=:443",
             "--entrypoints.web.http.redirections.entrypoint.to=websecure",
@@ -86,6 +92,7 @@ def traefik_service(email):
         "volumes": [
             "/var/run/docker.sock:/var/run/docker.sock:ro",
             "letsencrypt:/letsencrypt",
+            "./infra/traefik/dynamic:/etc/traefik/dynamic:ro",
         ],
         "networks": ["web"],
     }
