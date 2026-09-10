@@ -4,13 +4,15 @@ import {
   Button,
   Card,
   Dropdown,
+  FileDropzone,
   Flexbox,
   Header,
-  Icon,
+  StatTile,
   Text,
   TextAreaInput,
   TextInput,
 } from "bluestar";
+import type { FileDropzoneValue } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { getOrCreatePlaygroundKey, mintPlaygroundKey, clearPlaygroundKey } from "./playgroundKey";
 
@@ -22,7 +24,11 @@ import { getOrCreatePlaygroundKey, mintPlaygroundKey, clearPlaygroundKey } from 
 const GATEWAY_URL = import.meta.env.VITE_LLM_GATEWAY_URL ?? "https://llm.ryanzrau.dev";
 
 type ModelInfo = { id: string; vision: boolean };
-type ImageAttachment = { name: string; dataUrl: string };
+
+function formatElapsed(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
 
 /**
  * A one-off prompt tester: pastes straight through to the gateway's own
@@ -46,11 +52,13 @@ export function PlaygroundPage() {
   const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
   const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [image, setImage] = useState<ImageAttachment | null>(null);
+  const [image, setImage] = useState<FileDropzoneValue | null>(null);
   const [response, setResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const startRef = useRef(0);
 
   useEffect(() => {
     if (!record) return;
@@ -72,6 +80,14 @@ export function PlaygroundPage() {
       .catch(() => setModels("unavailable"));
   }, [apiKey]);
 
+  // Stop the tick if the page is left mid-request rather than leaking a
+  // dangling interval.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) window.clearInterval(timerRef.current);
+    };
+  }, []);
+
   const modelList = models === "unavailable" || models === null ? null : models;
   const selectedModel = modelList?.find((m) => m.id === model);
   // Unknown until a specific model is picked and its capabilities are known
@@ -84,26 +100,24 @@ export function PlaygroundPage() {
     setModel(next);
     // Switching to a model that can't take images makes a pending
     // attachment stale -- clear it here, at the point it happens, rather
-    // than watching the derived flag from an effect. Goes through
-    // removeImage() so the native file input's own displayed filename
-    // clears too, not just our copy of it in state.
-    if (modelList?.find((m) => m.id === next)?.vision === false) removeImage();
+    // than watching the derived flag from an effect.
+    if (modelList?.find((m) => m.id === next)?.vision === false) setImage(null);
   }
 
-  function onFileSelected(file: File | undefined) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setImage({ name: file.name, dataUrl: reader.result });
-      }
-    };
-    reader.readAsDataURL(file);
+  function startTimer() {
+    startRef.current = performance.now();
+    setElapsedMs(0);
+    timerRef.current = window.setInterval(() => {
+      setElapsedMs(performance.now() - startRef.current);
+    }, 100);
   }
 
-  function removeImage() {
-    setImage(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  function stopTimer() {
+    if (timerRef.current !== null) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setElapsedMs(performance.now() - startRef.current);
   }
 
   async function sendWith(key: string, retryOn401: boolean): Promise<void> {
@@ -148,6 +162,7 @@ export function PlaygroundPage() {
     setSending(true);
     setError(null);
     setResponse(null);
+    startTimer();
     try {
       await sendWith(apiKey, true);
     } catch (e) {
@@ -159,6 +174,7 @@ export function PlaygroundPage() {
             : "Something went wrong."
       );
     } finally {
+      stopTimer();
       setSending(false);
     }
   }
@@ -213,33 +229,14 @@ export function PlaygroundPage() {
           rows={6}
           placeholder="Ask it something"
         />
-        <Flexbox direction="column" gap={8}>
-          <Flexbox gap={4} alignItems="center">
-            <Icon name="image" size={16} />
-            <Text variant="label">Image (optional)</Text>
-          </Flexbox>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            disabled={visionUnsupported}
-            onChange={(e) => onFileSelected(e.target.files?.[0])}
-          />
-          {visionUnsupported && (
-            <Text variant="caption">&ldquo;{model}&rdquo; doesn&apos;t support image input.</Text>
-          )}
-          {image && (
-            <Flexbox gap={8} alignItems="center">
-              <img
-                src={image.dataUrl}
-                alt={image.name}
-                style={{ maxWidth: 80, maxHeight: 80, borderRadius: 4 }}
-              />
-              <Text variant="caption">{image.name}</Text>
-              <Button label="Remove" variant="secondary" density="dense" onClick={removeImage} />
-            </Flexbox>
-          )}
-        </Flexbox>
+        <FileDropzone
+          label="Image (optional)"
+          value={image}
+          onChange={setImage}
+          accept="image/*"
+          isDisabled={visionUnsupported}
+          warning={visionUnsupported ? `"${model}" doesn't support image input.` : undefined}
+        />
         <Flexbox gap={8} alignItems="center">
           <Button
             label={sending ? "Sending…" : "Send"}
@@ -247,6 +244,9 @@ export function PlaygroundPage() {
             isDisabled={sending || !apiKey || !prompt}
           />
           <Button label="Reset key" variant="secondary" density="dense" onClick={resetKey} />
+          {elapsedMs !== null && (
+            <StatTile label="Response time" value={formatElapsed(elapsedMs)} />
+          )}
         </Flexbox>
         {keyError && (
           <Alert variant="error" title="Couldn't set up your key">

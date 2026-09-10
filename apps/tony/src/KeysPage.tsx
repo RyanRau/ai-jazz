@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import {
+  BarChart,
   Badge,
   Button,
   Card,
   ConfirmDialog,
-  Dropdown,
+  Divider,
   EmptyState,
   Flexbox,
   Form,
@@ -19,10 +20,20 @@ import {
   TextInput,
   useColorScheme,
   useForm,
+  useTheme,
   useToast,
 } from "bluestar";
 import { pb } from "./pb";
 import { useAuthRecord } from "./useAuth";
+import {
+  type UsageRow,
+  TIME_RANGE_OPTIONS,
+  type TimeRange,
+  byDay,
+  filterByRange,
+  formatCompact,
+  formatDate,
+} from "./usageHelpers";
 
 type KeyRow = {
   id: string;
@@ -35,17 +46,6 @@ type KeyRow = {
   owner_email?: string;
 };
 
-type UsageRow = {
-  id: string;
-  key: string;
-  model: string;
-  tokens_in: number;
-  tokens_out: number;
-  created: string;
-};
-
-type UsageTotals = { tokens_in: number; tokens_out: number; calls: number };
-
 // Validated categorical pair (dataviz skill, slots 1/2 -- blue/orange):
 // node scripts/validate_palette.js "<pair>" --mode <light|dark> --surface "<bluestar's real surface>"
 // passes every check for each mode against its own surface, but the light
@@ -56,65 +56,167 @@ const COLORS = {
   dark: { in: "#3987e5", out: "#d95926" },
 };
 
-function formatDate(iso: string) {
-  if (!iso) return "Never";
-  return new Date(iso).toLocaleString();
+/** A dense two/three-way toggle -- same look everywhere it's used on this page. */
+function SegmentToggle<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { label: string; value: T }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <Flexbox gap={4}>
+      {options.map((o) => (
+        <Button
+          key={o.value}
+          label={o.label}
+          density="dense"
+          variant={value === o.value ? "primary" : "secondary"}
+          onClick={() => onChange(o.value)}
+        />
+      ))}
+    </Flexbox>
+  );
 }
 
-function dayKey(created: string): string {
-  // PocketBase datetimes are "YYYY-MM-DD HH:MM:SS.sssZ" -- the date portion
-  // is already a stable grouping key without parsing a Date.
-  return created.slice(0, 10);
-}
+/** Shared totals/chart/logs view -- rendered for "All keys" and for one key alike. */
+function UsageSection({ rows }: { rows: UsageRow[] }) {
+  const { resolved } = useColorScheme();
+  const [tab, setTab] = useState<"chart" | "logs">("chart");
+  const [chartType, setChartType] = useState<"line" | "bar">("line");
+  const [range, setRange] = useState<TimeRange>("30d");
 
-function dayLabel(key: string): string {
-  const [, month, day] = key.split("-");
-  return `${Number(month)}/${Number(day)}`;
-}
+  const scoped = filterByRange(rows, range);
+  const totalCalls = scoped.length;
+  const totalIn = scoped.reduce((sum, r) => sum + r.tokens_in, 0);
+  const totalOut = scoped.reduce((sum, r) => sum + r.tokens_out, 0);
+  const days = byDay(scoped);
+  const colors = COLORS[resolved];
 
-function formatCompact(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
-}
-
-function totalsByKey(rows: UsageRow[]): Record<string, UsageTotals> {
-  const totals: Record<string, UsageTotals> = {};
-  for (const row of rows) {
-    const t = totals[row.key] || { tokens_in: 0, tokens_out: 0, calls: 0 };
-    t.tokens_in += row.tokens_in;
-    t.tokens_out += row.tokens_out;
-    t.calls += 1;
-    totals[row.key] = t;
+  if (rows.length === 0) {
+    return <Text variant="body">No usage yet.</Text>;
   }
-  return totals;
+
+  const series = [
+    {
+      key: "in",
+      label: "Tokens in",
+      color: colors.in,
+      points: days.map((d) => ({ x: d.label, y: d.in })),
+    },
+    {
+      key: "out",
+      label: "Tokens out",
+      color: colors.out,
+      points: days.map((d) => ({ x: d.label, y: d.out })),
+    },
+  ];
+
+  return (
+    <Flexbox direction="column" gap={16}>
+      <Flexbox justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={12}>
+        <SegmentToggle
+          options={[
+            { label: "Chart", value: "chart" },
+            { label: "Logs", value: "logs" },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+        {tab === "chart" && (
+          <Flexbox gap={12} flexWrap="wrap">
+            <SegmentToggle
+              options={[
+                { label: "Line", value: "line" },
+                { label: "Bar", value: "bar" },
+              ]}
+              value={chartType}
+              onChange={setChartType}
+            />
+            <SegmentToggle options={TIME_RANGE_OPTIONS} value={range} onChange={setRange} />
+          </Flexbox>
+        )}
+      </Flexbox>
+
+      <Flexbox gap={16} flexWrap="wrap">
+        <StatTile label="Total calls" value={totalCalls.toLocaleString()} />
+        <StatTile label="Tokens in" value={formatCompact(totalIn)} />
+        <StatTile label="Tokens out" value={formatCompact(totalOut)} />
+      </Flexbox>
+
+      {tab === "chart" ? (
+        scoped.length === 0 ? (
+          <Text variant="caption">No usage in this range.</Text>
+        ) : chartType === "line" ? (
+          <LineChart formatValue={formatCompact} series={series} />
+        ) : (
+          <BarChart formatValue={formatCompact} series={series} />
+        )
+      ) : (
+        <Table
+          rows={scoped}
+          rowKey={(r) => r.id}
+          empty={<EmptyState title="No calls in this range" description="" />}
+          columns={[
+            { header: "When", cell: (r) => <Text variant="caption">{formatDate(r.created)}</Text> },
+            { header: "Model", cell: (r) => <Text variant="caption">{r.model}</Text> },
+            {
+              header: "Tokens in",
+              align: "right" as const,
+              cell: (r) => <Text variant="caption">{r.tokens_in.toLocaleString()}</Text>,
+            },
+            {
+              header: "Tokens out",
+              align: "right" as const,
+              cell: (r) => <Text variant="caption">{r.tokens_out.toLocaleString()}</Text>,
+            },
+          ]}
+        />
+      )}
+    </Flexbox>
+  );
+}
+
+function RenameKeyForm({
+  target,
+  onDone,
+}: {
+  target: KeyRow;
+  onDone: (newLabel: string) => Promise<void>;
+}) {
+  const form = useForm<{ label: string }>({
+    initialValues: { label: target.label },
+    validate: (v) => (v.label.trim() ? {} : { label: "Required" }),
+    onSubmit: async (v) => onDone(v.label.trim()),
+  });
+  return (
+    <Form form={form}>
+      <TextInput {...form.field("label")} label="Label" required />
+      <SubmitButton label="Save" />
+    </Form>
+  );
 }
 
 /**
- * Key management + usage, in one page since the two are really one subject:
- * which keys exist and what they've been doing. Admin sees every key (with
- * its owner) and every usage row; a regular user sees only their own --
- * enforced by apps/pocketbase/pb_hooks/llm.pb.js, not here. This just
- * renders whatever the hook hands back.
- *
- * The usage section below the table is scoped by the key dropdown: "All
- * keys" reuses the rows already fetched for the table's per-key totals
- * column, but picking one key re-fetches with ?key=<id> instead of
- * filtering client-side -- the unfiltered fetch is capped server-side at
- * 500 rows total, so filtering it after the fact could silently miss older
- * rows for a quiet key once other keys' activity has pushed them out.
+ * Key management + usage, two panels: a key list on the left (with "All
+ * keys" as its own row, aggregating everyone visible), the selected key's
+ * detail -- rename/revoke plus its usage -- on the right. Admin sees every
+ * key (with its owner) and every usage row; a regular user sees only their
+ * own -- enforced by apps/pocketbase/pb_hooks/llm.pb.js, not here.
  */
 export function KeysPage() {
   const record = useAuthRecord();
   const isAdmin = record?.is_admin === true;
   const toast = useToast();
-  const { resolved } = useColorScheme();
 
   const [keys, setKeys] = useState<KeyRow[] | null>(null);
   const [allUsage, setAllUsage] = useState<UsageRow[]>([]);
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState<{ label: string; key: string } | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<KeyRow | null>(null);
+  const [renameTarget, setRenameTarget] = useState<KeyRow | null>(null);
 
   const [selectedKeyId, setSelectedKeyId] = useState("");
   const [keyScopedUsage, setKeyScopedUsage] = useState<UsageRow[] | null>(null);
@@ -148,8 +250,6 @@ export function KeysPage() {
     };
   }, [selectedKeyId]);
 
-  const usageByKey = totalsByKey(allUsage);
-
   const form = useForm<{ label: string }>({
     initialValues: { label: "" },
     validate: (v) => (v.label.trim() ? {} : { label: "Required" }),
@@ -172,9 +272,16 @@ export function KeysPage() {
     await load();
   }
 
-  // A revoked key is soft-deleted, not gone -- it stays out of the table
-  // and usage dropdown by default, but toggling "Show revoked keys" brings
-  // it (and its usage) back into view rather than deleting the record.
+  async function rename(key: KeyRow, label: string) {
+    await pb.send("/api/custom/llm/keys/rename", { method: "POST", body: { id: key.id, label } });
+    setRenameTarget(null);
+    toast.success(`Renamed to "${label}"`);
+    await load();
+  }
+
+  // A revoked key is soft-deleted, not gone -- it stays out of the list by
+  // default, but toggling "Show revoked keys" brings it back into view
+  // rather than deleting the record.
   function toggleShowRevoked(next: boolean) {
     setShowRevoked(next);
     if (!next && keys?.find((k) => k.id === selectedKeyId)?.revoked_at) {
@@ -186,151 +293,101 @@ export function KeysPage() {
 
   const visibleKeys = showRevoked ? keys : keys.filter((k) => !k.revoked_at);
   const visibleKeyIds = new Set(visibleKeys.map((k) => k.id));
-
-  const keyOptions = [
-    { label: "All keys", value: "" },
-    ...visibleKeys.map((k) => ({
-      label: isAdmin && k.owner_email ? `${k.label} (${k.owner_email})` : k.label,
-      value: k.id,
-    })),
-  ];
+  const selectedKey = visibleKeys.find((k) => k.id === selectedKeyId) ?? null;
 
   const rows = selectedKeyId
     ? (keyScopedUsage ?? [])
     : allUsage.filter((r) => visibleKeyIds.has(r.key));
-  const totalCalls = rows.length;
-  const totalIn = rows.reduce((sum, r) => sum + r.tokens_in, 0);
-  const totalOut = rows.reduce((sum, r) => sum + r.tokens_out, 0);
-
-  const byDay = new Map<string, { in: number; out: number }>();
-  for (const r of rows) {
-    const dKey = dayKey(r.created);
-    const entry = byDay.get(dKey) ?? { in: 0, out: 0 };
-    entry.in += r.tokens_in;
-    entry.out += r.tokens_out;
-    byDay.set(dKey, entry);
-  }
-  const days = [...byDay.keys()].sort();
-  const colors = COLORS[resolved];
 
   return (
     <Card padding={24}>
-      <Flexbox direction="column" gap={16}>
-        <Flexbox justifyContent="space-between" alignItems="center">
-          <Header variant="h2">API keys</Header>
-          <Button label="New key" variant="creation" onClick={() => setCreating(true)} />
+      <Flexbox gap={20} alignItems="flex-start">
+        <Flexbox direction="column" gap={12} width={260} style={{ flexShrink: 0 }}>
+          <Flexbox justifyContent="space-between" alignItems="center">
+            <Header variant="h2">Keys</Header>
+            <Button
+              label="New"
+              variant="creation"
+              density="dense"
+              onClick={() => setCreating(true)}
+            />
+          </Flexbox>
+          <Switch label="Show revoked" value={showRevoked} onChange={toggleShowRevoked} />
+
+          <Flexbox direction="column" gap={4}>
+            <KeyListRow
+              label="All keys"
+              selected={selectedKeyId === ""}
+              onClick={() => setSelectedKeyId("")}
+            />
+            {visibleKeys.map((k) => (
+              <KeyListRow
+                key={k.id}
+                label={k.label}
+                sublabel={isAdmin ? k.owner_email : undefined}
+                isDefault={k.is_default}
+                isRevoked={Boolean(k.revoked_at)}
+                selected={selectedKeyId === k.id}
+                onClick={() => setSelectedKeyId(k.id)}
+              />
+            ))}
+          </Flexbox>
         </Flexbox>
 
-        <Switch label="Show revoked keys" value={showRevoked} onChange={toggleShowRevoked} />
+        <Divider direction="vertical" />
 
-        <Table
-          rows={visibleKeys}
-          rowKey={(k) => k.id}
-          empty={
-            <EmptyState
-              title={showRevoked ? "No keys yet" : "No active keys"}
-              description={
-                showRevoked
-                  ? "Create one to start calling the gateway."
-                  : 'Turn on "Show revoked keys" to see revoked ones.'
-              }
-            />
-          }
-          columns={[
-            {
-              header: "Label",
-              cell: (k) => (
+        <Flexbox direction="column" gap={16} grow={1} style={{ minWidth: 0 }}>
+          {selectedKey ? (
+            <>
+              <Flexbox
+                justifyContent="space-between"
+                alignItems="flex-start"
+                flexWrap="wrap"
+                gap={12}
+              >
                 <Flexbox direction="column" gap={4}>
-                  <Flexbox gap={4} alignItems="center">
-                    <Text variant="subtitle">{k.label}</Text>
-                    {k.is_default && <Badge variant="neutral">Default</Badge>}
+                  <Flexbox gap={8} alignItems="center">
+                    <Header variant="h2">{selectedKey.label}</Header>
+                    {selectedKey.is_default && <Badge variant="neutral">Default</Badge>}
+                    {selectedKey.revoked_at ? (
+                      <Badge variant="error">Revoked</Badge>
+                    ) : (
+                      <Badge variant="success">Active</Badge>
+                    )}
                   </Flexbox>
-                  <Text variant="caption">{k.key_prefix}…</Text>
-                </Flexbox>
-              ),
-            },
-            ...(isAdmin ? [{ header: "Owner", cell: (k: KeyRow) => k.owner_email || "—" }] : []),
-            {
-              header: "Status",
-              cell: (k) =>
-                k.revoked_at ? (
-                  <Badge variant="error">Revoked</Badge>
-                ) : (
-                  <Badge variant="success">Active</Badge>
-                ),
-            },
-            {
-              header: "Usage",
-              cell: (k) => {
-                const t = usageByKey[k.id];
-                return (
                   <Text variant="caption">
-                    {t
-                      ? `${t.calls} call${t.calls === 1 ? "" : "s"} · ${t.tokens_in} in / ${t.tokens_out} out`
-                      : "No usage yet"}
+                    {selectedKey.key_prefix}…
+                    {isAdmin && selectedKey.owner_email ? ` · ${selectedKey.owner_email}` : ""}
                   </Text>
-                );
-              },
-            },
-            {
-              header: "Last used",
-              cell: (k) => <Text variant="caption">{formatDate(k.last_used_at)}</Text>,
-            },
-            {
-              header: "",
-              align: "right" as const,
-              cell: (k) =>
-                !k.revoked_at && !k.is_default ? (
+                  <Text variant="caption">
+                    Created {formatDate(selectedKey.created)} · Last used{" "}
+                    {formatDate(selectedKey.last_used_at)}
+                  </Text>
+                </Flexbox>
+                <Flexbox gap={8}>
                   <Button
-                    label="Revoke"
-                    variant="destructive"
+                    label="Rename"
+                    variant="secondary"
                     density="dense"
-                    onClick={() => setRevokeTarget(k)}
+                    onClick={() => setRenameTarget(selectedKey)}
                   />
-                ) : null,
-            },
-          ]}
-        />
-
-        <Flexbox direction="column" gap={16} style={{ marginTop: 8 }}>
-          <Flexbox justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={12}>
-            <Header variant="h2">Usage</Header>
-            <div style={{ minWidth: 220 }}>
-              <Dropdown
-                options={keyOptions}
-                value={selectedKeyId}
-                onChange={(v) => setSelectedKeyId(v ?? "")}
-              />
-            </div>
-          </Flexbox>
-
-          {rows.length === 0 ? (
-            <Text variant="body">No usage yet.</Text>
+                  {!selectedKey.revoked_at && !selectedKey.is_default && (
+                    <Button
+                      label="Revoke"
+                      variant="destructive"
+                      density="dense"
+                      onClick={() => setRevokeTarget(selectedKey)}
+                    />
+                  )}
+                </Flexbox>
+              </Flexbox>
+              <Divider />
+              <UsageSection rows={rows} />
+            </>
           ) : (
             <>
-              <Flexbox gap={16} flexWrap="wrap">
-                <StatTile label="Total calls" value={totalCalls.toLocaleString()} />
-                <StatTile label="Tokens in" value={formatCompact(totalIn)} />
-                <StatTile label="Tokens out" value={formatCompact(totalOut)} />
-              </Flexbox>
-
-              <LineChart
-                formatValue={formatCompact}
-                series={[
-                  {
-                    key: "in",
-                    label: "Tokens in",
-                    color: colors.in,
-                    points: days.map((d) => ({ x: dayLabel(d), y: byDay.get(d)?.in ?? 0 })),
-                  },
-                  {
-                    key: "out",
-                    label: "Tokens out",
-                    color: colors.out,
-                    points: days.map((d) => ({ x: dayLabel(d), y: byDay.get(d)?.out ?? 0 })),
-                  },
-                ]}
-              />
+              <Header variant="h2">All keys</Header>
+              <UsageSection rows={rows} />
             </>
           )}
         </Flexbox>
@@ -360,6 +417,20 @@ export function KeysPage() {
         </Flexbox>
       </Modal>
 
+      <Modal
+        isOpen={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title="Rename key"
+      >
+        {renameTarget && (
+          <RenameKeyForm
+            key={renameTarget.id}
+            target={renameTarget}
+            onDone={(label) => rename(renameTarget, label)}
+          />
+        )}
+      </Modal>
+
       <ConfirmDialog
         isOpen={revokeTarget !== null}
         onClose={() => setRevokeTarget(null)}
@@ -371,5 +442,50 @@ export function KeysPage() {
         confirmLabel="Revoke"
       />
     </Card>
+  );
+}
+
+function KeyListRow({
+  label,
+  sublabel,
+  isDefault,
+  isRevoked,
+  selected,
+  onClick,
+}: {
+  label: string;
+  sublabel?: string;
+  isDefault?: boolean;
+  isRevoked?: boolean;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 2,
+        width: "100%",
+        textAlign: "left",
+        padding: "8px 10px",
+        borderRadius: 8,
+        border: "none",
+        cursor: "pointer",
+        background: selected ? theme.colors.surfaceHover : "transparent",
+      }}
+    >
+      <Flexbox gap={4} alignItems="center">
+        <Text variant="subtitle" color={isRevoked ? theme.colors.textMuted : undefined}>
+          {label}
+        </Text>
+        {isDefault && <Badge variant="neutral">Default</Badge>}
+      </Flexbox>
+      {sublabel && <Text variant="caption">{sublabel}</Text>}
+    </button>
   );
 }
