@@ -5,6 +5,7 @@ import {
   Avatar,
   AsyncButton,
   Card,
+  FileDropzone,
   Flexbox,
   Form,
   Header,
@@ -13,10 +14,24 @@ import {
   useForm,
   useToast,
 } from "bluestar";
+import type { FileDropzoneValue } from "bluestar";
 import { pb } from "./pb";
 
 type NameValues = { name: string };
 type PasswordValues = { oldPassword: string; password: string; passwordConfirm: string };
+
+// FileDropzone hands back a data URL (it reads the file itself so every
+// consumer doesn't have to) -- PocketBase's file upload wants a Blob, so
+// this reverses that encoding for the one place that needs the raw bytes
+// back.
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [meta, base64] = dataUrl.split(",");
+  const mime = meta.match(/:(.*?);/)?.[1] ?? "application/octet-stream";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
 
 export function SettingsPage({ record }: { record: RecordModel }) {
   const toast = useToast();
@@ -29,19 +44,15 @@ export function SettingsPage({ record }: { record: RecordModel }) {
     },
   });
 
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const avatarPreview = avatarFile
-    ? URL.createObjectURL(avatarFile)
-    : record.avatar
-      ? pb.files.getURL(record, record.avatar)
-      : undefined;
+  const [avatarValue, setAvatarValue] = useState<FileDropzoneValue | null>(null);
+  const currentAvatarUrl = record.avatar ? pb.files.getURL(record, record.avatar) : undefined;
 
   async function uploadAvatar() {
-    if (!avatarFile) return;
+    if (!avatarValue) return;
     const formData = new FormData();
-    formData.append("avatar", avatarFile);
+    formData.append("avatar", dataUrlToBlob(avatarValue.dataUrl), avatarValue.name);
     await pb.collection("users").update(record.id, formData);
-    setAvatarFile(null);
+    setAvatarValue(null);
     toast.success("Avatar updated");
   }
 
@@ -92,18 +103,19 @@ export function SettingsPage({ record }: { record: RecordModel }) {
         <Flexbox direction="column" gap={16}>
           <Header variant="h2">Profile</Header>
 
-          <Flexbox direction="row" alignItems="center" gap={16}>
-            <Avatar src={avatarPreview} name={record.name || record.email} size={64} />
-            <Flexbox direction="column" gap={8}>
-              <input
-                type="file"
+          <Flexbox direction="row" alignItems="flex-start" gap={16}>
+            <Avatar src={currentAvatarUrl} name={record.name || record.email} size={64} />
+            <Flexbox direction="column" gap={8} style={{ maxWidth: 280 }}>
+              <FileDropzone
+                value={avatarValue}
+                onChange={setAvatarValue}
                 accept="image/*"
-                onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
+                prompt="Drag an image here, or click to browse"
               />
               <AsyncButton
                 label="Upload avatar"
                 density="dense"
-                isDisabled={!avatarFile}
+                isDisabled={!avatarValue}
                 onClick={uploadAvatar}
               />
             </Flexbox>

@@ -66,7 +66,7 @@ export default function Dropdown(props: DropdownProps) {
                 cursor: pointer;
                 & option {
                   padding: 4px 8px;
-                  border-radius: 4px;
+                  border-radius: ${theme.radius.sm};
                 }
               `}
             >

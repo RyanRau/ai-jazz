@@ -141,11 +141,15 @@ const headings: Theme["headings"] = {
   h3: { size: "16px", weight: "700" },
 };
 
+// A tighter, flatter scale than a typical "AI product" rounded-everything
+// look — closer to Tailwind UI / MUI's defaults. `full` stays reserved for
+// genuine pills (badges, switches, avatars) rather than leaking onto
+// structural surfaces like cards and buttons.
 const radius: Theme["radius"] = {
   none: "0",
-  sm: "4px",
-  md: "6px",
-  lg: "12px",
+  sm: "3px",
+  md: "4px",
+  lg: "8px",
   full: "9999px",
 };
 
@@ -180,8 +184,8 @@ export const defaultTheme: Theme = {
   shadow: {
     none: "none",
     sm: "0 1px 2px rgba(0, 0, 0, 0.06)",
-    md: "0 4px 6px rgba(0, 0, 0, 0.1)",
-    lg: "0 12px 24px rgba(0, 0, 0, 0.14)",
+    md: "0 2px 4px rgba(0, 0, 0, 0.08)",
+    lg: "0 8px 16px rgba(0, 0, 0, 0.12)",
   },
 };
 
@@ -219,7 +223,7 @@ export const darkTheme: Theme = {
   shadow: {
     none: "none",
     sm: "0 1px 2px rgba(0, 0, 0, 0.4)",
-    md: "0 4px 6px rgba(0, 0, 0, 0.5)",
-    lg: "0 12px 24px rgba(0, 0, 0, 0.6)",
+    md: "0 2px 4px rgba(0, 0, 0, 0.45)",
+    lg: "0 8px 16px rgba(0, 0, 0, 0.55)",
   },
 };

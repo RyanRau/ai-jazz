@@ -257,10 +257,15 @@ value, not an event.
 
 #### `Card`
 
-| Prop      | Type      | Default           |
-| --------- | --------- | ----------------- |
-| `padding` | `Spacing` | `16`              |
-| `shadow`  | `string`  | `theme.shadow.md` |
+| Prop      | Type      | Default  |
+| --------- | --------- | -------- |
+| `padding` | `Spacing` | `16`     |
+| `shadow`  | `string`  | `"none"` |
+
+The border is the surface's primary separator — flat-dashboard style, not a
+floating panel. Pass `theme.shadow.sm/md/lg` for a card that should read as
+genuinely elevated (rare; reserve real shadow for overlays like `Menu` and
+`Modal`).
 
 #### `Divider`
 
@@ -301,18 +306,36 @@ Accepts all native `<button>` props except `disabled`.
 | ------------ | --------------------------------------------------------- | ----------- |
 | `label`      | `string`                                                  | required    |
 | `variant`    | `"primary" \| "secondary" \| "creation" \| "destructive"` | `"primary"` |
+| `appearance` | `"solid" \| "outline" \| "text"`                          | `"solid"`   |
 | `isDisabled` | `boolean`                                                 | `false`     |
 | `density`    | `"normal" \| "dense"`                                     | `"normal"`  |
 | `type`       | `"button" \| "submit" \| "reset"`                         | `"button"`  |
 
-> Visual intent is **`variant`**. `type` is the real HTML attribute — use
-> `SubmitButton` inside a `<Form>` rather than setting it by hand. Disable with
+> Visual intent is **`variant`**; structural style is **`appearance`** — the
+> two are independent, so `variant="destructive" appearance="outline"` is a
+> red outlined button. `type` is the real HTML attribute — use `SubmitButton`
+> inside a `<Form>` rather than setting it by hand. Disable with
 > `isDisabled`, not `disabled`.
 
 #### `AsyncButton`
 
 `Button`'s props, but `onClick: () => Promise<void>`. Disables and spins until the
 promise settles, including on rejection.
+
+#### `SegmentedControl`
+
+| Prop       | Type                            | Default  |
+| ---------- | ------------------------------- | -------- |
+| `options`  | `{ label: string; value: T }[]` | required |
+| `value`    | `T`                             | required |
+| `onChange` | `(value: T) => void`            | required |
+
+A dense, single-select toggle group for picking one of a small set of views
+(chart vs. table, a time range) — not a form field, so it takes no
+`label`/`description`. The selected segment lifts on a sunken track with a
+small functional shadow (`theme.shadow.sm`) — the same
+lift-to-indicate-state convention `SideNav`'s collapse handle uses, not an
+ambient card shadow.
 
 ### Form controls
 
@@ -409,13 +432,13 @@ display name or email, never a backend record; bluestar stays backend-agnostic.
 
 A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
-needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `check`,
-`user`, `plus`, `trash`, `search`, `externalLink`, `image`, `key`, `chat`,
-`menu`, `upload` (`key`/`chat`/`menu` are hand-drawn for this repo, not adapted
-from Lucide). `color` defaults to `"currentColor"` so it inherits
-surrounding text/button color for free — pass `label` only for an icon
-standing alone with no adjacent text (it's decorative/`aria-hidden`
-otherwise).
+needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `chevronLeft`,
+`chevronRight`, `check`, `user`, `plus`, `trash`, `search`, `externalLink`,
+`image`, `key`, `chat`, `menu`, `upload` (`key`/`chat`/`menu` are hand-drawn
+for this repo, not adapted from Lucide). `color` defaults to
+`"currentColor"` so it inherits surrounding text/button color for free —
+pass `label` only for an icon standing alone with no adjacent text (it's
+decorative/`aria-hidden` otherwise).
 
 #### `StatTile`
 
@@ -471,7 +494,24 @@ dataviz skill's script, different hexes per color scheme.
 #### `Badge`
 
 `variant`: `"neutral" | "primary" | "success" | "warning" | "error"` (default
-`"neutral"`); `emphasis`: `"subtle" | "solid"` (default `"subtle"`).
+`"neutral"`); `emphasis`: `"outline" | "subtle" | "solid"` (default
+`"outline"` — transparent background, colored border and text; the flat
+status-chip look).
+
+#### `ChatBubble`
+
+| Prop      | Type                                                | Default      |
+| --------- | --------------------------------------------------- | ------------ |
+| `role`    | `"user" \| "assistant"`                             | required     |
+| `content` | `string`                                            | required     |
+| `status`  | `"pending" \| "streaming" \| "complete" \| "error"` | `"complete"` |
+
+One message in a chat thread. User bubbles are right-aligned and filled with
+the accent color; assistant bubbles are left-aligned, bordered, on
+`surface` — the same solid-vs-outlined distinction `Button`'s `solid`/
+`outline` appearances draw elsewhere. `"pending"`/`"streaming"` show a
+spinner + "Generating…" below the content (and a placeholder "…" while
+`content` is still empty); `"error"` shows "Generation failed".
 
 #### `Table`
 
@@ -547,6 +587,20 @@ string works fine, same pattern `EmptyState`'s `icon` prop already uses.
 pre-truncate a longer field (e.g. an app's `description`). Provide `href`
 _or_ `onClick`, not both — `href` renders an `<a>`, `onClick` a `<button>`.
 
+#### `Tooltip`
+
+| Prop        | Type                | Default  |
+| ----------- | ------------------- | -------- |
+| `content`   | `string`            | required |
+| `children`  | `ReactNode`         | required |
+| `placement` | `"top" \| "bottom"` | `"top"`  |
+
+A small inverted-color label shown on hover or keyboard focus. Not
+portaled — fine wrapping a button in normal flow, but it can clip inside an
+`overflow: hidden` ancestor. `children` needs to be focusable on its own
+(a `Button`, `Icon`-only button, `Link`) for the keyboard-focus trigger to
+work — a bare `<span>` only gets the hover trigger.
+
 ### Navigation
 
 #### `Link`
@@ -613,7 +667,58 @@ border at vertical centre (the convention most dashboard component
 libraries — Bootstrap, Tailwind UI — use, rather than a full-width row).
 Give every item an `icon` or it becomes unusable once collapsed. Collapsed
 state persists to `localStorage` the same way `useColorScheme` persists its
-own choice — pass `storageKey={null}` to disable that.
+own choice — pass `storageKey={null}` to disable that. The active item is a
+3px left accent bar + tinted background, not a solid fill — the same
+flat-selection language `Tabs` uses for the underline.
+
+#### `ListRow`
+
+| Prop       | Type         | Default  |
+| ---------- | ------------ | -------- |
+| `title`    | `string`     | required |
+| `subtitle` | `string`     | —        |
+| `badge`    | `ReactNode`  | —        |
+| `muted`    | `boolean`    | `false`  |
+| `selected` | `boolean`    | required |
+| `onClick`  | `() => void` | required |
+
+One row in a selectable master-detail list — an API key list, a chat list.
+Selection reads the same way `SideNav`'s does: a left accent bar + tinted
+background, so "this is the current pick" looks the same everywhere in the
+library, not just in the permanent app rail. `muted` dims the title (a
+revoked/archived row that stays clickable) and takes precedence over the
+selected color.
+
+#### `Tabs`
+
+| Prop        | Type                    | Default  |
+| ----------- | ----------------------- | -------- |
+| `items`     | `TabItem[]`             | required |
+| `activeKey` | `string`                | required |
+| `onSelect`  | `(key: string) => void` | required |
+
+`TabItem` is `{ key, label, icon? }`. A flat, underline-selected tab row for
+switching between views _within_ a page — `SideNav`'s counterpart for
+switching between an app's top-level _sections_.
+
+#### `Breadcrumbs`
+
+`items: BreadcrumbItem[]` — `{ label, href? }`. A chevron-separated ancestor
+trail; the last item always renders as plain (non-link) current-page text
+regardless of whether it has an `href`. Omit `href` on any item to render it
+as plain text instead of a link.
+
+#### `Pagination`
+
+| Prop           | Type                     | Default  |
+| -------------- | ------------------------ | -------- |
+| `page`         | `number` (1-indexed)     | required |
+| `pageCount`    | `number`                 | required |
+| `onPageChange` | `(page: number) => void` | required |
+
+Prev/next controls plus a truncated run of page numbers (first, last,
+current ± 1, `…` elsewhere) — pairs with `Table` for paged data. Renders
+`null` when `pageCount <= 1`.
 
 ---
 

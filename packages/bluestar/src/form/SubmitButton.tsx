@@ -1,4 +1,4 @@
-import Button from "../components/buttons/Button/Button";
+import Button, { resolveButtonTextColor } from "../components/buttons/Button/Button";
 import type { ButtonProps } from "../components/buttons/Button/Button";
 import Spinner from "../components/feedback/Spinner/Spinner";
 import Text from "../components/text/Text/Text";
@@ -20,19 +20,29 @@ export default function SubmitButton({
   label,
   isDisabled,
   disableWhenInvalid = false,
+  variant = "primary",
+  appearance = "solid",
   ...props
 }: SubmitButtonProps) {
   const form = useFormContext();
   const theme = useTheme();
+  const textColor = resolveButtonTextColor(theme, variant, appearance);
 
   const disabled = isDisabled || form.isSubmitting || (disableWhenInvalid && !form.isValid);
 
   return (
-    <Button {...props} type="submit" label={label} isDisabled={disabled}>
-      <Text variant="label" color={theme.colors.textOnAccent}>
+    <Button
+      {...props}
+      variant={variant}
+      appearance={appearance}
+      type="submit"
+      label={label}
+      isDisabled={disabled}
+    >
+      <Text variant="label" color={textColor}>
         {label}
       </Text>
-      {form.isSubmitting && <Spinner size={14} color={theme.colors.textOnAccent} />}
+      {form.isSubmitting && <Spinner size={14} color={textColor} />}
     </Button>
   );
 }

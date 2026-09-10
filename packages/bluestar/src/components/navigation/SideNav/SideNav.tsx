@@ -76,7 +76,12 @@ export default function SideNav({
       <Flexbox direction="column" gap={4} style={{ padding: 8, flex: 1, overflow: "hidden" }}>
         {items.map((item) => {
           const isActive = item.key === activeKey;
-          const fg = isActive ? theme.colors.textOnAccent : theme.colors.text;
+          // A left accent bar + tinted background reads as "selected" without
+          // the item becoming a solid, pill-like block — closer to how a
+          // flat dashboard rail (MUI's Drawer, Tailwind UI's sidebar) marks
+          // the current section than a fully filled row does.
+          const fg = isActive ? theme.colors.primary : theme.colors.text;
+          const ACCENT_WIDTH = 3;
           return (
             <button
               key={item.key}
@@ -89,16 +94,26 @@ export default function SideNav({
                 align-items: center;
                 gap: 12px;
                 width: 100%;
-                padding: 10px 12px;
+                padding: 10px 12px 10px ${12 - ACCENT_WIDTH}px;
                 border: none;
-                border-radius: ${theme.radius.md};
-                background-color: ${isActive ? theme.colors.primary : "transparent"};
+                border-left: ${ACCENT_WIDTH}px solid
+                  ${isActive ? theme.colors.primary : "transparent"};
+                border-radius: 0 ${theme.radius.sm} ${theme.radius.sm} 0;
+                background-color: ${
+                  isActive
+                    ? `color-mix(in srgb, ${theme.colors.primary} 12%, transparent)`
+                    : "transparent"
+                };
                 cursor: pointer;
                 text-align: left;
                 white-space: nowrap;
 
                 &:hover {
-                  background-color: ${isActive ? theme.colors.primaryHover : theme.colors.surfaceHover};
+                  background-color: ${
+                    isActive
+                      ? `color-mix(in srgb, ${theme.colors.primary} 18%, transparent)`
+                      : theme.colors.surfaceHover
+                  };
                 }
                 &:focus-visible {
                   outline: 2px solid ${theme.colors.focusRing};

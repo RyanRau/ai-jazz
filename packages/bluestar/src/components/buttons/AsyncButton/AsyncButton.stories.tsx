@@ -41,3 +41,19 @@ export const LongTask: Story = {
     },
   },
 };
+
+export const Outline: Story = {
+  args: {
+    label: "Redeploy",
+    appearance: "outline",
+    onClick: () => new Promise((resolve) => setTimeout(resolve, 2000)),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "The label and spinner match the accent color, not `textOnAccent`, on non-solid appearances.",
+      },
+    },
+  },
+};

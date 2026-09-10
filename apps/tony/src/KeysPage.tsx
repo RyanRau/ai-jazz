@@ -11,7 +11,9 @@ import {
   Form,
   Header,
   LineChart,
+  ListRow,
   Modal,
+  SegmentedControl,
   StatTile,
   SubmitButton,
   Switch,
@@ -20,7 +22,6 @@ import {
   TextInput,
   useColorScheme,
   useForm,
-  useTheme,
   useToast,
 } from "bluestar";
 import { pb } from "./pb";
@@ -55,31 +56,6 @@ const COLORS = {
   light: { in: "#2a78d6", out: "#eb6834" },
   dark: { in: "#3987e5", out: "#d95926" },
 };
-
-/** A dense two/three-way toggle -- same look everywhere it's used on this page. */
-function SegmentToggle<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { label: string; value: T }[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <Flexbox gap={4}>
-      {options.map((o) => (
-        <Button
-          key={o.value}
-          label={o.label}
-          density="dense"
-          variant={value === o.value ? "primary" : "secondary"}
-          onClick={() => onChange(o.value)}
-        />
-      ))}
-    </Flexbox>
-  );
-}
 
 /** Shared totals/chart/logs view -- rendered for "All keys" and for one key alike. */
 function UsageSection({ rows }: { rows: UsageRow[] }) {
@@ -117,7 +93,7 @@ function UsageSection({ rows }: { rows: UsageRow[] }) {
   return (
     <Flexbox direction="column" gap={16}>
       <Flexbox justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={12}>
-        <SegmentToggle
+        <SegmentedControl
           options={[
             { label: "Chart", value: "chart" },
             { label: "Logs", value: "logs" },
@@ -127,7 +103,7 @@ function UsageSection({ rows }: { rows: UsageRow[] }) {
         />
         {tab === "chart" && (
           <Flexbox gap={12} flexWrap="wrap">
-            <SegmentToggle
+            <SegmentedControl
               options={[
                 { label: "Line", value: "line" },
                 { label: "Bar", value: "bar" },
@@ -135,7 +111,7 @@ function UsageSection({ rows }: { rows: UsageRow[] }) {
               value={chartType}
               onChange={setChartType}
             />
-            <SegmentToggle options={TIME_RANGE_OPTIONS} value={range} onChange={setRange} />
+            <SegmentedControl options={TIME_RANGE_OPTIONS} value={range} onChange={setRange} />
           </Flexbox>
         )}
       </Flexbox>
@@ -315,18 +291,18 @@ export function KeysPage() {
           <Switch label="Show revoked" value={showRevoked} onChange={toggleShowRevoked} />
 
           <Flexbox direction="column" gap={4}>
-            <KeyListRow
-              label="All keys"
+            <ListRow
+              title="All keys"
               selected={selectedKeyId === ""}
               onClick={() => setSelectedKeyId("")}
             />
             {visibleKeys.map((k) => (
-              <KeyListRow
+              <ListRow
                 key={k.id}
-                label={k.label}
-                sublabel={isAdmin ? k.owner_email : undefined}
-                isDefault={k.is_default}
-                isRevoked={Boolean(k.revoked_at)}
+                title={k.label}
+                subtitle={isAdmin ? k.owner_email : undefined}
+                badge={k.is_default ? <Badge variant="neutral">Default</Badge> : undefined}
+                muted={Boolean(k.revoked_at)}
                 selected={selectedKeyId === k.id}
                 onClick={() => setSelectedKeyId(k.id)}
               />
@@ -411,9 +387,7 @@ export function KeysPage() {
             This is the only time &ldquo;{newKey?.label}&rdquo;&apos;s key is shown. Copy it now —
             it can&apos;t be shown again, only revoked and replaced.
           </Text>
-          <Card padding={12}>
-            <code style={{ wordBreak: "break-all", fontSize: 13 }}>{newKey?.key}</code>
-          </Card>
+          <TextInput label="API key" value={newKey?.key ?? ""} onChange={() => {}} readOnly />
         </Flexbox>
       </Modal>
 
@@ -442,50 +416,5 @@ export function KeysPage() {
         confirmLabel="Revoke"
       />
     </Card>
-  );
-}
-
-function KeyListRow({
-  label,
-  sublabel,
-  isDefault,
-  isRevoked,
-  selected,
-  onClick,
-}: {
-  label: string;
-  sublabel?: string;
-  isDefault?: boolean;
-  isRevoked?: boolean;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  const theme = useTheme();
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        gap: 2,
-        width: "100%",
-        textAlign: "left",
-        padding: "8px 10px",
-        borderRadius: 8,
-        border: "none",
-        cursor: "pointer",
-        background: selected ? theme.colors.surfaceHover : "transparent",
-      }}
-    >
-      <Flexbox gap={4} alignItems="center">
-        <Text variant="subtitle" color={isRevoked ? theme.colors.textMuted : undefined}>
-          {label}
-        </Text>
-        {isDefault && <Badge variant="neutral">Default</Badge>}
-      </Flexbox>
-      {sublabel && <Text variant="caption">{sublabel}</Text>}
-    </button>
   );
 }

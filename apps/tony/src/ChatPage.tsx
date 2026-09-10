@@ -3,11 +3,13 @@ import {
   Badge,
   Button,
   Card,
+  ChatBubble,
   Divider,
   Dropdown,
   EmptyState,
   Flexbox,
   Header,
+  ListRow,
   Spinner,
   StatTile,
   Text,
@@ -399,9 +401,10 @@ export function ChatPage() {
           ) : (
             <Flexbox direction="column" gap={4}>
               {chats.map((c) => (
-                <ChatListRow
+                <ListRow
                   key={c.id}
-                  chat={c}
+                  title={c.title}
+                  subtitle={formatDate(c.updated)}
                   selected={c.id === selectedChatId}
                   onClick={() => selectChat(c.id)}
                 />
@@ -456,7 +459,9 @@ export function ChatPage() {
                 description="Send a message below to begin."
               />
             ) : (
-              messages.map((m) => <MessageBubble key={m.id} message={m} />)
+              messages.map((m) => (
+                <ChatBubble key={m.id} role={m.role} content={m.content} status={m.status} />
+              ))
             )}
             <div ref={threadEndRef} />
           </div>
@@ -503,81 +508,5 @@ export function ChatPage() {
         </Flexbox>
       </Flexbox>
     </Card>
-  );
-}
-
-function ChatListRow({
-  chat,
-  selected,
-  onClick,
-}: {
-  chat: ChatSummary;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  const theme = useTheme();
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        gap: 2,
-        width: "100%",
-        textAlign: "left",
-        padding: "8px 10px",
-        borderRadius: 8,
-        border: "none",
-        cursor: "pointer",
-        background: selected ? theme.colors.surfaceHover : "transparent",
-      }}
-    >
-      <Text variant="subtitle">{chat.title}</Text>
-      <Text variant="caption" color={theme.colors.textMuted}>
-        {formatDate(chat.updated)}
-      </Text>
-    </button>
-  );
-}
-
-function MessageBubble({ message }: { message: ChatMessage }) {
-  const theme = useTheme();
-  const isUser = message.role === "user";
-  const isGenerating = message.status === "pending" || message.status === "streaming";
-  const isError = message.status === "error";
-
-  return (
-    <Flexbox justifyContent={isUser ? "flex-end" : "flex-start"}>
-      <div
-        style={{
-          maxWidth: "80%",
-          borderRadius: theme.radius.lg,
-          padding: "10px 14px",
-          background: isUser ? theme.colors.primary : theme.colors.surface,
-          border: isUser ? "none" : `1px solid ${theme.colors.border}`,
-        }}
-      >
-        <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-          <Text variant="body" color={isUser ? theme.colors.textOnAccent : undefined}>
-            {message.content || (isGenerating ? "…" : "")}
-          </Text>
-        </div>
-        {(isGenerating || isError) && (
-          <Flexbox gap={4} alignItems="center" style={{ marginTop: 6 }}>
-            {isGenerating && (
-              <Spinner size={12} color={isUser ? theme.colors.textOnAccent : undefined} />
-            )}
-            <Text
-              variant="caption"
-              color={isUser ? theme.colors.textOnAccent : theme.colors.textMuted}
-            >
-              {isError ? "Generation failed" : "Generating…"}
-            </Text>
-          </Flexbox>
-        )}
-      </div>
-    </Flexbox>
   );
 }

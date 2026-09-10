@@ -26,6 +26,8 @@ export const iconPaths: Record<IconName, React.ReactNode> = {
     </>
   ),
   chevronDown: <path d="m6 9 6 6 6-6" />,
+  chevronLeft: <path d="m15 18-6-6 6-6" />,
+  chevronRight: <path d="m9 18 6-6-6-6" />,
   check: <path d="M20 6 9 17l-5-5" />,
   user: (
     <>
