@@ -769,6 +769,14 @@ state instead of hiding it outright. `items` is optional: a single-page
 app can render `SideNav` for just its `top`/`footer` chrome with an empty
 (or omitted) `items` array and nothing to switch between.
 
+`top` — not `items` — is the region that takes the rail's leftover vertical
+space and scrolls internally if its own content overflows it, so `top` is
+also where an unbounded per-page list belongs (a chat-history list beneath
+an app switcher, say): render it directly in `top`, below whatever
+branding sits above it, rather than building a separate nested drawer for
+it. `items` stays pinned at its natural (short) height directly above
+`footer` whenever `top` is present.
+
 On mobile, `AppShell` renders the same `sideNav` element a second time inside
 a full-screen drawer rather than the permanent rail — collapsing makes no
 sense floating full-screen on a touch device, so that instance is always

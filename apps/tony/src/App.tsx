@@ -6,9 +6,11 @@ import { AccountMenu } from "./AccountMenu";
 import { AppSwitcher } from "./AppSwitcher";
 import { GatewayStatus } from "./GatewayStatus";
 import { ChatPage } from "./ChatPage";
+import { ChatHistoryList } from "./ChatHistoryList";
 import { KeysPage } from "./KeysPage";
 import { PlaygroundPage } from "./PlaygroundPage";
 import { pb } from "./pb";
+import { useChat } from "./useChat";
 
 type Tab = "chat" | "playground" | "keys";
 
@@ -16,6 +18,11 @@ function App() {
   const record = useAuthRecord();
   const [granted, setGranted] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>("playground");
+  // Called unconditionally (not just on the Chat tab) so switching tabs and
+  // back doesn't lose the draft, the streaming connection, or the selected
+  // chat -- SideNav's own chat-history list and ChatPage both read this one
+  // instance rather than each keeping a separate copy.
+  const chat = useChat();
 
   useEffect(() => {
     if (!record) return;
@@ -67,13 +74,14 @@ function App() {
               <div style={{ padding: "0 12px" }}>
                 <GatewayStatus />
               </div>
+              {tab === "chat" && <ChatHistoryList chat={chat} />}
             </Flexbox>
           }
           footer={<AccountMenu />}
         />
       }
     >
-      {tab === "chat" && <ChatPage />}
+      {tab === "chat" && <ChatPage chat={chat} />}
       {tab === "playground" && <PlaygroundPage />}
       {tab === "keys" && <KeysPage />}
     </AppShell>

@@ -133,13 +133,32 @@ export default function SideNav({
         <div
           className={css`
             padding: 8px 8px 0 8px;
+            /* \`top\` takes the leftover vertical space (and scrolls
+               internally if its own content overflows it) rather than
+               \`items\` below, so an app that puts something unbounded in
+               \`top\` -- a chat-history list, say -- gets a real scroll
+               region instead of silently clipping past the rail's bottom.
+               \`items\` stays its natural (short) height and sits flush
+               above \`footer\` either way, since nothing here changes for
+               apps that don't grow \`top\` past a single row. */
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
           `}
         >
           {top}
         </div>
       )}
 
-      <Flexbox direction="column" gap={4} style={{ padding: 8, flex: 1, overflow: "hidden" }}>
+      <Flexbox
+        direction="column"
+        gap={4}
+        style={{
+          padding: 8,
+          flexShrink: 0,
+          ...(top && !collapsed ? {} : { flex: 1, overflow: "hidden" }),
+        }}
+      >
         {items.map((item) => {
           const isActive = item.key === activeKey;
           // A left accent bar + tinted background reads as "selected" without

@@ -134,8 +134,16 @@ export default function AppShell({
            and the header can stay fixed in place while only the body
            scrolls. Without one -- no sideNav, or sideNav moved into the
            mobile drawer -- this is unchanged: a normal page that scrolls as
-           a whole. */
-        ${showRail ? "height: 100vh; overflow: hidden;" : "min-height: 100vh;"}
+           a whole. \`dvh\` (with a \`vh\` fallback for browsers that don't
+           know it) tracks the *visible* viewport rather than the layout
+           one, so this doesn't jump when a mobile on-screen keyboard opens
+           and shrinks the visible area -- \`vh\` stays put and the fixed
+           shell would otherwise sit partly behind the keyboard. */
+        ${
+          showRail
+            ? "height: 100vh; height: 100dvh; overflow: hidden;"
+            : "min-height: 100vh; min-height: 100dvh;"
+        }
         display: flex;
         flex-direction: column;
         background-color: ${theme.colors.background};
@@ -245,10 +253,12 @@ export default function AppShell({
             background: transparent;
             max-width: 100vw;
             max-height: 100vh;
+            max-height: 100dvh;
             /* Overrides the browser default centering so the panel inside
                can sit flush against the true left edge instead. */
             margin: 0;
             height: 100vh;
+            height: 100dvh;
             width: 100vw;
 
             &::backdrop {
