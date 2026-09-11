@@ -747,6 +747,13 @@ state instead of hiding it outright. `items` is optional: a single-page
 app can render `SideNav` for just its `top`/`footer` chrome with an empty
 (or omitted) `items` array and nothing to switch between.
 
+On mobile, `AppShell` renders the same `sideNav` element a second time inside
+a full-screen drawer rather than the permanent rail — collapsing makes no
+sense floating full-screen on a touch device, so that instance is always
+full-width and forced expanded (no collapse toggle rendered at all), driven
+by `SideNavMobileContext` (exported, but set by `AppShell` — not something an
+app passes itself).
+
 #### `ThemeToggle`
 
 No props. A three-way Auto/Light/Dark `SegmentedControl` wired straight to
