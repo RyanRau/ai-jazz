@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   ChatBubble,
+  Disclosure,
   Dropdown,
   EmptyState,
   Flexbox,
@@ -13,7 +14,7 @@ import {
   TextAreaInput,
   useTheme,
 } from "bluestar";
-import { formatDate } from "./usageHelpers";
+import { formatDate, formatMessageTime } from "./usageHelpers";
 import type { ChatState } from "./useChat";
 
 function formatElapsed(ms: number): string {
@@ -90,42 +91,60 @@ export function ChatPage({ chat }: { chat: ChatState }) {
             description="Send a message below to begin."
           />
         ) : (
-          messages.map((m) => (
-            <Flexbox key={m.id} direction="column" gap={8}>
-              {m.tool_calls.length > 0 && (
-                <Flexbox direction="column" gap={8} style={{ padding: "0 4px" }}>
-                  {m.tool_calls.map((tc, i) => (
-                    <Flexbox key={i} direction="column" gap={4}>
-                      <Text variant="caption">Searched the web: "{tc.query}"</Text>
-                      {tc.results.length > 0 && (
-                        <Flexbox direction="row" gap={12} flexWrap="wrap">
-                          {tc.results.map((r) => (
-                            <Link key={r.url} href={r.url} external variant="muted">
-                              <Text variant="caption">{r.title}</Text>
-                            </Link>
-                          ))}
-                        </Flexbox>
-                      )}
-                    </Flexbox>
-                  ))}
-                </Flexbox>
-              )}
-              <ChatBubble role={m.role} content={m.content} status={m.status} />
-              {m.role === "assistant" &&
+          messages.map((m) => {
+            const isUser = m.role === "user";
+            const meta = [
+              formatMessageTime(m.created),
+              m.role === "assistant" &&
                 m.status === "complete" &&
-                (m.tokens_in > 0 || m.tokens_out > 0 || m.response_ms > 0) && (
-                  <Text variant="caption" color={theme.colors.textMuted}>
-                    {[
-                      m.tokens_in > 0 && `${m.tokens_in.toLocaleString()} in`,
-                      m.tokens_out > 0 && `${m.tokens_out.toLocaleString()} out`,
-                      m.response_ms > 0 && formatElapsed(m.response_ms),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </Text>
+                m.tokens_in > 0 &&
+                `${m.tokens_in.toLocaleString()} in`,
+              m.role === "assistant" &&
+                m.status === "complete" &&
+                m.tokens_out > 0 &&
+                `${m.tokens_out.toLocaleString()} out`,
+              m.role === "assistant" &&
+                m.status === "complete" &&
+                m.response_ms > 0 &&
+                formatElapsed(m.response_ms),
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            const toolCount = m.tool_calls.length;
+
+            return (
+              <Flexbox key={m.id} direction="column" gap={4}>
+                <ChatBubble role={m.role} content={m.content} status={m.status} />
+                {meta && (
+                  <Flexbox justifyContent={isUser ? "flex-end" : "flex-start"}>
+                    <Text variant="caption" color={theme.colors.textMuted}>
+                      {meta}
+                    </Text>
+                  </Flexbox>
                 )}
-            </Flexbox>
-          ))
+                {toolCount > 0 && (
+                  <Disclosure label={`${toolCount} tool${toolCount === 1 ? "" : "s"} used`}>
+                    <Flexbox direction="column" gap={8}>
+                      {m.tool_calls.map((tc, i) => (
+                        <Flexbox key={i} direction="column" gap={4}>
+                          <Text variant="caption">Searched the web: "{tc.query}"</Text>
+                          {tc.results.length > 0 && (
+                            <Flexbox direction="row" gap={12} flexWrap="wrap">
+                              {tc.results.map((r) => (
+                                <Link key={r.url} href={r.url} external variant="muted">
+                                  <Text variant="caption">{r.title}</Text>
+                                </Link>
+                              ))}
+                            </Flexbox>
+                          )}
+                        </Flexbox>
+                      ))}
+                    </Flexbox>
+                  </Disclosure>
+                )}
+              </Flexbox>
+            );
+          })
         )}
         <div ref={threadEndRef} />
       </Flexbox>
@@ -142,8 +161,15 @@ export function ChatPage({ chat }: { chat: ChatState }) {
         <Flexbox direction="column" gap={8}>
           <TextAreaInput
             label="Message"
+            description="Enter to send, Shift+Enter for a new line"
             value={draft}
             onChange={setDraft}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (!sending && apiKey && draft.trim()) send();
+              }
+            }}
             rows={3}
             placeholder="Ask it something"
             isDisabled={sending}

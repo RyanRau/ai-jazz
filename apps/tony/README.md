@@ -20,6 +20,15 @@ A side nav switches between four pages:
   the browser tab (see `_generate_chat_response` in the gateway), so a
   message keeps going and gets saved even if you close it; replies render
   as markdown (`bluestar`'s `Markdown`/`ChatBubble`), code blocks included.
+  The composer sends on Enter and inserts a newline on Shift+Enter
+  (`TextAreaInput`'s `onKeyDown` passthrough); every message shows its own
+  timestamp (`formatMessageTime` in `usageHelpers.ts` — just the time for
+  today, a short date for anything older) alongside token in/out and
+  elapsed time for a completed assistant reply. A web-search tool call
+  (when `web_search.searxng_url` is configured on the gateway) shows up
+  under its message as a `Disclosure` — "N tools used", collapsed by
+  default — rather than an always-open block, since the query/results are
+  useful to check but not something worth taking up space by default.
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
   browser, the same as any other API client. Model is a dropdown populated

@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import { css } from "goober";
 import { useTheme } from "../../../theme";
 import FormInputLayout from "../FormInputLayout/FormInputLayout";
@@ -9,6 +10,9 @@ export type TextAreaInputProps = FormFieldProps & {
   onChange: (value: string) => void;
   placeholder?: string;
   rows?: number;
+  /** Passed straight through to the underlying `<textarea>` -- e.g. for a
+   * chat composer where Enter submits and Shift+Enter inserts a newline. */
+  onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
 };
 
 export default function TextAreaInput({
@@ -23,6 +27,7 @@ export default function TextAreaInput({
   placeholder,
   rows = 4,
   isDisabled,
+  onKeyDown,
 }: TextAreaInputProps) {
   const theme = useTheme();
 
@@ -41,6 +46,7 @@ export default function TextAreaInput({
           value={value}
           rows={rows}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
           disabled={isDisabled}
           required={required}

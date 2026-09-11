@@ -366,17 +366,17 @@ ambient card shadow.
 
 ### Form controls
 
-| Component       | Value type                                   | Extra props                                                                                                                         |
-| --------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `TextInput`     | `string`                                     | `placeholder`, `type` (`text\|email\|password\|url\|tel`), `readOnly` for a copyable but non-editable value (e.g. a generated link) |
-| `NumberInput`   | `number \| null`                             | `min`, `max`, `step`, `placeholder`                                                                                                 |
-| `TextAreaInput` | `string`                                     | `rows` (default `4`), `placeholder`                                                                                                 |
-| `Checkbox`      | `boolean`                                    | `label` is the text beside the box; `hideLabel` visually hides it (sr-only) for dense grids where the label would be redundant      |
-| `Switch`        | `boolean`                                    | same shape as `Checkbox`, toggle UI                                                                                                 |
-| `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                                                                                                       |
-| `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`                                                                                         |
-| `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                                                                                            |
-| `TokenSelect`   | `string[]`                                   | `options: { label, value }[]`, `addLabel` (default `"Add"`)                                                                         |
+| Component       | Value type                                   | Extra props                                                                                                                                                          |
+| --------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TextInput`     | `string`                                     | `placeholder`, `type` (`text\|email\|password\|url\|tel`), `readOnly` for a copyable but non-editable value (e.g. a generated link)                                  |
+| `NumberInput`   | `number \| null`                             | `min`, `max`, `step`, `placeholder`                                                                                                                                  |
+| `TextAreaInput` | `string`                                     | `rows` (default `4`), `placeholder`, `onKeyDown` (raw passthrough to the `<textarea>`, e.g. for a chat composer where Enter sends and Shift+Enter inserts a newline) |
+| `Checkbox`      | `boolean`                                    | `label` is the text beside the box; `hideLabel` visually hides it (sr-only) for dense grids where the label would be redundant                                       |
+| `Switch`        | `boolean`                                    | same shape as `Checkbox`, toggle UI                                                                                                                                  |
+| `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                                                                                                                                        |
+| `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`                                                                                                                          |
+| `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                                                                                                                             |
+| `TokenSelect`   | `string[]`                                   | `options: { label, value }[]`, `addLabel` (default `"Add"`)                                                                                                          |
 
 An empty `NumberInput` yields `null`, never `NaN`.
 
@@ -576,6 +576,23 @@ spinner + "Generating…" below the content (and a placeholder "…" while
 `content` renders through `Markdown` below (code blocks included); a
 user's own message stays plain, whitespace-preserved text so pasting
 something with `#`/`*` in it isn't reformatted as markdown underneath them.
+
+#### `Disclosure`
+
+| Prop          | Type        | Default  |
+| ------------- | ----------- | -------- |
+| `label`       | `string`    | required |
+| `children`    | `ReactNode` | required |
+| `defaultOpen` | `boolean`   | `false`  |
+
+A single collapsible section — a chevron + `label` that reveals `children`
+on click, collapsed by default. For an aside that's genuinely optional to
+read (tool calls behind a chat reply, a raw error's stack trace) rather
+than content that belongs in the page's normal flow; reach for a plain
+heading instead when the content is always worth showing. Not the same
+thing as `SideNav`'s own per-item chevron (that one's wired to
+`expandedContent`/`activeKey`, not a standalone component) — this is the
+generic building block for "collapsed until clicked" anywhere else.
 
 #### `Markdown`
 
