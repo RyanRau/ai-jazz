@@ -14,6 +14,7 @@ import {
   Spinner,
   Text,
   breakpoints,
+  useTheme,
 } from "bluestar";
 import type { SideNavItem } from "bluestar";
 import { useAuthRecord } from "./useAuth";
@@ -24,9 +25,16 @@ import { AppSwitcher } from "./AppSwitcher";
 import { AdminPage } from "./AdminPage";
 import { SettingsPage } from "./SettingsPage";
 import { ActivatePage } from "./ActivatePage";
+import { AppIcon } from "./appIcons";
 import { pb } from "./pb";
 
-type GrantedApp = { id: string; name: string; url: string; description?: string; icon?: string };
+type GrantedApp = {
+  id: string;
+  slug: string;
+  name: string;
+  url: string;
+  description?: string;
+};
 
 // The fixed footprint lives on this wrapper (a real flex item with a
 // declared width), not on Card's own content — Card has no width prop and
@@ -65,12 +73,14 @@ const clampClass = css`
   -webkit-box-orient: vertical;
 `;
 
+const onHomePath = window.location.pathname === "/";
 const onAppsPath = window.location.pathname === "/apps";
 const onAdminPath = window.location.pathname === "/admin";
 const onSettingsPath = window.location.pathname === "/settings";
 const onActivatePath = window.location.pathname === "/activate";
 
 function App() {
+  const theme = useTheme();
   const record = useAuthRecord();
   const [loginOpen, setLoginOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
@@ -122,15 +132,16 @@ function App() {
   // Fully replaces hub.ryanzrau.dev, which no longer exists — this app now
   // does everything hub once did.
   const navItems: SideNavItem[] = [
+    { key: "home", label: "Home", icon: "home" },
     { key: "apps", label: "Apps", icon: "grid" },
     ...(record.is_admin ? [{ key: "admin", label: "Admin", icon: "user" } as SideNavItem] : []),
   ];
   const sideNav = (
     <SideNav
       items={navItems}
-      activeKey={onAdminPath ? "admin" : onAppsPath ? "apps" : ""}
+      activeKey={onAdminPath ? "admin" : onAppsPath ? "apps" : onHomePath ? "home" : ""}
       onSelect={(key) => {
-        window.location.href = `/${key}`;
+        window.location.href = key === "home" ? "/" : `/${key}`;
       }}
       top={<AppSwitcher appName="Ryan Rau" />}
       footer={<AccountMenu />}
@@ -180,11 +191,9 @@ function App() {
                   <Card padding={20}>
                     <div className={appCardClass}>
                       <Flexbox direction="row" alignItems="center" gap={8}>
-                        {a.icon && (
-                          <span aria-hidden style={{ fontSize: 20, flexShrink: 0 }}>
-                            {a.icon}
-                          </span>
-                        )}
+                        <div style={{ flexShrink: 0 }}>
+                          <AppIcon slug={a.slug} size={20} color={theme.colors.primary} />
+                        </div>
                         <div className={truncateClass}>
                           <Header variant="h3">{a.name}</Header>
                         </div>
@@ -211,7 +220,7 @@ function App() {
   // the dashboard nav in an overlay instead of a permanent sideNav rail.
   return (
     <>
-      <Landing signedIn onOpenMenu={() => setNavOpen(true)} />
+      <Landing signedIn onOpenMenu={() => setNavOpen(true)} name={record.name || record.email} />
 
       <Drawer isOpen={navOpen} onClose={() => setNavOpen(false)} title="Menu">
         <SideNavMobileContext.Provider value={true}>{sideNav}</SideNavMobileContext.Provider>

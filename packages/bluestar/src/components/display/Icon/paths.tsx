@@ -37,6 +37,12 @@ export const iconPaths: Record<IconName, React.ReactNode> = {
     </>
   ),
   check: <path d="M20 6 9 17l-5-5" />,
+  home: (
+    <>
+      <path d="M3 11.5 12 4l9 7.5" />
+      <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" />
+    </>
+  ),
   user: (
     <>
       <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
