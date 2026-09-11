@@ -461,6 +461,19 @@ export function ChatPage() {
                     </Flexbox>
                   )}
                   <ChatBubble role={m.role} content={m.content} status={m.status} />
+                  {m.role === "assistant" &&
+                    m.status === "complete" &&
+                    (m.tokens_in > 0 || m.tokens_out > 0 || m.response_ms > 0) && (
+                      <Text variant="caption" color={theme.colors.textMuted}>
+                        {[
+                          m.tokens_in > 0 && `${m.tokens_in.toLocaleString()} in`,
+                          m.tokens_out > 0 && `${m.tokens_out.toLocaleString()} out`,
+                          m.response_ms > 0 && formatElapsed(m.response_ms),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </Text>
+                    )}
                 </Flexbox>
               ))
             )}
@@ -490,14 +503,6 @@ export function ChatPage() {
                   <Text variant="caption">Still generating…</Text>
                 </Flexbox>
               )}
-              {!sending &&
-                lastMessage?.role === "assistant" &&
-                lastMessage.status === "complete" &&
-                lastMessage.response_ms > 0 && (
-                  <Text variant="caption">
-                    Responded in {formatElapsed(lastMessage.response_ms)}
-                  </Text>
-                )}
             </Flexbox>
           </Flexbox>
 
