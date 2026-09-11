@@ -71,3 +71,42 @@ export function AccountMenu() {
     </Flexbox>
   );
 }
+
+/**
+ * `SideNav`'s `collapsedFooter` stand-in for `AccountMenu` above — the
+ * 64px collapsed rail has no room for the full name/email/Settings/theme
+ * row, but the profile (→ Settings) and log-out actions still need to be
+ * reachable without expanding the rail.
+ */
+export function CollapsedAccountMenu() {
+  const record = useAuthRecord();
+  if (!record) return null;
+
+  const name = record.name || record.email;
+  const avatarSrc = record.avatar ? pb.files.getURL(record, record.avatar) : undefined;
+
+  return (
+    <Flexbox direction="column" alignItems="center" gap={8}>
+      <button
+        type="button"
+        aria-label={`Settings (${name})`}
+        onClick={() => {
+          window.location.href = SETTINGS_URL;
+        }}
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+      >
+        <Avatar src={avatarSrc} name={name} size={28} />
+      </button>
+      <Button
+        label="Log out"
+        aria-label="Log out"
+        appearance="text"
+        variant="secondary"
+        density="dense"
+        onClick={signOut}
+      >
+        <Icon name="logOut" size={16} />
+      </Button>
+    </Flexbox>
+  );
+}
