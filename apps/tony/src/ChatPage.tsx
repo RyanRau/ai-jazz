@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { css } from "goober";
 import {
   Badge,
+  breakpoints,
   Button,
-  Card,
   ChatBubble,
-  Divider,
+  Drawer,
   Dropdown,
   EmptyState,
   Flexbox,
   Header,
+  Icon,
   Link,
   ListRow,
   Spinner,
@@ -91,9 +93,16 @@ function deltaContent(ev: Record<string, unknown>): string | null {
   return typeof delta?.content === "string" ? delta.content : null;
 }
 
+const LIST_WIDTH = 280;
+
 /**
- * Persistent, multi-turn chat -- two panels like KeysPage, chat list on the
- * left, thread on the right. Generation is driven by gateway.py's
+ * Persistent, multi-turn chat -- laid out like OpenAI/Claude's own chat UI:
+ * a chat-history list and the active thread, full-height and edge to edge
+ * rather than boxed in a `Card`. The list renders twice, like `AppShell`'s
+ * own nav does for its mobile drawer -- as a permanent column at `md` and
+ * up, and inside a `Drawer` below that, opened from a menu button in the
+ * thread header -- so switching chats on a phone never fights a cramped
+ * fixed-height panel for space. Generation is driven by gateway.py's
  * /v1/chat/send as a background task independent of this page's connection
  * (see that file's _generate_chat_response), so a message started here keeps
  * going and gets saved even if you close the tab. This page shows it two
@@ -114,6 +123,7 @@ export function ChatPage() {
   const [chats, setChats] = useState<ChatSummary[] | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -208,12 +218,14 @@ export function ChatPage() {
     setSelectedChatId(null);
     setDraft("");
     setError(null);
+    setHistoryOpen(false);
   }
 
   function selectChat(id: string) {
     abortRef.current?.abort();
     setMessages([]);
     setSelectedChatId(id);
+    setHistoryOpen(false);
   }
 
   async function sendWith(key: string, retryOn401: boolean): Promise<void> {
@@ -369,37 +381,111 @@ export function ChatPage() {
     lastMessage && (lastMessage.status === "pending" || lastMessage.status === "streaming")
   );
 
-  return (
-    <Card padding={24}>
-      <Flexbox gap={20} alignItems="flex-start">
-        <Flexbox direction="column" gap={12} width={260} style={{ flexShrink: 0 }}>
-          <Flexbox justifyContent="space-between" alignItems="center">
-            <Header variant="h2">Chat</Header>
-            <Button label="New chat" variant="creation" density="dense" onClick={newChat} />
-          </Flexbox>
-          {chats.length === 0 ? (
-            <Text variant="caption">No chats yet.</Text>
-          ) : (
-            <Flexbox direction="column" gap={4}>
-              {chats.map((c) => (
-                <ListRow
-                  key={c.id}
-                  title={c.title}
-                  subtitle={formatDate(c.updated)}
-                  selected={c.id === selectedChatId}
-                  onClick={() => selectChat(c.id)}
-                />
-              ))}
-            </Flexbox>
-          )}
+  const chatList = (onNavigate: () => void, showTitle: boolean) => (
+    <Flexbox direction="column" gap={12} style={{ padding: 12 }}>
+      <Flexbox justifyContent={showTitle ? "space-between" : "flex-end"} alignItems="center">
+        {showTitle && <Header variant="h3">Chats</Header>}
+        <Button
+          label="New chat"
+          variant="creation"
+          density="dense"
+          onClick={() => {
+            newChat();
+            onNavigate();
+          }}
+        />
+      </Flexbox>
+      {chats.length === 0 ? (
+        <Text variant="caption">No chats yet.</Text>
+      ) : (
+        <Flexbox direction="column" gap={4}>
+          {chats.map((c) => (
+            <ListRow
+              key={c.id}
+              title={c.title}
+              subtitle={formatDate(c.updated)}
+              selected={c.id === selectedChatId}
+              onClick={() => {
+                selectChat(c.id);
+                onNavigate();
+              }}
+            />
+          ))}
         </Flexbox>
+      )}
+    </Flexbox>
+  );
 
-        <Divider direction="vertical" />
+  return (
+    <div
+      className={css`
+        display: flex;
+        flex-direction: row;
+        height: 100%;
+        min-height: 0;
+        border: 1px solid ${theme.colors.border};
+        border-radius: ${theme.radius.lg};
+        overflow: hidden;
+      `}
+    >
+      <div
+        className={css`
+          width: ${LIST_WIDTH}px;
+          flex-shrink: 0;
+          height: 100%;
+          overflow-y: auto;
+          border-right: 1px solid ${theme.colors.border};
+          background-color: ${theme.colors.surface};
+          @media (max-width: ${breakpoints.md}px) {
+            display: none;
+          }
+        `}
+      >
+        {chatList(() => {}, true)}
+      </div>
 
-        <Flexbox direction="column" gap={16} grow={1} style={{ minWidth: 0 }}>
-          <Flexbox justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={12}>
+      <Flexbox direction="column" grow={1} style={{ minWidth: 0, height: "100%", minHeight: 0 }}>
+        <Flexbox
+          justifyContent="space-between"
+          alignItems="flex-start"
+          flexWrap="wrap"
+          gap={12}
+          style={{
+            flexShrink: 0,
+            padding: "12px 16px",
+            borderBottom: `1px solid ${theme.colors.border}`,
+          }}
+        >
+          <Flexbox alignItems="center" gap={8}>
+            <button
+              type="button"
+              aria-label="Chat history"
+              onClick={() => setHistoryOpen(true)}
+              className={css`
+                display: none;
+                @media (max-width: ${breakpoints.md}px) {
+                  display: flex;
+                }
+                align-items: center;
+                background: none;
+                border: 1px solid ${theme.colors.border};
+                border-radius: ${theme.radius.md};
+                padding: 8px;
+                cursor: pointer;
+                color: ${theme.colors.text};
+                &:hover {
+                  background-color: ${theme.colors.surfaceHover};
+                }
+                &:focus-visible {
+                  outline: 2px solid ${theme.colors.focusRing};
+                  outline-offset: 2px;
+                }
+              `}
+            >
+              <Icon name="menu" size={18} />
+            </button>
             <Flexbox direction="column" gap={4}>
-              <Header variant="h2">{selectedChat ? selectedChat.title : "New chat"}</Header>
+              <Header variant="h3">{selectedChat ? selectedChat.title : "New chat"}</Header>
               {selectedChat && (
                 <Flexbox gap={8} alignItems="center">
                   <Badge variant="neutral">{selectedChat.model}</Badge>
@@ -407,109 +493,118 @@ export function ChatPage() {
                 </Flexbox>
               )}
             </Flexbox>
-            {!selectedChat &&
-              (modelList ? (
-                <div style={{ width: 260 }}>
-                  <Dropdown
-                    label="Model"
-                    options={[
-                      { label: "Gateway default", value: "" },
-                      ...modelList.map((m) => ({ label: m.id, value: m.id })),
-                    ]}
-                    value={model}
-                    onChange={(v) => setModel(v ?? "")}
-                  />
-                </div>
-              ) : null)}
           </Flexbox>
+          {!selectedChat &&
+            (modelList ? (
+              <div style={{ width: 240, maxWidth: "100%" }}>
+                <Dropdown
+                  label="Model"
+                  options={[
+                    { label: "Gateway default", value: "" },
+                    ...modelList.map((m) => ({ label: m.id, value: m.id })),
+                  ]}
+                  value={model}
+                  onChange={(v) => setModel(v ?? "")}
+                />
+              </div>
+            ) : null)}
+        </Flexbox>
 
-          <div
-            style={{
-              minHeight: 320,
-              maxHeight: 480,
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              padding: "4px 4px 0",
-            }}
-          >
-            {messages.length === 0 ? (
-              <EmptyState
-                title={selectedChat ? "No messages" : "Start a new chat"}
-                description="Send a message below to begin."
-              />
-            ) : (
-              messages.map((m) => (
-                <Flexbox key={m.id} direction="column" gap={8}>
-                  {m.tool_calls.length > 0 && (
-                    <Flexbox direction="column" gap={8} style={{ padding: "0 4px" }}>
-                      {m.tool_calls.map((tc, i) => (
-                        <Flexbox key={i} direction="column" gap={4}>
-                          <Text variant="caption">Searched the web: "{tc.query}"</Text>
-                          {tc.results.length > 0 && (
-                            <Flexbox direction="row" gap={12} flexWrap="wrap">
-                              {tc.results.map((r) => (
-                                <Link key={r.url} href={r.url} external variant="muted">
-                                  <Text variant="caption">{r.title}</Text>
-                                </Link>
-                              ))}
-                            </Flexbox>
-                          )}
-                        </Flexbox>
-                      ))}
-                    </Flexbox>
-                  )}
-                  <ChatBubble role={m.role} content={m.content} status={m.status} />
-                  {m.role === "assistant" &&
-                    m.status === "complete" &&
-                    (m.tokens_in > 0 || m.tokens_out > 0 || m.response_ms > 0) && (
-                      <Text variant="caption" color={theme.colors.textMuted}>
-                        {[
-                          m.tokens_in > 0 && `${m.tokens_in.toLocaleString()} in`,
-                          m.tokens_out > 0 && `${m.tokens_out.toLocaleString()} out`,
-                          m.response_ms > 0 && formatElapsed(m.response_ms),
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </Text>
-                    )}
-                </Flexbox>
-              ))
-            )}
-            <div ref={threadEndRef} />
-          </div>
-
-          <Divider />
-
-          <Flexbox direction="column" gap={8}>
-            <TextAreaInput
-              label="Message"
-              value={draft}
-              onChange={setDraft}
-              rows={3}
-              placeholder="Ask it something"
-              isDisabled={sending}
+        <div
+          className={css`
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+          `}
+        >
+          {messages.length === 0 ? (
+            <EmptyState
+              title={selectedChat ? "No messages" : "Start a new chat"}
+              description="Send a message below to begin."
             />
-            <Flexbox gap={8} alignItems="center">
-              <Button
-                label={sending ? "Sending…" : "Send"}
-                onClick={send}
-                isDisabled={sending || !apiKey || !draft.trim()}
-              />
-              {generating && !sending && (
-                <Flexbox gap={4} alignItems="center">
-                  <Spinner size={14} />
-                  <Text variant="caption">Still generating…</Text>
-                </Flexbox>
-              )}
-            </Flexbox>
-          </Flexbox>
+          ) : (
+            messages.map((m) => (
+              <Flexbox key={m.id} direction="column" gap={8}>
+                {m.tool_calls.length > 0 && (
+                  <Flexbox direction="column" gap={8} style={{ padding: "0 4px" }}>
+                    {m.tool_calls.map((tc, i) => (
+                      <Flexbox key={i} direction="column" gap={4}>
+                        <Text variant="caption">Searched the web: "{tc.query}"</Text>
+                        {tc.results.length > 0 && (
+                          <Flexbox direction="row" gap={12} flexWrap="wrap">
+                            {tc.results.map((r) => (
+                              <Link key={r.url} href={r.url} external variant="muted">
+                                <Text variant="caption">{r.title}</Text>
+                              </Link>
+                            ))}
+                          </Flexbox>
+                        )}
+                      </Flexbox>
+                    ))}
+                  </Flexbox>
+                )}
+                <ChatBubble role={m.role} content={m.content} status={m.status} />
+                {m.role === "assistant" &&
+                  m.status === "complete" &&
+                  (m.tokens_in > 0 || m.tokens_out > 0 || m.response_ms > 0) && (
+                    <Text variant="caption" color={theme.colors.textMuted}>
+                      {[
+                        m.tokens_in > 0 && `${m.tokens_in.toLocaleString()} in`,
+                        m.tokens_out > 0 && `${m.tokens_out.toLocaleString()} out`,
+                        m.response_ms > 0 && formatElapsed(m.response_ms),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </Text>
+                  )}
+              </Flexbox>
+            ))
+          )}
+          <div ref={threadEndRef} />
+        </div>
 
+        <Flexbox
+          direction="column"
+          gap={8}
+          style={{
+            flexShrink: 0,
+            padding: 16,
+            borderTop: `1px solid ${theme.colors.border}`,
+          }}
+        >
+          <TextAreaInput
+            label="Message"
+            value={draft}
+            onChange={setDraft}
+            rows={3}
+            placeholder="Ask it something"
+            isDisabled={sending}
+          />
+          <Flexbox gap={8} alignItems="center">
+            <Button
+              label={sending ? "Sending…" : "Send"}
+              onClick={send}
+              isDisabled={sending || !apiKey || !draft.trim()}
+            />
+            {generating && !sending && (
+              <Flexbox gap={4} alignItems="center">
+                <Spinner size={14} />
+                <Text variant="caption">Still generating…</Text>
+              </Flexbox>
+            )}
+          </Flexbox>
           {keyError && <Text color={theme.colors.error}>{keyError}</Text>}
           {error && <Text color={theme.colors.error}>{error}</Text>}
         </Flexbox>
       </Flexbox>
-    </Card>
+
+      <Drawer isOpen={historyOpen} onClose={() => setHistoryOpen(false)} title="Chats">
+        {chatList(() => setHistoryOpen(false), false)}
+      </Drawer>
+    </div>
   );
 }

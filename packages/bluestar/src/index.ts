@@ -32,6 +32,7 @@ export * from "./components/display/StatusDot";
 
 // Overlay
 export * from "./components/overlay/Modal";
+export * from "./components/overlay/Drawer";
 export * from "./components/overlay/ConfirmDialog";
 export * from "./components/overlay/Menu";
 export * from "./components/overlay/MenuItem";

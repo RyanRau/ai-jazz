@@ -601,6 +601,28 @@ Generic over the row type, so `cell` receives a typed row.
 
 Built on native `<dialog>`, so focus trapping and Esc-to-close come for free.
 
+#### `Drawer`
+
+| Prop              | Type                | Default  |
+| ----------------- | ------------------- | -------- |
+| `isOpen`          | `boolean`           | required |
+| `onClose`         | `() => void`        | required |
+| `title`           | `string`            | required |
+| `side`            | `"left" \| "right"` | `"left"` |
+| `width`           | `number \| string`  | `320`    |
+| `closeOnBackdrop` | `boolean`           | `true`   |
+
+A full-height panel flush against a viewport edge, built on native `<dialog>`
+the same way `Modal` is. For a secondary list nested inside a page — chat
+history, a filter rail — that should float above the content on a narrow
+viewport instead of losing permanent width to it: show it as an ordinary
+column on a wide viewport, and swap in a `Drawer` (toggled from a button) on
+narrow ones, closing it yourself once the user picks something (unlike
+`AppShell`'s own top-level nav drawer, a page you write fully controls its
+own `Drawer` state, so closing on selection is just calling `onClose` from
+the click handler). This is the same list-over-content pattern `AppShell`
+uses internally for mobile navigation, generalized for reuse inside a page.
+
 #### `ConfirmDialog`
 
 `isOpen`, `onClose`, `onConfirm` (may be async), `title`, `message`,
