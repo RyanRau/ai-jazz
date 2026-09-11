@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { css } from "goober";
 import {
   BarChart,
@@ -182,8 +182,12 @@ function RenameKeyForm({
  * Key management + usage, two panels: a key list on the left (with "All
  * keys" as its own row, aggregating everyone visible), the selected key's
  * detail -- rename/revoke plus its usage -- on the right. Admin sees every
- * key (with its owner) and every usage row; a regular user sees only their
- * own -- enforced by apps/pocketbase/pb_hooks/llm.pb.js, not here.
+ * key (with its owner) in the list; a regular user sees only their own --
+ * enforced by apps/pocketbase/pb_hooks/llm.pb.js, not here. The "All keys"
+ * usage view defaults to just the signed-in user's own rows regardless of
+ * admin status (`usageScope`, `?mine=true`) -- an admin's own usage has no
+ * other way to stand out inside an unscoped dump of every user's rows, so
+ * seeing everyone's is an explicit toggle, not the landing state.
  */
 export function KeysPage() {
   const record = useAuthRecord();
@@ -201,20 +205,29 @@ export function KeysPage() {
   const [keyScopedUsage, setKeyScopedUsage] = useState<UsageRow[] | null>(null);
   const [showRevoked, setShowRevoked] = useState(false);
   const [listOpen, setListOpen] = useState(false);
+  // Meaningful for an admin only -- a non-admin's own usage is already all
+  // GET /usage ever returns them, so this stays "mine" and unused for them.
+  // Defaults to "mine": an admin's own usage isn't otherwise distinguishable
+  // inside an unscoped dump of every user's rows, so "all users" is an
+  // explicit opt-in rather than the landing view.
+  const [usageScope, setUsageScope] = useState<"mine" | "all">("mine");
 
-  function load() {
+  const load = useCallback(() => {
     return Promise.all([
       pb.send<{ keys: KeyRow[] }>("/api/custom/llm/keys", { method: "GET" }),
-      pb.send<{ usage: UsageRow[] }>("/api/custom/llm/usage", { method: "GET" }),
+      pb.send<{ usage: UsageRow[] }>("/api/custom/llm/usage", {
+        method: "GET",
+        query: isAdmin && usageScope === "all" ? {} : { mine: "true" },
+      }),
     ]).then(([keysRes, usageRes]) => {
       setKeys(keysRes.keys);
       setAllUsage(usageRes.usage);
     });
-  }
+  }, [isAdmin, usageScope]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     if (!selectedKeyId) return;
@@ -416,7 +429,26 @@ export function KeysPage() {
               </>
             ) : (
               <>
-                <Header variant="h2">All keys</Header>
+                <Flexbox
+                  justifyContent="space-between"
+                  alignItems="center"
+                  flexWrap="wrap"
+                  gap={12}
+                >
+                  <Header variant="h2">
+                    {isAdmin && usageScope === "all" ? "All users" : "My usage"}
+                  </Header>
+                  {isAdmin && (
+                    <SegmentedControl
+                      options={[
+                        { label: "My usage", value: "mine" },
+                        { label: "All users", value: "all" },
+                      ]}
+                      value={usageScope}
+                      onChange={setUsageScope}
+                    />
+                  )}
+                </Flexbox>
                 <UsageSection rows={rows} />
               </>
             )}
