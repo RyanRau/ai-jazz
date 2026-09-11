@@ -41,3 +41,28 @@ export const Error: Story = {
     </Flexbox>
   ),
 };
+
+export const WithMarkdown: Story = {
+  render: () => (
+    <Flexbox direction="column" gap={12} style={{ width: 480 }}>
+      <ChatBubble
+        role="user"
+        content="Write a TS function that reverses a string, and explain the * and # in this sentence."
+      />
+      <ChatBubble
+        role="assistant"
+        content={
+          "Here you go:\n\n```ts\nfunction reverse(s: string): string {\n  return [...s].reverse().join('');\n}\n```\n\nThe `*` and `#` are literal characters — I only treat *your* markdown-looking punctuation as text, not formatting."
+        }
+      />
+    </Flexbox>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Assistant content renders through `Markdown` (code blocks included); the user's own message stays plain, whitespace-preserved text even though it also contains `*`/`#` characters.",
+      },
+    },
+  },
+};

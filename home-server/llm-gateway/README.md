@@ -106,9 +106,23 @@ curl http://127.0.0.1:8000/v1/chat/completions \
 First request to a model is slow (load time). Same model on subsequent requests
 reuses the running process.
 
+**Any request-body param not shown above already works** — `temperature`,
+`top_p`, `max_tokens`, `seed`, `stream`/`stream_options`, and anything else your
+`llama-server` build accepts pass straight through to it untouched; this file
+only ever touches `model` (alias → real name) and, for `/v1/chat/send`,
+forces `stream: true`. Tony's Playground (`apps/tony/src/PlaygroundPage.tsx`)
+puts dedicated controls in front of the common ones plus a streaming toggle,
+and a raw-JSON field for everything else — see that app's Docs page for the
+user-facing version of this reference.
+
 **Reasoning budget**: fixed per model in `config.yaml`, not per-request. If your
 `llama-server` build accepts `reasoning_budget` in the request body, that already
 passes through untouched — no gateway change needed.
+
+**Context size**: also fixed per model in `config.yaml` (`args.ctx-size`),
+set when that model's `llama-server` process starts — not something a
+request can override, since it's a server startup flag, not a chat-completion
+parameter.
 
 ## Web search (optional)
 

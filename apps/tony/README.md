@@ -1,46 +1,68 @@
 # tony
 
 Dashboard for the home-lab LLM setup — served at `https://tony.ryanzrau.dev`.
-A side nav switches between two pages:
+A side nav switches between four pages:
 
+- **Chat** — persistent, multi-turn conversations, backed by
+  `apps/pocketbase/pb_hooks/chat.pb.js` and gateway.py's `/v1/chat/send`.
+  Recent chats live in the side nav itself (`src/ChatHistoryList.tsx`,
+  rendered in `SideNav`'s `top` slot — see `packages/PACKAGES.md` on why
+  that slot, not a separate page-level panel, is where an unbounded list
+  belongs), with the thread itself in `src/ChatPage.tsx`. Both share one
+  `src/useChat.ts` instance, created once in `App.tsx`. Generation runs as a
+  background task independent of the browser tab (see `_generate_chat_response`
+  in the gateway), so a message keeps going and gets saved even if you close
+  it; replies render as markdown (`bluestar`'s `Markdown`/`ChatBubble`),
+  code blocks included.
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
-  browser, the same as any other API client. Uses a personal key created
-  automatically the first time a user visits (`src/playgroundKey.ts`) —
-  nothing to paste in. It's a real key like any other (created via the same
-  self-service route the Keys page uses, just triggered for the user rather
-  than by them), cached client-side in `localStorage` scoped by user id, and
-  shows up on the Keys page as `"Tony Playground (auto)"`, marked default so
-  it can't be revoked out from under this page. If the cached key stops
-  working (cache cleared elsewhere), the page mints a fresh one and retries
-  once rather than surfacing an auth error for a key the user never typed in
-  themselves. The model field is a dropdown populated from the gateway's own
-  `GET /v1/models` once the key is ready, falling back to a plain text field
-  if the gateway can't be reached; picking a model the gateway reports as
-  vision-capable enables an image attachment field, sent as an `image_url`
-  content part alongside the prompt. Until the WireGuard tunnel exists,
-  sending will fail to reach the gateway — that's expected, not a bug in
-  this page.
+  browser, the same as any other API client. Model is a dropdown populated
+  from the gateway's own `GET /v1/models` once a key is ready, falling back
+  to a plain text field if the gateway can't be reached; picking a
+  vision-capable model enables an image attachment field, sent as an
+  `image_url` content part. Exposes dedicated controls for the common
+  sampling params (temperature, max tokens, top P) plus an **Advanced
+  params** JSON field that merges arbitrary extra fields into the request
+  body — anything a given `llama-server` build accepts (`reasoning_budget`,
+  `min_p`, `seed`, ...) passes straight through with no gateway change
+  needed, since gateway.py forwards the body almost untouched. A **Stream
+  response** toggle reads the reply as SSE instead of waiting for the whole
+  completion (the gateway already supports this for `/v1/chat/completions`;
+  see its README). See the **Docs** page for the full parameter reference.
 - **Keys** — create/revoke API keys and see both per-key and aggregate usage
   (call count, tokens in/out, a daily time-series chart) in one place, with
   a dropdown to scope the usage section to one key or "All keys". Backed by
   `apps/pocketbase/pb_hooks/llm.pb.js`: an `is_admin` account sees and can
   revoke every key across every user; anyone else only ever sees their own.
   A key's plaintext is shown exactly once, at creation — the server never
-  stores it, only its hash. The Playground's auto-provisioned key is marked
-  `is_default` and has no Revoke button — the route refuses to revoke it
-  even for an admin, since there'd be no way for the Playground to recover
-  (a `1788989340`/`1788992030` migration pair adds the field and backfills
-  it onto keys that were minted before it existed). Revoking is a soft
-  delete: the key drops out of the table and usage dropdown, but a "Show
+  stores it, only its hash. Chat and Playground share one personal
+  _default_ key (`src/playgroundKey.ts`/`src/usePlaygroundKey.ts`) — shown
+  on this page as `"Tony Playground (auto)"`, with no Revoke button, since
+  the route refuses to revoke a default key even for an admin (there'd be
+  no way to recover it: its plaintext is cached only in whatever browser
+  minted it, never stored server-side). If a page finds no key cached
+  locally, it shows a warning with a "Create key" button rather than
+  minting one silently — the old silent-mint-on-every-cache-miss behavior
+  is what let a user end up with several defaults; the server now also
+  refuses to create a second active default per user outright (checked in
+  `llm.pb.js`'s POST /keys route, its `onRecordCreate`/`onRecordUpdate`
+  hooks, and a partial unique index — see migration
+  `1789099510_llm_api_keys_one_default_index.js`). Revoking any other key is
+  a soft delete: it drops out of the table and usage dropdown, but a "Show
   revoked keys" toggle brings it (and its usage) back into view rather than
   deleting the row. The usage stats and chart are built on bluestar's
   `StatTile` and `LineChart`.
+- **Docs** (`src/DocsPage.tsx`) — the gateway's request/response reference
+  (parameters, streaming, images) rendered as markdown via `bluestar`'s
+  `Markdown` component, the same one Chat/Playground use for replies. Plain
+  markdown content in the file itself — no CMS round-trip for a page one
+  person maintains.
 
 Auth and data both go through PocketBase (`registry_apps`/`registry_grants`
 for who can open the app at all; `llm_api_keys`/`llm_usage_logs` for the Keys
 page). See [`home-server/llm-gateway`](../../home-server/llm-gateway/README.md)
-for how the gateway itself validates keys and reports usage back.
+for how the gateway itself validates keys, reports usage back, and forwards
+request parameters to `llama-server`.
 
 ## Local development
 

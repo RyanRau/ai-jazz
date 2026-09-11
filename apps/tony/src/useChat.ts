@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { pb } from "./pb";
+import { useAuthRecord } from "./useAuth";
 import { usePlaygroundKey } from "./usePlaygroundKey";
 import { GATEWAY_URL } from "./gateway";
+import { parseSseLines, deltaContent } from "./sse";
 
 export type ChatSummary = {
   id: string;
@@ -32,28 +34,6 @@ type IdsEvent = {
   assistant_message_id: string;
 };
 
-// Mirrors gateway.py's _parse_sse_json_lines -- splits on complete lines,
-// JSON-parses `data: {...}` lines, carries a trailing partial line over to
-// the next chunk. The gateway relays raw upstream bytes verbatim, so this
-// has to handle the same partial-line-across-chunks case it does.
-function parseSseLines(buffer: string): { events: Record<string, unknown>[]; leftover: string } {
-  const lines = buffer.split("\n");
-  const leftover = lines.pop() ?? "";
-  const events: Record<string, unknown>[] = [];
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line.startsWith("data:")) continue;
-    const payload = line.slice(5).trim();
-    if (payload === "" || payload === "[DONE]") continue;
-    try {
-      events.push(JSON.parse(payload));
-    } catch {
-      // Partial/garbled line -- skip it, the stream keeps going.
-    }
-  }
-  return { events, leftover };
-}
-
 // Mirrors chat.pb.js's title derivation so the optimistic chat-list entry
 // (added the moment a new chat starts, before the next refresh) matches
 // what the server will actually store.
@@ -63,14 +43,6 @@ function deriveTitle(content: string): string {
 
 function isIdsEvent(ev: Record<string, unknown>): ev is IdsEvent {
   return ev.type === "ids" && typeof ev.chat_id === "string";
-}
-
-function deltaContent(ev: Record<string, unknown>): string | null {
-  const choices = ev.choices;
-  if (!Array.isArray(choices) || choices.length === 0) return null;
-  const delta = (choices[0] as Record<string, unknown>)?.delta as
-    Record<string, unknown> | undefined;
-  return typeof delta?.content === "string" ? delta.content : null;
 }
 
 /**
@@ -89,6 +61,11 @@ function deltaContent(ev: Record<string, unknown>): string | null {
  * ten minutes later."
  */
 export function useChat() {
+  // App.tsx calls this hook unconditionally, before its own `if (!record)`
+  // gate -- so refreshChats()'s own effect below can't assume `record`
+  // exists the way it could when this lived inside ChatPage, a component
+  // that only ever mounted post-login.
+  const record = useAuthRecord();
   const playgroundKey = usePlaygroundKey();
   const { apiKey, keyError, recoverFromUnauthorized } = playgroundKey;
 
@@ -127,8 +104,9 @@ export function useChat() {
   }
 
   useEffect(() => {
+    if (!record) return;
     refreshChats();
-  }, []);
+  }, [record]);
 
   // Loads a selected chat's messages, then polls every 1.5s while the last
   // one is still generating -- skipped while this tab is actively streaming

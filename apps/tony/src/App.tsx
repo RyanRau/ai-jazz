@@ -9,10 +9,11 @@ import { ChatPage } from "./ChatPage";
 import { ChatHistoryList } from "./ChatHistoryList";
 import { KeysPage } from "./KeysPage";
 import { PlaygroundPage } from "./PlaygroundPage";
+import { DocsPage } from "./DocsPage";
 import { pb } from "./pb";
 import { useChat } from "./useChat";
 
-type Tab = "chat" | "playground" | "keys";
+type Tab = "chat" | "playground" | "keys" | "docs";
 
 function App() {
   const record = useAuthRecord();
@@ -65,6 +66,7 @@ function App() {
             { key: "chat", label: "Chat", icon: "chat" },
             { key: "playground", label: "Playground", icon: "search" },
             { key: "keys", label: "Keys", icon: "key" },
+            { key: "docs", label: "Docs", icon: "docs" },
           ]}
           activeKey={tab}
           onSelect={(key) => setTab(key as Tab)}
@@ -84,6 +86,7 @@ function App() {
       {tab === "chat" && <ChatPage chat={chat} />}
       {tab === "playground" && <PlaygroundPage />}
       {tab === "keys" && <KeysPage />}
+      {tab === "docs" && <DocsPage />}
     </AppShell>
   );
 }

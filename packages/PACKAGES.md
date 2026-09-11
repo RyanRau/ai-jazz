@@ -311,10 +311,12 @@ for a one-per-page hero/landing headline — which still renders as an
 | --------- | ----------------------------------------------------------- | ------------ |
 | `variant` | `"caption" \| "body" \| "subtitle" \| "label" \| "display"` | `"subtitle"` |
 | `color`   | `string`                                                    | —            |
-| `as`      | `"p" \| "span" \| "label"`                                  | `"p"`        |
+| `as`      | `"p" \| "span" \| "label" \| "div"`                         | `"p"`        |
 
 There are no `bold` / `italic` / `muted` / `size` props — the variant carries all
-of that.
+of that. Pass `as="div"` when the content needs to contain block-level
+children (another `Flexbox`, a button) — a `<p>` can't legally contain
+those, which is exactly why `Alert` renders its own `children` with it.
 
 #### `TextPairing`
 
@@ -417,6 +419,10 @@ upload icon otherwise, plus a Remove button once a file's selected.
 | `variant`   | `"info" \| "success" \| "warning" \| "error"` | `"info"`                                |
 | `title`     | `string`                                      | —                                       |
 | `onDismiss` | `() => void`                                  | — (renders the close button when given) |
+
+`children` can be more than inline text — a `Flexbox` with its own action
+button inside is fine, since `Alert` renders its body with `Text`'s
+`as="div"` rather than the default `<p>`.
 
 #### `Toast`
 
@@ -566,7 +572,33 @@ the accent color; assistant bubbles are left-aligned, bordered, on
 `surface` — the same solid-vs-outlined distinction `Button`'s `solid`/
 `outline` appearances draw elsewhere. `"pending"`/`"streaming"` show a
 spinner + "Generating…" below the content (and a placeholder "…" while
-`content` is still empty); `"error"` shows "Generation failed".
+`content` is still empty); `"error"` shows "Generation failed". Assistant
+`content` renders through `Markdown` below (code blocks included); a
+user's own message stays plain, whitespace-preserved text so pasting
+something with `#`/`*` in it isn't reformatted as markdown underneath them.
+
+#### `Markdown`
+
+| Prop      | Type     | Default  |
+| --------- | -------- | -------- |
+| `content` | `string` | required |
+
+GitHub-flavored markdown (via `react-markdown` + `remark-gfm`) rendered as
+themed React elements — headings, lists, tables, blockquotes, links (through
+`Link`, external ones opening in a new tab automatically). No
+`dangerouslySetInnerHTML` anywhere, so there's no raw-HTML injection surface
+even for untrusted content (an LLM's own output, `ChatBubble`'s main use of
+this). Partial/mid-stream markdown (an unclosed code fence, say) renders
+whatever it can parse rather than erroring, so it's safe to feed live
+streaming text as it arrives.
+
+A fenced code block gets its own bordered panel with a language label (from
+the fence's info string, e.g. ` ```ts `) and a copy button; inline code
+gets a small pill. The two are told apart by CSS rather than by inspecting
+react-markdown's tree (its `code`/`pre` overrides don't expose parent
+context to each other) — the code-block panel resets the inline pill's
+styling for whatever lands inside it via a `pre code { ... }` rule, so
+either override can be written without needing to know about the other.
 
 #### `Table`
 
