@@ -62,6 +62,18 @@ default** — a key only works if it was present in the last successful pull,
 so a PocketBase outage can delay a new key or revocation taking effect, but
 can never turn into open access.
 
+A token that doesn't match any known key hash is tried a second way: as a
+live PocketBase user session token, resolved by forwarding it to
+PocketBase's `POST /api/custom/llm/keys/default` (which authenticates it as
+that user's own session, not the gateway's), cached briefly
+(`session_cache_seconds`). This is what Tony's own Chat/Playground pages
+send — the signed-in user's regular PocketBase login, not a minted key —
+so they work from any browser/device the moment you're signed in there,
+with nothing to create or lose track of; usage still attributes to a real
+`llm_api_keys` row (the user's auto-provisioned default), same as any other
+key. Minted keys (the `curl`/scripting flow below) remain the only option
+for a client that isn't a PocketBase-authenticated browser session.
+
 One-time setup, once per fresh `pb_data` volume:
 
 1. In the PocketBase admin UI (`https://api.ryanzrau.dev/_/`), create a

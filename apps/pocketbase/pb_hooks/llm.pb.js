@@ -24,14 +24,11 @@
 // plaintext key once. is_default just marks the key as one the revoke route
 // below will refuse to touch -- it's the caller's own key either way, so
 // there's no privilege being granted, only a self-inflicted-footgun guard
-// for the key apps/tony/src/playgroundKey.ts mints (see its is_default
-// migration for why the Playground needs this). At most one active default
-// per user is allowed -- checked here for a clean error message, backstopped
-// regardless of entry point by the onRecordCreate/onRecordUpdate hooks below
-// and, at the database level, by a unique index (see migration
-// 1789099510_llm_api_keys_one_default_index.js). playgroundKey.ts used to
-// mint a fresh default on every cache miss even when the user already had
-// one, which is what let these pile up.
+// for the key POST /keys/default below auto-provisions. At most one active
+// default per user is allowed -- checked here for a clean error message,
+// backstopped regardless of entry point by the onRecordCreate/onRecordUpdate
+// hooks below and, at the database level, by a unique index (see migration
+// 1789099510_llm_api_keys_one_default_index.js).
 routerAdd(
   "POST",
   "/api/custom/llm/keys",
@@ -73,6 +70,56 @@ routerAdd(
     e.app.save(record);
 
     return e.json(200, { id: record.id, label: label, key: secret });
+  },
+  $apis.requireAuth()
+);
+
+// Get-or-create your own default key, without ever returning its plaintext
+// or hash -- just its id. Called by the gateway, which forwards the
+// caller's own bearer token here (so this authenticates as an ordinary
+// user session via $apis.requireAuth(), not the service account) to turn a
+// live PocketBase login into something it can log usage against. This is
+// what lets Chat/Playground work from any signed-in browser with nothing
+// to mint or cache client-side: every device already has a working
+// PocketBase session (auto-refreshed, shared cross-subdomain via the auth
+// cookie -- see apps/tony/src/pb.ts/CookieAuthStore.ts), so there's no
+// separate "Playground key" for the client to lose or need to recover.
+// Auto-provisions on first call exactly like POST /keys with
+// is_default: true, just without a client ever seeing the secret it
+// generates -- nothing outside this handler needs it.
+routerAdd(
+  "POST",
+  "/api/custom/llm/keys/default",
+  (e) => {
+    const auth = e.requestInfo().auth;
+    if (!auth) {
+      throw new ForbiddenError("Sign-in required.");
+    }
+
+    const existing = e.app.findRecordsByFilter(
+      "llm_api_keys",
+      "user = {:userId} && is_default = true && revoked_at = ''",
+      "",
+      1,
+      0,
+      { userId: auth.id }
+    );
+    if (existing.length > 0) {
+      return e.json(200, { key_id: existing[0].id, user_id: auth.id });
+    }
+
+    const secret = "sk-" + $security.randomString(48);
+    const collection = e.app.findCollectionByNameOrId("llm_api_keys");
+    const record = new Record(collection, {
+      user: auth.id,
+      label: "Tony Playground (auto)",
+      key_hash: $security.sha256(secret),
+      key_prefix: secret.substring(0, 10),
+      is_default: true,
+    });
+    e.app.save(record);
+
+    return e.json(200, { key_id: record.id, user_id: auth.id });
   },
   $apis.requireAuth()
 );
