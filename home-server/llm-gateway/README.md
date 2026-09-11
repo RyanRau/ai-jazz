@@ -137,19 +137,19 @@ SearXNG itself has no GPU need, unlike `llama-server` (see Limitations below)
 
 2. **Enable the JSON API.** SearXNG's default `settings.yml` only enables the
    `html` output format — the JSON API `gateway.py` needs will 403 until you
-   add `json` to `search.formats` and set a `secret_key`. Edit
-   `~/searxng/settings.yml`:
+   add `json` under `search.formats`:
 
    ```yaml
    search:
      formats:
        - html
        - json
-   server:
-     secret_key: "generate-one-with-openssl-rand-hex-32" # `openssl rand -hex 32`
    ```
 
-   Then `docker restart searxng` to pick it up.
+   Then `docker restart searxng` to pick it up. (`server.secret_key` is
+   already a real random value SearXNG generated on first run — no need to
+   touch it, just don't leave it as the literal default `"ultrasecretkey"`
+   if you ever reset it.)
 
 3. **Point the gateway at it** — `config.yaml`:
 
