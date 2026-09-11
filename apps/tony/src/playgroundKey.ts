@@ -9,31 +9,25 @@ function storageKey(userId: string) {
   return `tony-playground-key:${userId}`;
 }
 
-// Dedupes concurrent get-or-create calls for the same user within this page
-// instance -- React StrictMode double-invokes effects in dev, so without
-// this two calls that both see "nothing cached yet" each mint their own key
-// (and PocketBase's SDK auto-cancels one of the two identical requests,
-// since by default it keys on method+URL, surfacing as a request-aborted
-// error on top of the wasted key).
-const inFlight = new Map<string, Promise<string>>();
-
-/** The signed-in user's own Playground key, minting one the first time. */
-export async function getOrCreatePlaygroundKey(userId: string): Promise<string> {
-  const cached = localStorage.getItem(storageKey(userId));
-  if (cached) return cached;
-
-  const existing = inFlight.get(userId);
-  if (existing) return existing;
-
-  const promise = mintPlaygroundKey(userId).finally(() => inFlight.delete(userId));
-  inFlight.set(userId, promise);
-  return promise;
+/**
+ * The signed-in user's cached Playground key, or `null` if this browser
+ * doesn't have one. Deliberately does *not* mint one when it's missing --
+ * that used to happen automatically on every cache miss (a cleared cache, a
+ * different browser or device), and since a default key's plaintext is
+ * shown only once at creation and never stored server-side, every miss
+ * minted a brand new one rather than recovering the existing one, leaving
+ * users with several. Callers should show a prompt and call
+ * `mintPlaygroundKey` explicitly instead -- see `usePlaygroundKey.ts`.
+ */
+export function getCachedPlaygroundKey(userId: string): string | null {
+  return localStorage.getItem(storageKey(userId));
 }
 
 /**
- * Always creates a new key and caches it, replacing whatever was cached.
- * Used both for the first-ever mint and to recover if the cached key was
- * revoked (e.g. from the Keys page) or the cache was cleared.
+ * Creates a new default key and caches it. The server refuses this if the
+ * user already has an active default key (see pb_hooks/llm.pb.js) --
+ * expected and surfaced to the caller as a rejected promise, not retried,
+ * since retrying would just fail again for the same reason.
  */
 export async function mintPlaygroundKey(userId: string): Promise<string> {
   const res = await pb.send<{ id: string; label: string; key: string }>("/api/custom/llm/keys", {

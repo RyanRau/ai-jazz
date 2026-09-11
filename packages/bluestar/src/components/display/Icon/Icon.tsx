@@ -21,7 +21,9 @@ export type IconName =
   | "image"
   | "upload"
   | "switch"
-  | "edit";
+  | "edit"
+  | "docs"
+  | "copy";
 
 export type IconProps = {
   name: IconName;

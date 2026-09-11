@@ -19,7 +19,7 @@ type TextProps = {
   /** Override the theme colour. Useful on a coloured background. */
   color?: string;
   /** Element to render. Defaults to `"p"`. */
-  as?: "p" | "span" | "label";
+  as?: "p" | "span" | "label" | "div";
 };
 
 export default function Text({ children, variant = "subtitle", color, as: Tag = "p" }: TextProps) {

@@ -48,7 +48,12 @@ export default function Alert({ variant = "info", title, children, onDismiss }: 
               <strong>{title}</strong>
             </Text>
           )}
-          <Text variant="body">{children}</Text>
+          {/* `as="div"`, not the default `"p"` -- a real alert body often
+              needs richer content than inline text (an action button, its
+              own layout), which a `<p>` can't legally contain. */}
+          <Text variant="body" as="div">
+            {children}
+          </Text>
         </Flexbox>
 
         {onDismiss && (

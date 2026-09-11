@@ -89,8 +89,13 @@ export default function Drawer({
         background: transparent;
         max-width: 100vw;
         max-height: 100vh;
+        max-height: 100dvh;
         margin: 0 0 0 ${side === "left" ? "0" : "auto"};
+        /* \`dvh\` tracks the visible viewport, so this doesn't jump when a
+           mobile on-screen keyboard opens and shrinks it -- \`vh\` alone
+           stays put and the panel would sit partly behind the keyboard. */
         height: 100vh;
+        height: 100dvh;
 
         &::backdrop {
           background-color: ${theme.colors.overlay};
