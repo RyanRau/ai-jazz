@@ -195,14 +195,58 @@ chat template — every model in `config.example.yaml` already runs with
 `jinja: true`, which is required for this, but isn't a guarantee for every
 GGUF.
 
+## Link reading (optional)
+
+Set `url_fetch.enabled: true` in `config.yaml` and `/v1/chat/send` starts
+offering the model a `fetch_url` tool — given a link, it fetches the page and
+converts its main content to markdown (via `trafilatura`) for the model to
+read and respond about. Independent of the `web_search` section above: no
+SearXNG needed, and either (or both) can be enabled on their own.
+
+```yaml
+url_fetch:
+  enabled: true
+```
+
+SSRF-guarded the same way any server that fetches user-supplied URLs should
+be: only `http`/`https` URLs are followed, every hostname (including at each
+redirect hop) is resolved and rejected if any address is private, loopback,
+link-local, multicast, or otherwise reserved — so the tool can't be pointed at
+the gateway's own host, the LAN, or a cloud metadata endpoint. The response
+body is capped (`MAX_FETCH_BYTES`) and the extracted markdown truncated
+(`MAX_FETCH_CONTENT_CHARS`) before it reaches the model, so one large page
+can't blow up a turn's context. A fetch failure (bad host, timeout, no
+extractable content) degrades to an `{"error": ...}` tool result rather than
+failing the chat turn, the same as `web_search`.
+
+## System prompts
+
+Chat (`/v1/chat/send`) resolves an effective system prompt for every turn:
+
+1. A new chat may set its own `system_prompt` in the request body — stored on
+   its `llm_chats` row from then on, editable later via
+   `POST /api/custom/llm/chats/system_prompt` (`apps/pocketbase/pb_hooks/chat.pb.js`).
+   An edit takes effect on the chat's _next_ turn, since the gateway resolves
+   the stored value fresh each time rather than trusting whatever a given
+   request happens to send — nothing is re-injected into already-generated
+   messages.
+2. Otherwise, `tony`'s Chat page falls back to the signed-in user's own
+   `default_system_prompt` (a plain field on the `users` collection, edited
+   directly via PocketBase's own self-service update rule — no gateway
+   involvement).
+3. Otherwise, no system message is sent at all — exactly today's behavior.
+
+The gateway itself only ever sees the already-resolved value; it doesn't know
+about per-user defaults.
+
 ## Routes
 
-| Route                       | Auth | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| --------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /health`               | no   | gateway + loaded-model status                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `GET /v1/models`            | yes  | configured models + aliases + per-model `vision` flag                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `POST /v1/chat/completions` | yes  | chat, streaming, vision                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `POST /v1/chat/send`        | yes  | persistent chat turn (`tony`'s Chat page) — generation runs as a background task in PocketBase (`llm_chats`/`llm_chat_messages`, via `apps/pocketbase/pb_hooks/chat.pb.js`) independent of the request, so it keeps going and gets saved even if the client disconnects. The response is an SSE relay of the same chunks for as long as the client stays connected; a client that leaves polls `GET /api/custom/llm/chats/messages?chat=<id>` instead to see the finished result. |
+| Route                       | Auth | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`               | no   | gateway + loaded-model status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `GET /v1/models`            | yes  | configured models + aliases + per-model `vision`, `context_size` (from `args.ctx-size`), `size_bytes` (stat'd off `model_path`), `description`, `best_for`                                                                                                                                                                                                                                                                                                                                                                |
+| `POST /v1/chat/completions` | yes  | chat, streaming, vision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `POST /v1/chat/send`        | yes  | persistent chat turn (`tony`'s Chat page), optional `system_prompt` on a new chat — generation runs as a background task in PocketBase (`llm_chats`/`llm_chat_messages`, via `apps/pocketbase/pb_hooks/chat.pb.js`) independent of the request, so it keeps going and gets saved even if the client disconnects. The response is an SSE relay of the same chunks for as long as the client stays connected; a client that leaves polls `GET /api/custom/llm/chats/messages?chat=<id>` instead to see the finished result. |
 
 ## Limitations
 

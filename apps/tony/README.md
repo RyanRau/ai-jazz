@@ -24,11 +24,17 @@ A side nav switches between four pages:
   (`TextAreaInput`'s `onKeyDown` passthrough); every message shows its own
   timestamp (`formatMessageTime` in `usageHelpers.ts` — just the time for
   today, a short date for anything older) alongside token in/out and
-  elapsed time for a completed assistant reply. A web-search tool call
-  (when `web_search.searxng_url` is configured on the gateway) shows up
-  under its message as a `Disclosure` — "N tools used", collapsed by
-  default — rather than an always-open block, since the query/results are
+  elapsed time for a completed assistant reply. A web-search or link-read
+  tool call (when `web_search.searxng_url` and/or `url_fetch.enabled` are
+  configured on the gateway — independent of each other) shows up under its
+  message as a `Disclosure` — "N tools used", collapsed by default — rather
+  than an always-open block, since the query/results (or fetched link) are
   useful to check but not something worth taking up space by default.
+  New chats can set a system prompt, or leave it blank to fall back to your
+  own default (set on the Keys page); an existing chat's system prompt shows
+  as its own `Disclosure` and can be edited there — an edit takes effect on
+  that chat's next message, not retroactively. See the gateway's README for
+  how the effective prompt is resolved.
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
   browser, the same as any other API client. Model is a dropdown populated
@@ -77,7 +83,11 @@ A side nav switches between four pages:
   other key is a soft delete: it drops out of the table and usage dropdown,
   but a "Show revoked keys" toggle brings it (and its usage) back into view
   rather than deleting the row. The usage stats and chart are built on
-  bluestar's `StatTile` and `LineChart`.
+  bluestar's `StatTile` and `LineChart`. Also where your own default system
+  prompt lives (`users.default_system_prompt`) — a plain self-service field
+  on the `users` collection, edited directly via the PocketBase SDK rather
+  than a custom route, since PocketBase's own update rule already lets a
+  signed-in user edit their own record.
 - **Docs** (`src/DocsPage.tsx`) — the gateway's request/response reference
   (parameters, streaming, images) rendered as markdown via `bluestar`'s
   `Markdown` component, the same one Chat/Playground use for replies. Plain

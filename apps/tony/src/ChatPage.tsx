@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { css } from "goober";
 import {
   Badge,
@@ -20,6 +21,50 @@ import type { ChatState } from "./useChat";
 function formatElapsed(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+/** Edits one chat's system prompt -- `key={chat.id}` at the call site resets
+ * this back to `initial` on every chat switch rather than needing a sync
+ * effect. Saving takes effect on the chat's next turn (see gateway.py's
+ * effective_system_prompt), not retroactively. */
+function SystemPromptEditor({
+  initial,
+  onSave,
+}: {
+  initial: string;
+  onSave: (value: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState(initial);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await onSave(value);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Flexbox direction="column" gap={8}>
+      <TextAreaInput
+        label="System prompt"
+        value={value}
+        onChange={setValue}
+        rows={3}
+        placeholder="None set for this chat"
+      />
+      <Flexbox>
+        <Button
+          label={saving ? "Saving…" : "Save"}
+          onClick={save}
+          isDisabled={saving || value === initial}
+          density="dense"
+        />
+      </Flexbox>
+    </Flexbox>
+  );
 }
 
 /**
@@ -45,6 +90,10 @@ export function ChatPage({ chat }: { chat: ChatState }) {
     modelList,
     model,
     setModel,
+    systemPromptDraft,
+    setSystemPromptDraft,
+    defaultSystemPrompt,
+    updateChatSystemPrompt,
     selectedChat,
     messages,
     draft,
@@ -70,7 +119,7 @@ export function ChatPage({ chat }: { chat: ChatState }) {
         </Flexbox>
         {!selectedChat &&
           (modelList ? (
-            <div style={{ width: 240, maxWidth: "100%" }}>
+            <Flexbox direction="column" gap={8} style={{ width: 240, maxWidth: "100%" }}>
               <Dropdown
                 label="Model"
                 options={[
@@ -80,9 +129,30 @@ export function ChatPage({ chat }: { chat: ChatState }) {
                 value={model}
                 onChange={(v) => setModel(v ?? "")}
               />
-            </div>
+              <TextAreaInput
+                label="System prompt (optional)"
+                value={systemPromptDraft}
+                onChange={setSystemPromptDraft}
+                rows={2}
+                placeholder={
+                  defaultSystemPrompt ? "Falls back to your default" : "None -- see Keys page"
+                }
+              />
+            </Flexbox>
           ) : null)}
       </Flexbox>
+
+      {selectedChat && (
+        <Disclosure
+          label={selectedChat.system_prompt ? "System prompt" : "System prompt (none set)"}
+        >
+          <SystemPromptEditor
+            key={selectedChat.id}
+            initial={selectedChat.system_prompt}
+            onSave={(value) => updateChatSystemPrompt(selectedChat.id, value)}
+          />
+        </Disclosure>
+      )}
 
       <Flexbox direction="column" gap={12}>
         {messages.length === 0 ? (
@@ -125,20 +195,32 @@ export function ChatPage({ chat }: { chat: ChatState }) {
                 {toolCount > 0 && (
                   <Disclosure label={`${toolCount} tool${toolCount === 1 ? "" : "s"} used`}>
                     <Flexbox direction="column" gap={8}>
-                      {m.tool_calls.map((tc, i) => (
-                        <Flexbox key={i} direction="column" gap={4}>
-                          <Text variant="caption">Searched the web: "{tc.query}"</Text>
-                          {tc.results.length > 0 && (
-                            <Flexbox direction="row" gap={12} flexWrap="wrap">
-                              {tc.results.map((r) => (
-                                <Link key={r.url} href={r.url} external variant="muted">
-                                  <Text variant="caption">{r.title}</Text>
-                                </Link>
-                              ))}
+                      {m.tool_calls.map((tc, i) =>
+                        tc.type === "fetch_url" ? (
+                          <Flexbox key={i} direction="column" gap={4}>
+                            <Flexbox direction="row" gap={4} alignItems="center" flexWrap="wrap">
+                              <Text variant="caption">Read link:</Text>
+                              <Link href={tc.url} external variant="muted">
+                                <Text variant="caption">{tc.title || tc.url}</Text>
+                              </Link>
                             </Flexbox>
-                          )}
-                        </Flexbox>
-                      ))}
+                            {tc.error && <Text variant="caption">{tc.error}</Text>}
+                          </Flexbox>
+                        ) : (
+                          <Flexbox key={i} direction="column" gap={4}>
+                            <Text variant="caption">Searched the web: "{tc.query}"</Text>
+                            {tc.results.length > 0 && (
+                              <Flexbox direction="row" gap={12} flexWrap="wrap">
+                                {tc.results.map((r) => (
+                                  <Link key={r.url} href={r.url} external variant="muted">
+                                    <Text variant="caption">{r.title}</Text>
+                                  </Link>
+                                ))}
+                              </Flexbox>
+                            )}
+                          </Flexbox>
+                        )
+                      )}
                     </Flexbox>
                   </Disclosure>
                 )}

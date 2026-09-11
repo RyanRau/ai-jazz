@@ -6,16 +6,20 @@ Run: python3 gateway.py --config config.yaml
 import argparse
 import asyncio
 import hashlib
+import ipaddress
 import json
 import os
 import signal
+import socket
 import sys
 import time
 from collections import deque
 from contextlib import asynccontextmanager
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
+import trafilatura
 import uvicorn
 import yaml
 from fastapi import FastAPI, Request, HTTPException, Depends
@@ -464,6 +468,16 @@ async def health():
     }
 
 
+def _model_size_bytes(model_cfg: dict) -> Optional[int]:
+    """Best-effort size of the GGUF on disk, for the model picker's "size"
+    column -- not something worth failing /v1/models over if the path is
+    momentarily missing (e.g. an external drive not mounted yet)."""
+    try:
+        return os.path.getsize(os.path.expanduser(model_cfg["model_path"]))
+    except OSError:
+        return None
+
+
 @app.get("/v1/models", dependencies=[Depends(check_api_key)])
 async def list_models():
     return {
@@ -474,6 +488,13 @@ async def list_models():
                 "object": "model",
                 "aliases": m.get("aliases", []),
                 "vision": m.get("vision", False),
+                # ctx-size is already a per-model llama-server startup flag
+                # (see config.yaml) -- surfaced here too so a client doesn't
+                # have to hardcode it, e.g. for a context-usage indicator.
+                "context_size": m.get("args", {}).get("ctx-size"),
+                "size_bytes": _model_size_bytes(m),
+                "description": m.get("description"),
+                "best_for": m.get("best_for"),
             }
             for m in CONFIG["models"]
         ],
@@ -627,6 +648,117 @@ async def _web_search(query: str) -> list[dict]:
     ]
 
 
+FETCH_URL_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "fetch_url",
+        "description": (
+            "Fetch a specific web page by URL and return its main content as "
+            "markdown. Use this when the user gives you a link and asks what "
+            "it's about, or to read/summarize it -- not for open-ended search."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "The URL to fetch."}
+            },
+            "required": ["url"],
+        },
+    },
+}
+
+MAX_FETCH_BYTES = 2_000_000
+MAX_FETCH_CONTENT_CHARS = 8000
+MAX_FETCH_REDIRECTS = 5
+
+
+async def _is_public_host(hostname: str) -> bool:
+    """Rejects a hostname that resolves to any private/loopback/link-local/
+    reserved/multicast address, so the fetch_url tool can't be turned into a
+    probe against the gateway's own host, the LAN, or a cloud metadata
+    endpoint. Every resolved address must be public, not just the first.
+    getaddrinfo is a blocking call -- run off-loop so one slow/hanging DNS
+    lookup can't stall every other request this single-process gateway is
+    handling.
+    """
+    try:
+        infos = await asyncio.get_running_loop().run_in_executor(
+            None, socket.getaddrinfo, hostname, None
+        )
+    except socket.gaierror:
+        return False
+    if not infos:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return False
+    return True
+
+
+async def _fetch_url(url: str) -> dict:
+    """Fetches a URL and extracts its main content as markdown (trafilatura),
+    for the fetch_url tool. SSRF-guarded: only plain http/https URLs whose
+    host resolves exclusively to public addresses are fetched, redirects are
+    manually followed (capped) so each hop gets the same host check rather
+    than trusting httpx to follow into somewhere internal, and the response
+    body is capped so a huge page can't blow up the tool result. Any failure
+    degrades to an {"error": ...} result rather than failing the chat turn,
+    same as _web_search.
+    """
+    current = url
+    for _ in range(MAX_FETCH_REDIRECTS):
+        parsed = urlparse(current)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return {"url": current, "error": "Only http/https URLs are supported."}
+        if not await _is_public_host(parsed.hostname):
+            return {"url": current, "error": "That host can't be fetched."}
+
+        try:
+            async with httpx.AsyncClient(follow_redirects=False, timeout=10) as client:
+                async with client.stream("GET", current) as r:
+                    if r.is_redirect:
+                        location = r.headers.get("location")
+                        if not location:
+                            return {"url": current, "error": "Redirect with no location."}
+                        current = str(httpx.URL(current).join(location))
+                        continue
+                    if r.status_code >= 400:
+                        return {"url": current, "error": f"HTTP {r.status_code}"}
+                    raw = bytearray()
+                    async for chunk in r.aiter_bytes():
+                        raw += chunk
+                        if len(raw) > MAX_FETCH_BYTES:
+                            break
+                    html = bytes(raw).decode(r.charset_encoding or "utf-8", errors="replace")
+        except httpx.HTTPError as e:
+            return {"url": current, "error": f"Fetch failed: {e}"}
+
+        content = (
+            trafilatura.extract(html, output_format="markdown", include_links=False, url=current)
+            or ""
+        ).strip()
+        if not content:
+            return {"url": current, "error": "Couldn't extract readable content."}
+        meta = trafilatura.extract_metadata(html)
+        return {
+            "url": current,
+            "title": meta.title if meta else None,
+            "content": content[:MAX_FETCH_CONTENT_CHARS],
+        }
+    return {"url": current, "error": "Too many redirects."}
+
+
 async def _append_chat_message(
     message_id: str,
     content: str,
@@ -676,12 +808,13 @@ async def _generate_chat_response(
     visit sees it too. Puts `None` on the queue when done, as the
     end-of-stream sentinel for a live relay.
 
-    Loops up to MAX_TOOL_ROUNDS times when web search is configured: a round
-    that ends in a tool call runs the search and feeds the results back as a
-    `tool` message for the next round, instead of treating that round as the
-    final answer. Tool-call chunks carry no `delta.content`, so the frontend
-    (which only ever looks at `delta.content`) silently ignores them -- no
-    special client-side handling needed.
+    Loops up to MAX_TOOL_ROUNDS times when web search and/or url fetching is
+    configured: a round that ends in a tool call runs it and feeds the
+    result back as a `tool` message for the next round, instead of treating
+    that round as the final answer. Tool-call chunks carry no
+    `delta.content`, so the frontend (which only ever looks at
+    `delta.content`) silently ignores them -- no special client-side
+    handling needed.
     """
     FLUSH_INTERVAL = 0.75
 
@@ -693,8 +826,14 @@ async def _generate_chat_response(
     client: Optional[httpx.AsyncClient] = None
 
     searxng_url = (CONFIG.get("web_search") or {}).get("searxng_url")
+    url_fetch_enabled = (CONFIG.get("url_fetch") or {}).get("enabled", False)
+    tools = []
     if searxng_url:
-        body = {**body, "tools": [WEB_SEARCH_TOOL]}
+        tools.append(WEB_SEARCH_TOOL)
+    if url_fetch_enabled:
+        tools.append(FETCH_URL_TOOL)
+    if tools:
+        body = {**body, "tools": tools}
 
     try:
         async with UsageTracker(key_id, model_cfg["name"]) as tracker:
@@ -771,17 +910,29 @@ async def _generate_chat_response(
                         args = json.loads(tc["arguments"] or "{}")
                     except ValueError:
                         args = {}
-                    query = args.get("query", "")
-                    results = (
-                        await _web_search(query) if tc["name"] == "web_search" else []
-                    )
                     if tc["name"] == "web_search":
-                        search_records.append({"query": query, "results": results})
+                        query = args.get("query", "")
+                        results = await _web_search(query)
+                        search_records.append(
+                            {"type": "web_search", "query": query, "results": results}
+                        )
+                        tool_result = results
+                    elif tc["name"] == "fetch_url":
+                        target = args.get("url", "")
+                        fetched = (
+                            await _fetch_url(target)
+                            if target
+                            else {"error": "No url given."}
+                        )
+                        search_records.append({"type": "fetch_url", **fetched})
+                        tool_result = fetched
+                    else:
+                        tool_result = {"error": f"Unknown tool '{tc['name']}'."}
                     body["messages"].append(
                         {
                             "role": "tool",
                             "tool_call_id": tc["id"] or f"call_{i}",
-                            "content": json.dumps(results),
+                            "content": json.dumps(tool_result),
                         }
                     )
 
@@ -816,13 +967,17 @@ async def _generate_chat_response(
 
 @app.post("/v1/chat/send")
 async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
-    """Starts (or continues) a chat turn. Body: { chat_id?, model, messages }
-    -- same shape as /v1/chat/completions, just with an optional chat_id to
-    continue an existing conversation. The actual generation runs as a
-    standalone background task (see _generate_chat_response) that keeps
-    going even if this request's connection drops; this handler's SSE
-    response is just a live window onto it for as long as the caller stays
-    connected.
+    """Starts (or continues) a chat turn. Body: { chat_id?, model, messages,
+    system_prompt? } -- same shape as /v1/chat/completions, just with an
+    optional chat_id to continue an existing conversation. system_prompt is
+    only read when starting a new chat (chat_id empty); it's stored on the
+    new llm_chats row and from then on the chat's own stored value is what's
+    actually used, resolved fresh each turn (see effective_system_prompt
+    below) rather than trusting whatever a given request happens to send.
+    The actual generation runs as a standalone background task (see
+    _generate_chat_response) that keeps going even if this request's
+    connection drops; this handler's SSE response is just a live window
+    onto it for as long as the caller stays connected.
     """
     body = await request.json()
     model_cfg = resolve_model(body.get("model"))
@@ -848,6 +1003,11 @@ async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
     if not isinstance(user_content, str):
         raise HTTPException(400, "Chat messages must be plain text.")
 
+    # Only meaningful for a brand-new chat (chat_id empty) -- an existing
+    # chat's system prompt already lives on its llm_chats row and is what
+    # comes back from the create call below regardless of what's sent here.
+    new_chat_system_prompt = body.pop("system_prompt", None)
+
     create = await key_store._request(
         "POST",
         "/api/custom/llm/chats/messages/create",
@@ -856,9 +1016,22 @@ async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
             "chat_id": body.get("chat_id") or "",
             "model": model_cfg["name"],
             "content": user_content,
+            "system_prompt": new_chat_system_prompt or "",
         },
     )
     ids = create.json()
+
+    # Resolved server-side (the chat's own stored value, not whatever this
+    # request happened to send) so an edit made via
+    # POST /api/custom/llm/chats/system_prompt takes effect on the chat's
+    # next turn without the client needing to resend it. Popped off `ids`
+    # before it's relayed to the client as the "ids" SSE event below -- the
+    # client already has this chat's system prompt from its own chats list.
+    effective_system_prompt = (ids.pop("system_prompt", "") or "").strip()
+    if effective_system_prompt:
+        body["messages"] = [
+            {"role": "system", "content": effective_system_prompt}
+        ] + messages
 
     queue: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
     asyncio.create_task(

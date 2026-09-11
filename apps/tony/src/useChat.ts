@@ -9,12 +9,18 @@ export type ChatSummary = {
   id: string;
   title: string;
   model: string;
+  system_prompt: string;
   created: string;
   updated: string;
 };
 export type MessageStatus = "pending" | "streaming" | "complete" | "error";
 export type SearchResult = { title: string; url: string; snippet: string };
-export type ToolCallRecord = { query: string; results: SearchResult[] };
+// `type` is missing on tool-call records saved before this field existed --
+// treated as "web_search" (see toolCallType() in ChatPage.tsx), the only
+// shape that existed then.
+export type ToolCallRecord =
+  | { type?: "web_search"; query: string; results: SearchResult[] }
+  | { type: "fetch_url"; url: string; title?: string | null; content?: string; error?: string };
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -26,7 +32,14 @@ export type ChatMessage = {
   tool_calls: ToolCallRecord[];
   created: string;
 };
-export type ModelInfo = { id: string; vision: boolean };
+export type ModelInfo = {
+  id: string;
+  vision: boolean;
+  context_size: number | null;
+  size_bytes: number | null;
+  description: string | null;
+  best_for: string | null;
+};
 type IdsEvent = {
   type: "ids";
   chat_id: string;
@@ -70,6 +83,10 @@ export function useChat() {
 
   const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
   const [model, setModel] = useState("");
+  // Only meaningful for a new (not-yet-started) chat -- an existing chat's
+  // system prompt lives on its ChatSummary and is edited via
+  // updateChatSystemPrompt() instead.
+  const [systemPromptDraft, setSystemPromptDraft] = useState("");
 
   const [chats, setChats] = useState<ChatSummary[] | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -95,8 +112,27 @@ export function useChat() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((data: { data: { id: string; vision?: boolean }[] }) =>
-        setModels(data.data.map((m) => ({ id: m.id, vision: m.vision === true })))
+      .then(
+        (data: {
+          data: {
+            id: string;
+            vision?: boolean;
+            context_size?: number | null;
+            size_bytes?: number | null;
+            description?: string | null;
+            best_for?: string | null;
+          }[];
+        }) =>
+          setModels(
+            data.data.map((m) => ({
+              id: m.id,
+              vision: m.vision === true,
+              context_size: m.context_size ?? null,
+              size_bytes: m.size_bytes ?? null,
+              description: m.description ?? null,
+              best_for: m.best_for ?? null,
+            }))
+          )
       )
       .catch(() => setModels("unavailable"));
   }, [apiKey]);
@@ -105,6 +141,24 @@ export function useChat() {
     return pb
       .send<{ chats: ChatSummary[] }>("/api/custom/llm/chats", { method: "GET" })
       .then((res) => setChats(res.chats));
+  }
+
+  // Edits an existing chat's system prompt (a new chat's is set at creation
+  // time via `send()` instead, from `systemPromptDraft`). Takes effect on
+  // the chat's next turn -- see gateway.py's effective_system_prompt.
+  function updateChatSystemPrompt(chatId: string, systemPrompt: string) {
+    return pb
+      .send<{ id: string; system_prompt: string }>("/api/custom/llm/chats/system_prompt", {
+        method: "POST",
+        body: { chat_id: chatId, system_prompt: systemPrompt },
+      })
+      .then((res) => {
+        setChats(
+          (prev) =>
+            prev?.map((c) => (c.id === chatId ? { ...c, system_prompt: res.system_prompt } : c)) ??
+            prev
+        );
+      });
   }
 
   useEffect(() => {
@@ -166,6 +220,7 @@ export function useChat() {
     setMessages([]);
     setSelectedChatId(null);
     setDraft("");
+    setSystemPromptDraft("");
     setError(null);
     setChatsView("thread");
   }
@@ -190,6 +245,14 @@ export function useChat() {
     const chat = chats?.find((c) => c.id === selectedChatId);
     const sendModel = chat?.model || model;
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
+    // Only meaningful for a brand-new chat -- an existing chat's system
+    // prompt already lives server-side and is resolved fresh by the gateway
+    // regardless of what (if anything) is sent here. Falls back to the
+    // signed-in user's own default when the chat doesn't set its own.
+    const defaultSystemPrompt = (record?.default_system_prompt as string | undefined) || "";
+    const effectiveSystemPrompt = selectedChatId
+      ? ""
+      : systemPromptDraft.trim() || defaultSystemPrompt.trim();
 
     setDraft("");
     setError(null);
@@ -209,6 +272,7 @@ export function useChat() {
           chat_id: selectedChatId || undefined,
           model: sendModel || undefined,
           messages: [...history, { role: "user", content }],
+          system_prompt: effectiveSystemPrompt || undefined,
         }),
         signal: controller.signal,
       });
@@ -251,6 +315,7 @@ export function useChat() {
                   id: ev.chat_id,
                   title: deriveTitle(content),
                   model: sendModel,
+                  system_prompt: effectiveSystemPrompt,
                   created: now,
                   updated: now,
                 },
@@ -343,6 +408,10 @@ export function useChat() {
     modelList,
     model,
     setModel,
+    systemPromptDraft,
+    setSystemPromptDraft,
+    defaultSystemPrompt: (record?.default_system_prompt as string | undefined) || "",
+    updateChatSystemPrompt,
     chats,
     selectedChatId,
     selectedChat,

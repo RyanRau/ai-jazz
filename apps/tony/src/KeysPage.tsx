@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   ConfirmDialog,
+  Disclosure,
   Divider,
   Drawer,
   EmptyState,
@@ -22,6 +23,7 @@ import {
   Switch,
   Table,
   Text,
+  TextAreaInput,
   TextInput,
   useColorScheme,
   useForm,
@@ -175,6 +177,63 @@ function RenameKeyForm({
       <TextInput {...form.field("label")} label="Label" required />
       <SubmitButton label="Save" />
     </Form>
+  );
+}
+
+/**
+ * Your own default system prompt (`users.default_system_prompt`) -- used by
+ * Chat for any new chat that doesn't set its own override. Plain
+ * self-service field on the `users` collection, so this just PATCHes it
+ * directly via the PocketBase SDK; no custom route, unlike everything else
+ * on this page.
+ */
+function DefaultSystemPromptSection() {
+  const record = useAuthRecord();
+  const toast = useToast();
+  const initial = (record?.default_system_prompt as string | undefined) || "";
+  const [value, setValue] = useState(initial);
+  // Tracked separately from `initial` (which only reflects the record as of
+  // the last render this component didn't remount for) so the Save button
+  // goes back to disabled right after a successful save rather than staying
+  // enabled until the page happens to re-fetch the record some other way.
+  const [savedValue, setSavedValue] = useState(initial);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!record) return;
+    setSaving(true);
+    try {
+      await pb.collection("users").update(record.id, { default_system_prompt: value });
+      setSavedValue(value);
+      toast.success("Default system prompt saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Disclosure label="Default system prompt" defaultOpen={Boolean(initial)}>
+      <Flexbox direction="column" gap={8}>
+        <Text variant="caption">
+          Used by Chat for any new chat that doesn't set its own system prompt.
+        </Text>
+        <TextAreaInput
+          label="Default system prompt"
+          value={value}
+          onChange={setValue}
+          rows={3}
+          placeholder="None set"
+        />
+        <Flexbox>
+          <Button
+            label={saving ? "Saving…" : "Save"}
+            onClick={save}
+            isDisabled={saving || value === savedValue}
+            density="dense"
+          />
+        </Flexbox>
+      </Flexbox>
+    </Disclosure>
   );
 }
 
@@ -353,6 +412,9 @@ export function KeysPage() {
             />
           </Flexbox>
         </Flexbox>
+
+        <DefaultSystemPromptSection />
+        <Divider />
 
         <Flexbox gap={20} alignItems="flex-start">
           <div

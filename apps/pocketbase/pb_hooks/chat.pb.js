@@ -40,6 +40,7 @@ routerAdd(
       id: r.id,
       title: r.getString("title"),
       model: r.getString("model"),
+      system_prompt: r.getString("system_prompt"),
       created: r.getString("created"),
       updated: r.getString("updated"),
     }));
@@ -113,10 +114,13 @@ routerAdd(
 );
 
 // Gateway-facing: start a new turn. Body: { user_id, chat_id?, model,
-// content }. Creates the chat first if chat_id is empty (title derived
-// from the user's message), then the user's own message (encrypted) and an
-// assistant placeholder (status: "pending") gateway.py will append to as
-// it streams.
+// content, system_prompt? }. Creates the chat first if chat_id is empty
+// (title derived from the user's message, system_prompt stored on it if
+// given), then the user's own message (encrypted) and an assistant
+// placeholder (status: "pending") gateway.py will append to as it streams.
+// Returns the chat's current system_prompt (freshly set, or whatever an
+// existing chat already had) so the gateway can resolve the turn's
+// effective system prompt without a separate round trip.
 routerAdd(
   "POST",
   "/api/custom/llm/chats/messages/create",
@@ -135,12 +139,23 @@ routerAdd(
     }
 
     let chatId = (body.chat_id || "").trim();
+    let chat;
     if (!chatId) {
       const chatsCollection = e.app.findCollectionByNameOrId("llm_chats");
       const title = content.length > 60 ? content.substring(0, 60) + "…" : content;
-      const chat = new Record(chatsCollection, { user: userId, title: title, model: model });
+      chat = new Record(chatsCollection, {
+        user: userId,
+        title: title,
+        model: model,
+        system_prompt: body.system_prompt || "",
+      });
       e.app.save(chat);
       chatId = chat.id;
+    } else {
+      chat = e.app.findRecordById("llm_chats", chatId);
+      if (chat.getString("user") !== userId) {
+        throw new ForbiddenError("You don't own this chat.");
+      }
     }
 
     const encKey = $os.getenv("CHAT_ENCRYPTION_KEY") || "dev-only-insecure-chat-key-32ch!";
@@ -166,7 +181,39 @@ routerAdd(
       chat_id: chatId,
       user_message_id: userMessage.id,
       assistant_message_id: assistantMessage.id,
+      system_prompt: chat.getString("system_prompt"),
     });
+  },
+  $apis.requireAuth()
+);
+
+// Update an existing chat's system prompt. Body: { chat_id, system_prompt }.
+// Owner only -- chats have no admin override, same as every other route in
+// this file. Takes effect on the chat's next turn: gateway.py resolves the
+// current value fresh from this record via /chats/messages/create each
+// time, rather than re-injecting it into messages already generated.
+routerAdd(
+  "POST",
+  "/api/custom/llm/chats/system_prompt",
+  (e) => {
+    const auth = e.requestInfo().auth;
+    if (!auth) {
+      throw new ForbiddenError("Sign-in required.");
+    }
+
+    const body = e.requestInfo().body;
+    const chatId = (body.chat_id || "").trim();
+    if (!chatId) {
+      throw new BadRequestError("chat_id is required.");
+    }
+    const chat = e.app.findRecordById("llm_chats", chatId);
+    if (chat.getString("user") !== auth.id) {
+      throw new ForbiddenError("You don't own this chat.");
+    }
+    chat.set("system_prompt", body.system_prompt || "");
+    e.app.save(chat);
+
+    return e.json(200, { id: chat.id, system_prompt: chat.getString("system_prompt") });
   },
   $apis.requireAuth()
 );

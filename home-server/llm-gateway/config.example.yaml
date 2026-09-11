@@ -31,12 +31,27 @@ llama_server:
 # web_search:
 #   searxng_url: "http://127.0.0.1:8080"
 
+# Optional. When enabled, Chat (/v1/chat/send) also offers the model a
+# `fetch_url` tool that retrieves a specific link and converts its main
+# content to markdown -- see README.md#link-reading. Independent of
+# web_search above (no SearXNG needed). Omit or leave disabled to leave
+# Chat exactly as it is today.
+# url_fetch:
+#   enabled: true
+
+# `description`/`best_for` are optional, freeform, and purely informational
+# -- surfaced by GET /v1/models for a model picker UI, never read by the
+# gateway itself. `context_size` and `size_bytes` don't need declaring here:
+# GET /v1/models derives them from `args.ctx-size` and the model file on
+# disk respectively.
 models:
   - name: "qwen3.5-2b"
     aliases: ["2b"]
     model_path: "~/server/llm/models/qwen3.5-2b/Qwen3.5-2B-Q4_K_M.gguf"
     mmproj_path: "~/server/llm/models/qwen3.5-2b/mmproj-BF16.gguf"
     vision: true
+    description: "Smallest model, fastest responses."
+    best_for: "Quick questions, low-latency chat"
     args:
       ctx-size: 32768
       n-gpu-layers: 99
@@ -49,6 +64,8 @@ models:
     model_path: "~/server/llm/models/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf"
     mmproj_path: "~/server/llm/models/qwen3.5-4b/mmproj-BF16.gguf"
     vision: true
+    description: "Mid-sized general-purpose model, a step up in quality from the 2B."
+    best_for: "General chat, everyday questions"
     args:
       ctx-size: 32768
       n-gpu-layers: 99
@@ -61,6 +78,8 @@ models:
     model_path: "~/server/llm/models/qwen3.5-9b/Qwen3.5-9B-Q4_K_M.gguf"
     mmproj_path: "~/server/llm/models/qwen3.5-9b/mmproj-BF16.gguf"
     vision: true
+    description: "Largest general-purpose model, the gateway's default."
+    best_for: "Higher-quality chat, harder reasoning"
     args:
       ctx-size: 16384
       n-gpu-layers: 99
@@ -72,6 +91,8 @@ models:
     aliases: ["coder"]
     model_path: "~/server/llm/models/qwen2.5-coder-7b/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
     vision: false
+    description: "Code-specialized model, no vision support."
+    best_for: "Writing and reviewing code"
     args:
       ctx-size: 24576
       n-gpu-layers: 99
@@ -83,6 +104,8 @@ models:
     aliases: ["phi4"]
     model_path: "~/server/llm/models/phi-4-14b/phi-4-Q4_K_M.gguf"
     vision: false
+    description: "Largest model, no vision support, smallest context window."
+    best_for: "Complex reasoning where context length isn't the constraint"
     args:
       ctx-size: 8192
       n-gpu-layers: 99
