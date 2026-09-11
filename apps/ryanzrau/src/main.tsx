@@ -10,7 +10,10 @@ startAuthRefresh();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider colorScheme="auto">
+    {/* cookieDomain shares the color scheme and custom accent across every
+        *.ryanzrau.dev subdomain, the same way CookieAuthStore.ts shares one
+        auth session — a choice made here applies everywhere, not just this app. */}
+    <ThemeProvider colorScheme="auto" cookieDomain=".ryanzrau.dev">
       <ToastProvider>
         <App />
       </ToastProvider>

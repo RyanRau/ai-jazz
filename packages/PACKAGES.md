@@ -96,7 +96,7 @@ setScheme("dark"); // persisted to localStorage
 ```tsx
 const { customAccent, setCustomAccent } = useCustomAccent();
 // customAccent: string | null — a hex color overriding theme.colors.primary, or null for the theme's own default
-setCustomAccent("#8b7fd1"); // persisted to sessionStorage — cleared when the tab closes
+setCustomAccent("#8b7fd1"); // persisted per ThemeProvider's storage/cookie config
 ```
 
 ### `ThemeProvider` props
@@ -109,12 +109,21 @@ setCustomAccent("#8b7fd1"); // persisted to sessionStorage — cleared when the 
 | `baseline`               | `boolean` (reset + body styles) | `true`                     |
 | `storageKey`             | `string \| null`                | `"bluestar-color-scheme"`  |
 | `customAccentStorageKey` | `string \| null`                | `"bluestar-custom-accent"` |
+| `cookieDomain`           | `string`                        | —                          |
 
 `storageKey` (localStorage) remembers an explicit `colorScheme` choice
 across visits; `customAccentStorageKey` (sessionStorage — cleared when the
 tab closes) remembers a viewer's custom accent color from `useCustomAccent`
 for the rest of that session. Pass either as `null` to disable that
 persistence.
+
+`cookieDomain` (e.g. `".ryanzrau.dev"`) switches both away from
+localStorage/sessionStorage to a cookie scoped to that domain — so a choice
+made on one subdomain applies on every other subdomain too, the same way
+`CookieAuthStore` shares one auth session across `*.ryanzrau.dev`. Every app
+in this repo sets it; leave it unset for a single-origin consumer (e.g.
+Storybook, which also passes `storageKey={null}` to keep story state from
+leaking between stories).
 
 Overrides are deep-merged over `defaultTheme` / `darkTheme`:
 
@@ -752,12 +761,13 @@ the same Auto/Light/Dark `SegmentedControl` as `ThemeToggle`, plus an accent
 color section with its own `SegmentedControl` toggling between "Presets"
 (the default swatch plus four preset colors) and "Custom" (any color via a
 native color input). Both apply live through `useColorScheme`/
-`useCustomAccent`, no separate save step. The accent is a viewer preference
-rather than an app default, so it persists to `sessionStorage` (cleared when
-the tab closes) rather than `colorScheme`'s longer-lived `localStorage` —
-see `ThemeProvider`'s `customAccentStorageKey`. Every app renders this
-inline in `AccountMenu`'s icon row, next to the Settings button;
-`ThemeToggle` stays around for a plain inline toggle elsewhere.
+`useCustomAccent`, no separate save step. Every app in this repo sets
+`ThemeProvider`'s `cookieDomain` to `.ryanzrau.dev`, so both the scheme and
+the accent persist as cookies shared across every subdomain rather than
+per-origin storage — pick a theme on one app and it follows you to the
+others. Every app renders this inline in `AccountMenu`'s icon row, next to
+the Settings button; `ThemeToggle` stays around for a plain inline toggle
+elsewhere.
 
 #### `ListRow`
 

@@ -12,8 +12,10 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {/* colorScheme="auto" is the default; spelled out so it's obvious the app
         follows the OS light/dark preference, and that "light" or "dark" would
-        pin it. useColorScheme() lets you build a toggle. */}
-    <ThemeProvider colorScheme="auto">
+        pin it. useColorScheme() lets you build a toggle. cookieDomain shares
+        the scheme and custom accent across every *.ryanzrau.dev subdomain,
+        the same way CookieAuthStore.ts shares one auth session. */}
+    <ThemeProvider colorScheme="auto" cookieDomain=".ryanzrau.dev">
       {/* Enables useToast() anywhere in the app. */}
       <ToastProvider>
         <App />

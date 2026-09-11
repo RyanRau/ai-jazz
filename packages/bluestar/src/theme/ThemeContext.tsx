@@ -94,25 +94,71 @@ export type ThemeProviderProps = {
    * sessionStorage key for remembering a custom accent color (set via
    * `useCustomAccent`'s `setCustomAccent`) — cleared when the tab closes,
    * unlike `storageKey`'s localStorage persistence for `colorScheme`. Pass
-   * null to disable.
+   * null to disable. Ignored when `cookieDomain` is set (see below).
    */
   customAccentStorageKey?: string | null;
+  /**
+   * When set, both `colorScheme` and the custom accent are persisted as
+   * cookies scoped to this domain (e.g. `.ryanzrau.dev`) instead of
+   * `localStorage`/`sessionStorage` — so a choice made on one subdomain
+   * applies on every other subdomain too, the same way `CookieAuthStore`
+   * shares one auth session across them. `storageKey`/`customAccentStorageKey`
+   * still name the cookies. Unset (the default) keeps the plain per-origin
+   * storage behavior, e.g. for Storybook or any other non-multi-subdomain
+   * consumer.
+   */
+  cookieDomain?: string;
   children: ReactNode;
 };
 
-function readStored(storageKey: string | null | undefined): ColorScheme | null {
-  if (!canUseDOM || !storageKey) return null;
-  try {
-    const value = window.localStorage.getItem(storageKey);
-    return value === "light" || value === "dark" || value === "auto" ? value : null;
-  } catch {
-    // Private browsing, or storage disabled — fall back to the prop.
-    return null;
-  }
+function readCookie(name: string): string | null {
+  if (!canUseDOM) return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${encodeURIComponent(name)}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
-function readStoredAccent(storageKey: string | null | undefined): string | null {
+/** Mirrors CookieAuthStore's domain handling: localhost can't set a scoped domain. */
+function writeCookie(name: string, value: string | null, domain: string) {
+  if (!canUseDOM) return;
+  const isLocal =
+    window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const parts = [
+    `${encodeURIComponent(name)}=${value === null ? "" : encodeURIComponent(value)}`,
+    "path=/",
+    `max-age=${value === null ? 0 : 60 * 60 * 24 * 365}`,
+    "samesite=lax",
+  ];
+  if (!isLocal) {
+    parts.push(`domain=${domain}`);
+    if (window.location.protocol === "https:") parts.push("secure");
+  }
+  document.cookie = parts.join("; ");
+}
+
+function readStored(
+  storageKey: string | null | undefined,
+  cookieDomain: string | undefined
+): ColorScheme | null {
   if (!canUseDOM || !storageKey) return null;
+  const value = cookieDomain
+    ? readCookie(storageKey)
+    : (() => {
+        try {
+          return window.localStorage.getItem(storageKey);
+        } catch {
+          // Private browsing, or storage disabled — fall back to the prop.
+          return null;
+        }
+      })();
+  return value === "light" || value === "dark" || value === "auto" ? value : null;
+}
+
+function readStoredAccent(
+  storageKey: string | null | undefined,
+  cookieDomain: string | undefined
+): string | null {
+  if (!canUseDOM || !storageKey) return null;
+  if (cookieDomain) return readCookie(storageKey);
   try {
     return window.sessionStorage.getItem(storageKey);
   } catch {
@@ -137,25 +183,29 @@ export function ThemeProvider({
   baseline = true,
   storageKey = "bluestar-color-scheme",
   customAccentStorageKey = "bluestar-custom-accent",
+  cookieDomain,
   children,
 }: ThemeProviderProps) {
   const [scheme, setSchemeState] = useState<ColorScheme>(
-    () => readStored(storageKey) ?? colorScheme
+    () => readStored(storageKey, cookieDomain) ?? colorScheme
   );
   const [customAccent, setCustomAccentState] = useState<string | null>(() =>
-    readStoredAccent(customAccentStorageKey)
+    readStoredAccent(customAccentStorageKey, cookieDomain)
   );
 
-  // Follow the prop when it changes, so the scheme can be driven from outside
-  // (a Storybook toolbar, an app's own settings screen) — but not on mount,
-  // where the initial state above already resolved the stored choice and a
-  // static "auto" prop would otherwise clobber it on every page load.
-  const mountedRef = useRef(false);
+  // Follow the prop only when it actually changes, so the scheme can still be
+  // driven from outside (a Storybook toolbar, an app's own settings screen)
+  // without clobbering the state initializer's already-resolved stored
+  // choice. Comparing against the last-seen prop value, rather than a
+  // boolean "have I run yet" flag, matters because this effect can genuinely
+  // run more than once before the prop ever changes -- React 18 StrictMode
+  // deliberately re-invokes effects once in development to catch exactly
+  // this kind of assumption. A boolean flip only guards the very first call;
+  // the second (re-invoked) call would see it already set and fire anyway.
+  const lastColorSchemeProp = useRef(colorScheme);
   useEffect(() => {
-    if (!mountedRef.current) {
-      mountedRef.current = true;
-      return;
-    }
+    if (lastColorSchemeProp.current === colorScheme) return;
+    lastColorSchemeProp.current = colorScheme;
     setSchemeState(colorScheme);
   }, [colorScheme]);
 
@@ -226,19 +276,27 @@ export function ThemeProvider({
     (next: ColorScheme) => {
       setSchemeState(next);
       if (!canUseDOM || !storageKey) return;
+      if (cookieDomain) {
+        writeCookie(storageKey, next, cookieDomain);
+        return;
+      }
       try {
         window.localStorage.setItem(storageKey, next);
       } catch {
         // Not being able to remember the choice shouldn't break the toggle.
       }
     },
-    [storageKey]
+    [storageKey, cookieDomain]
   );
 
   const setCustomAccent = useCallback(
     (next: string | null) => {
       setCustomAccentState(next);
       if (!canUseDOM || !customAccentStorageKey) return;
+      if (cookieDomain) {
+        writeCookie(customAccentStorageKey, next, cookieDomain);
+        return;
+      }
       try {
         if (next) window.sessionStorage.setItem(customAccentStorageKey, next);
         else window.sessionStorage.removeItem(customAccentStorageKey);
@@ -246,7 +304,7 @@ export function ThemeProvider({
         // Not being able to remember the choice shouldn't break the picker.
       }
     },
-    [customAccentStorageKey]
+    [customAccentStorageKey, cookieDomain]
   );
 
   const value = useMemo<ThemeContextValue>(
