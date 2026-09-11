@@ -22,22 +22,23 @@ ryanzrau.dev's home, not as dashboard chrome, even for the signed-in owner.
 The drawer is exactly the same `SideNav` instance `/apps`, `/admin`, and
 `/settings` render inside `AppShell`'s own rail (a "Home" item there just
 links back to `/`) — not forced full-width/non-collapsible, so its own
-bottom collapse toggle works the same way there too, and the panel's width
+collapse toggle works the same way there too, and the panel's width
 (`Drawer`'s `width="fit-content"`) follows it in and out. `header={false}`
 drops `Drawer`'s own title bar and close button entirely: the `SideNav`
 content (`AppSwitcher`'s brand row at the top) reads as if it were just
 there, with no extra chrome above it — Esc and a backdrop click are still
 how it closes.
 
-`AppSwitcher.tsx` draws a real icon per entry (`appIcons.tsx`'s per-slug set
-for a registry app, bluestar's `grid` icon for the built-in "Apps" catalog
-link) instead of `registry_apps`' emoji, and a small "R" monogram badge as
-this app's own brand mark — shown beside "Ryan Rau" when the rail is
-expanded, and alone, via `SideNav`'s `collapsedTop`, in the rail's "brand
-spot" when collapsed (a plain badge rather than reusing an icon like `home`,
-since the "Home" nav item right below it already owns that glyph — two
-identical icons stacked with nothing to distinguish them read as a
-rendering mistake, not branding).
+`AppSwitcher.tsx` is a thin wrapper around bluestar's shared `AppSwitcher`
+component (see `packages/PACKAGES.md`) — it only fetches this viewer's apps
+and builds the `entries` array; the switcher itself, and each entry's icon
+(resolved from its `slug` via bluestar's `AppIcon`), are the same everywhere
+in the repo. This app's own brand mark is a small "R" monogram badge —
+shown beside "Ryan Rau" when the rail is expanded, and alone, via `SideNav`'s
+`collapsedTop`, in the rail's "brand spot" when collapsed (a plain badge
+rather than reusing an icon like `home`, since the "Home" nav item right
+below it already owns that glyph — two identical icons stacked with nothing
+to distinguish them read as a rendering mistake, not branding).
 
 The Personal Projects section fetches `GET /api/custom/public-apps`
 (`apps/pocketbase/pb_hooks/registry_public.pb.js`) — the subset of
@@ -45,10 +46,10 @@ PocketBase's `registry_apps` collection marked `public: true`
 (`apps/pocketbase/pb_migrations/1789099600_registry_apps_public.js`). This is
 the same catalog that backs the signed-in Apps dashboard, which fetches the
 full (auth-gated) collection directly instead. Both pages draw the same
-custom SVG icon per app slug (`appIcons.tsx`) rather than the emoji
-`registry_apps` itself stores — a slug with no matching icon falls back to a
-generic mark. Mark a new app public in the Admin UI (`registry_apps` → the
-app's row → `public`) to add it to the home page too.
+bluestar `AppIcon` per app slug rather than the emoji `registry_apps` itself
+stores — a slug with no matching icon falls back to a generic mark. Mark a
+new app public in the Admin UI (`registry_apps` → the app's row → `public`)
+to add it to the home page too.
 
 ## Local development
 

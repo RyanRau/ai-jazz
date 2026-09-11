@@ -801,11 +801,11 @@ based on `sideNav` being passed and the viewport width.
 
 `SideNavItem` is `{ key, label, icon?, expandedContent?, action? }`. A collapsible left rail for an
 app's top-level pages — meant for `AppShell`'s `sideNav` slot. Collapses to
-an icon-only strip via a full-width chevron row pinned to the very bottom
-of the rail, below `footer`/`collapsedFooter` (the convention most
-developer tooling — VS Code, Linear, Notion — uses, rather than a floating
-handle on the rail's border); the chevron flips to point the direction the
-rail's edge is about to move. Give every item an `icon` or it becomes
+an icon-only strip via a small circular handle straddling the rail's right
+border at vertical centre (the convention several dashboard toolkits —
+Bootstrap, Tailwind UI — use, rather than a full-width row pinned to the
+bottom); the chevron flips to point the direction the rail's edge is about
+to move. Give every item an `icon` or it becomes
 unusable once collapsed. Collapsed
 state persists to `localStorage` the same way `useColorScheme` persists its
 own choice — pass `storageKey={null}` to disable that; `defaultCollapsed`
@@ -815,10 +815,10 @@ The active item is a 3px left accent bar + tinted background, not a solid
 fill — the same flat-selection language `Tabs` uses for the underline.
 
 `top` and `footer` turn the rail into the app's whole chrome, so `AppShell`
-needs no header at all (see its own doc above) — `top` is each app's own
-`AppSwitcher.tsx` (branding + a `switch`-icon `Menu` for jumping to another
-app, scaffolded like `AccountMenu.tsx`), `footer` an account/profile block
-pinned above a top border. Both are hidden while collapsed, since arbitrary
+needs no header at all (see its own doc above) — `top` is bluestar's shared
+`AppSwitcher` (see below), wired up by each app's own thin `AppSwitcher.tsx`
+wrapper (scaffolded like `AccountMenu.tsx`), `footer` an account/profile
+block pinned above a top border. Both are hidden while collapsed, since arbitrary
 content can't shrink to the 64px rail the way a `SideNavItem`'s own label
 does — unless `collapsedTop`/`collapsedFooter` give them an icon-only
 stand-in instead of hiding outright (a brand mark for `top`; an avatar + a
@@ -861,6 +861,53 @@ sense floating full-screen on a touch device, so that instance is always
 full-width and forced expanded (no collapse toggle rendered at all), driven
 by `SideNavMobileContext` (exported, but set by `AppShell` — not something an
 app passes itself).
+
+#### `AppSwitcher`
+
+| Prop      | Type                 | Default | Required |
+| --------- | -------------------- | ------- | -------- |
+| `appName` | `string`             | —       | Yes      |
+| `icon`    | `ReactNode`          | —       | No       |
+| `entries` | `AppSwitcherEntry[]` | —       | Yes      |
+
+`AppSwitcherEntry` is `{ slug, title, subtitle?, href }`. Branding + a switch
+menu for `SideNav`'s `top` slot, shared by every app so the switcher looks
+identical everywhere it appears — `appName`/`icon` render even with nothing
+to switch to, so the rail always says which app you're in; the `switch`-icon
+trigger (and its menu) only appears once `entries` has more than one item.
+Each entry's icon is resolved from its `slug` via `AppIcon` (see below), so
+apps don't hand-draw icons per entry.
+
+Deliberately presentational, same split as `LoginForm`/`AccountMenu`: this
+component takes a ready-made `entries` array rather than fetching anything
+itself, because bluestar must not depend on the `pocketbase` package (see
+`packages/bluestar/AUDIT.md`). Each app keeps a thin `AppSwitcher.tsx`
+wrapper (scaffolded into every new app) that queries `registry_apps`/
+`registry_grants` for this viewer's apps, builds `entries` — including a
+link back to the shared catalog at `slug: "apps"`, since that isn't itself a
+registry row — and renders this component with the result.
+
+#### `AppIcon`
+
+| Prop    | Type     | Default | Required |
+| ------- | -------- | ------- | -------- |
+| `slug`  | `string` | —       | Yes      |
+| `size`  | `number` | `24`    | No       |
+| `color` | `string` | —       | No       |
+
+One drawing per app in the cross-app registry (`registry_apps` in
+PocketBase), keyed by `slug` and shared by every place an app needs to be
+represented visually — `AppSwitcher`'s menu entries, a public "personal
+projects" page, an apps dashboard — so a given app reads the same everywhere
+it's shown instead of each consumer drawing its own copy. `"apps"` is a
+standing sentinel for the shared app catalog (not a real registry row) and
+resolves to the same grid glyph `Icon`'s own `grid` name draws, so a
+catalog link reads as the same mark wherever it appears. An unrecognized
+`slug` falls back to a plain generic mark rather than breaking the layout.
+Paths use `currentColor`, so `color` works the same as it does on `Icon` —
+pass a literal palette color on a page outside the theme system, or a theme
+token on a themed one. Add a new app's drawing here (not per-consuming-app)
+when it needs to appear anywhere `AppIcon` renders.
 
 #### `ThemeToggle`
 

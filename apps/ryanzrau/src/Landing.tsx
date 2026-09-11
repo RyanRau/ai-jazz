@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { css } from "goober";
+import { AppIcon } from "bluestar";
 import { pb } from "./pb";
-import { AppIcon } from "./appIcons";
 
 /**
  * The public, signed-out home page. Deliberately outside the bluestar

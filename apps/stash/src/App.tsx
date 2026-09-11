@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  AppIcon,
   AppShell,
   AsyncButton,
   Button,
@@ -105,7 +106,14 @@ function App() {
   if (granted === null) return null;
 
   return (
-    <AppShell sideNav={<SideNav top={<AppSwitcher appName="Stash" />} footer={<AccountMenu />} />}>
+    <AppShell
+      sideNav={
+        <SideNav
+          top={<AppSwitcher appName="Stash" icon={<AppIcon slug="stash" size={20} />} />}
+          footer={<AccountMenu />}
+        />
+      }
+    >
       <Flexbox direction="column" gap={24}>
         <Card padding={20}>
           <Form form={form}>
