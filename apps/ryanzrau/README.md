@@ -5,32 +5,38 @@ The personal site at [ryanzrau.dev](https://ryanzrau.dev) — the root-domain ap
 
 `Landing.tsx` — a warm "nature journal" personal-site page (bio, experience,
 skills, personal projects, hobbies) that intentionally sits outside
-bluestar's dashboard look — is the root path either way, signed in or out.
-Signed out, the top-right pill opens a `LoginForm` modal; signed in, it's a
-plain "Welcome, {name}" label instead, and a hamburger appears in the
+bluestar's dashboard look, styled with its own hardcoded palette rather than
+`useTheme()` — is the root path either way, signed in or out. Everything
+else (`/apps`, `/admin`, `/settings`, and the signed-in home nav) uses
+bluestar's stock `defaultTheme`/`darkTheme`, unmodified — this app's
+`ThemeProvider` in `main.tsx` carries no `theme`/`darkTheme` override, so
+the warm palette is Landing's alone and never leaks into the actual
+dashboard UI.
+
+Signed out, Landing's top-right pill opens a `LoginForm` modal; signed in,
+it's a plain "Welcome, {name}" label instead, and a hamburger appears in the
 top-left corner (icon-only; hovering just outlines it, no label) that opens
 the dashboard nav (Home, Apps, Admin, Settings, account) in a `Drawer`
 overlay instead of a permanent sideNav rail — the home page should read as
 ryanzrau.dev's home, not as dashboard chrome, even for the signed-in owner.
-The drawer reuses the exact same `SideNav` instance `/apps`, `/admin`, and
+The drawer is exactly the same `SideNav` instance `/apps`, `/admin`, and
 `/settings` render inside `AppShell`'s own rail (a "Home" item there just
-links back to `/`), wrapped in bluestar's (now-exported)
-`SideNavMobileContext` so it renders full-width and non-collapsible, the
-same way `AppShell`'s own mobile drawer does — those three paths are
-otherwise unchanged. It carries no "Menu"/"Navigation" heading of its own
-(bluestar's `Drawer` takes an optional `title` now, for exactly this); the
-`SideNav` content — `AppSwitcher`'s own brand row at the top — reads as if
-it were just there, the same chrome-less look `AppShell`'s own mobile drawer
-already had.
+links back to `/`) — not forced full-width/non-collapsible, so its own
+bottom collapse toggle works the same way there too, and the panel's width
+(`Drawer`'s `width="fit-content"`) follows it in and out. `header={false}`
+drops `Drawer`'s own title bar and close button entirely: the `SideNav`
+content (`AppSwitcher`'s brand row at the top) reads as if it were just
+there, with no extra chrome above it — Esc and a backdrop click are still
+how it closes.
 
 `AppSwitcher.tsx` draws a real icon per entry (`appIcons.tsx`'s per-slug set
 for a registry app, bluestar's `grid` icon for the built-in "Apps" catalog
 link) instead of `registry_apps`' emoji, and a small "R" monogram badge as
 this app's own brand mark — shown beside "Ryan Rau" when the rail is
-expanded, and alone, via `SideNav`'s new `collapsedTop`, in the rail's
-"brand spot" when collapsed (a plain badge rather than reusing an icon like
-`home`, since the "Home" nav item right below it already owns that glyph —
-two identical icons stacked with nothing to distinguish them read as a
+expanded, and alone, via `SideNav`'s `collapsedTop`, in the rail's "brand
+spot" when collapsed (a plain badge rather than reusing an icon like `home`,
+since the "Home" nav item right below it already owns that glyph — two
+identical icons stacked with nothing to distinguish them read as a
 rendering mistake, not branding).
 
 The Personal Projects section fetches `GET /api/custom/public-apps`
@@ -43,14 +49,6 @@ custom SVG icon per app slug (`appIcons.tsx`) rather than the emoji
 `registry_apps` itself stores — a slug with no matching icon falls back to a
 generic mark. Mark a new app public in the Admin UI (`registry_apps` → the
 app's row → `public`) to add it to the home page too.
-
-`theme.ts` re-colors bluestar to match Landing's palette (warm cream/clay/
-sage, Bitter/Karla type) for this app's own `AppShell` pages (`/apps`,
-`/admin`, `/settings`, and the signed-in home drawer) — passed to
-`ThemeProvider`'s `theme`/`darkTheme` props in `main.tsx`. It's colors and
-fonts only, deep-merged over bluestar's own `defaultTheme`/`darkTheme`; no
-bluestar component changed shape or gained a variant, and stash/tony keep
-bluestar's stock look since each app's `ThemeProvider` is independent.
 
 ## Local development
 

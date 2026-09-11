@@ -21,6 +21,16 @@ export type DrawerProps = {
   title?: string;
   /** Accessible label for the dialog when there's no visible `title` (falls back to `title`, then `"Navigation"`). */
   ariaLabel?: string;
+  /**
+   * Set `false` to drop the header bar entirely — no title, no close
+   * button — when `children` is itself a complete, self-contained UI with
+   * its own way to dismiss or navigate away (e.g. a `SideNav` whose own
+   * items double as the way out). The dialog still closes on Esc or a
+   * backdrop click either way; only the explicit in-panel close affordance
+   * goes away, so make sure at least one of those two still reaches the
+   * viewer. Defaults to `true`.
+   */
+  header?: boolean;
   children: ReactNode;
   /** Which viewport edge the panel is flush against. Defaults to `"left"`. */
   side?: "left" | "right";
@@ -46,6 +56,7 @@ export default function Drawer({
   onClose,
   title,
   ariaLabel,
+  header = true,
   children,
   side = "left",
   width = 320,
@@ -126,45 +137,47 @@ export default function Drawer({
           box-shadow: ${theme.shadow.lg};
         `}
       >
-        <Flexbox
-          direction="row"
-          justifyContent={title ? "space-between" : "flex-end"}
-          alignItems="center"
-          gap={12}
-          style={{
-            flexShrink: 0,
-            padding: "12px 12px 12px 16px",
-            borderBottom: `1px solid ${theme.colors.border}`,
-          }}
-        >
-          {title && <Header variant="h3">{title}</Header>}
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className={css`
-              background: none;
-              border: none;
-              cursor: pointer;
-              display: flex;
-              /* ~40px tap target, not just the glyph. */
-              padding: 10px 12px;
-              margin: -10px -12px;
-              border-radius: ${theme.radius.sm};
-              color: ${theme.colors.textMuted};
-              &:hover {
-                color: ${theme.colors.text};
-                background-color: ${theme.colors.surfaceHover};
-              }
-              &:focus-visible {
-                outline: 2px solid ${theme.colors.focusRing};
-                outline-offset: 2px;
-              }
-            `}
+        {header && (
+          <Flexbox
+            direction="row"
+            justifyContent={title ? "space-between" : "flex-end"}
+            alignItems="center"
+            gap={12}
+            style={{
+              flexShrink: 0,
+              padding: "12px 12px 12px 16px",
+              borderBottom: `1px solid ${theme.colors.border}`,
+            }}
           >
-            <Icon name="close" size={20} />
-          </button>
-        </Flexbox>
+            {title && <Header variant="h3">{title}</Header>}
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className={css`
+                background: none;
+                border: none;
+                cursor: pointer;
+                display: flex;
+                /* ~40px tap target, not just the glyph. */
+                padding: 10px 12px;
+                margin: -10px -12px;
+                border-radius: ${theme.radius.sm};
+                color: ${theme.colors.textMuted};
+                &:hover {
+                  color: ${theme.colors.text};
+                  background-color: ${theme.colors.surfaceHover};
+                }
+                &:focus-visible {
+                  outline: 2px solid ${theme.colors.focusRing};
+                  outline-offset: 2px;
+                }
+              `}
+            >
+              <Icon name="close" size={20} />
+            </button>
+          </Flexbox>
+        )}
 
         <div
           className={css`
