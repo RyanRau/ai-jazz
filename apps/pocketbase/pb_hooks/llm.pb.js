@@ -226,9 +226,15 @@ routerAdd(
   $apis.requireAuth()
 );
 
-// Usage rows for the tony dashboard. Admin: every row. Otherwise: only rows
-// for keys you own. Optional ?key=<id> narrows to one key (still subject to
-// the same ownership check).
+// Usage rows for the tony dashboard. Admin: every row, unless ?mine=true
+// forces it back down to just their own (the Keys page's default view --
+// an admin's own usage isn't distinguishable from everyone else's inside
+// an unscoped "every row" dump, so this is what lets the page default to
+// "my usage" and still offer "all users" as an explicit, opt-in switch).
+// Otherwise (non-admin): always just your own, ?mine ignored since there's
+// nothing broader to opt out of. Optional ?key=<id> narrows to one key
+// (still subject to the same ownership check) and takes priority over
+// ?mine.
 routerAdd(
   "GET",
   "/api/custom/llm/usage",
@@ -239,6 +245,7 @@ routerAdd(
     }
     const isAdmin = auth.get("is_admin") === true;
     const keyId = (e.requestInfo().query["key"] || "").trim();
+    const mineOnly = e.requestInfo().query["mine"] === "true";
 
     if (keyId) {
       const keyRecord = e.app.findRecordById("llm_api_keys", keyId);
@@ -252,7 +259,7 @@ routerAdd(
     if (keyId) {
       filter = "key = {:keyId}";
       params.keyId = keyId;
-    } else if (!isAdmin) {
+    } else if (!isAdmin || mineOnly) {
       filter = "key.user = {:userId}";
       params.userId = auth.id;
     }
