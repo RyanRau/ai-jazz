@@ -213,12 +213,20 @@ GGUF.
 - `llama-server` crash on startup → gateway returns 500, not a hang. The
   failure (including a tail of its stderr) is logged server-side; the client
   only gets FastAPI's generic 500 body, not the stderr tail itself.
-- Token counts come from the upstream response's `usage` field (or, for a
-  streamed response, whichever chunk carries it — usually the last one). If
-  `llama-server` doesn't include `usage`, or a stream is cut off before that
-  chunk arrives, the logged counts for that call are `0` — verify your build
-  actually returns `usage` (some require `stream_options: {"include_usage":
-true}` in the request for streamed responses).
+- Every call that reaches `manager.acquire` — success, an upstream error, or
+  a connection dropped mid-stream — gets exactly one usage row, via a small
+  `UsageTracker` context manager each of `/v1/chat/completions`,
+  `/v1/chat/send`, and the streaming path wrap around the actual model call
+  (`gateway.py`). A call is never silently untracked; the worst case is a
+  row with `0`/`0` tokens rather than no row at all. Token counts themselves
+  still come from the upstream response's `usage` field (or, for a streamed
+  response, whichever chunk carries it — usually the last one); if
+  `llama-server` doesn't include `usage` at all, or a stream is cut off
+  before that chunk arrives, the row's counts are `0` — every request this
+  gateway sends already sets `stream_options: {"include_usage": true}`
+  precisely so a streamed response includes it, but verify your
+  `llama-server` build actually honors that flag if you're still seeing
+  `0`s on calls that otherwise completed normally.
 - New keys and revocations take up to `key_refresh_seconds` to take effect —
   the gateway validates against its last successful pull, not PocketBase
   directly, so it keeps working through a brief PocketBase outage.

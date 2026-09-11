@@ -217,15 +217,72 @@ class KeyStore:
                 await self._request(
                     "POST", "/api/custom/llm/usage", json={"rows": rows}
                 )
+            except httpx.HTTPStatusError as e:
+                # A 4xx means PocketBase rejected the rows themselves (bad
+                # data, a schema mismatch) -- retrying the exact same
+                # payload would just 4xx again forever, quietly consuming
+                # queue capacity while never actually recording the calls
+                # it's holding. Log and drop rather than requeue, so a data
+                # problem shows up as a loud, visible log line instead of
+                # calls silently never landing. Anything else (a 5xx, e.g.
+                # PocketBase mid-restart) is worth retrying.
+                if 400 <= e.response.status_code < 500:
+                    print(
+                        f"[gateway] usage flush rejected ({e.response.status_code}), "
+                        f"dropping {len(rows)} rows -- check the request/response for why: {e}"
+                    )
+                else:
+                    print(
+                        f"[gateway] usage flush failed ({e.response.status_code}), "
+                        f"re-queueing {len(rows)} rows: {e}"
+                    )
+                    for row in rows:
+                        try:
+                            self._usage_queue.put_nowait(row)
+                        except asyncio.QueueFull:
+                            break
             except httpx.HTTPError as e:
                 print(
-                    f"[gateway] usage flush failed, re-queueing {len(rows)} rows: {e}"
+                    f"[gateway] usage flush failed (network), re-queueing {len(rows)} rows: {e}"
                 )
                 for row in rows:
                     try:
                         self._usage_queue.put_nowait(row)
                     except asyncio.QueueFull:
                         break
+
+
+class UsageTracker:
+    """Guarantees `key_store.record_usage(...)` fires exactly once per
+    generation attempt -- success, upstream error, or a caller disconnect --
+    with whatever token counts `update()` last saw (0/0 if the upstream
+    response never included a `usage` field at all). Every call site that
+    actually invokes llama-server wraps its work in this instead of calling
+    `record_usage` inline, so "did this call get tracked" doesn't depend on
+    each site separately remembering a `finally`/`except` that also records
+    usage -- forgetting one (as `/v1/chat/send` did; see
+    _generate_chat_response) used to mean that call just vanished from the
+    Keys page with no trace, success or failure.
+    """
+
+    def __init__(self, key_id: str, model: str):
+        self.key_id = key_id
+        self.model = model
+        self.tokens_in = 0
+        self.tokens_out = 0
+
+    def update(self, usage: dict):
+        if usage.get("prompt_tokens") is not None:
+            self.tokens_in = usage["prompt_tokens"]
+        if usage.get("completion_tokens") is not None:
+            self.tokens_out = usage["completion_tokens"]
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        key_store.record_usage(self.key_id, self.model, self.tokens_in, self.tokens_out)
+        return False
 
 
 key_store: Optional[KeyStore] = None
@@ -446,16 +503,11 @@ async def chat_completions(request: Request, auth: dict = Depends(check_api_key)
         return await _proxy_stream(client, body, manager.release, key_id)
 
     try:
-        r = await client.post("/v1/chat/completions", json=body)
-        data = r.json()
-        usage = data.get("usage") or {}
-        key_store.record_usage(
-            key_id,
-            model_cfg["name"],
-            usage.get("prompt_tokens", 0),
-            usage.get("completion_tokens", 0),
-        )
-        return JSONResponse(data, status_code=r.status_code)
+        async with UsageTracker(key_id, model_cfg["name"]) as tracker:
+            r = await client.post("/v1/chat/completions", json=body)
+            data = r.json()
+            tracker.update(data.get("usage") or {})
+            return JSONResponse(data, status_code=r.status_code)
     except httpx.HTTPError as e:
         raise HTTPException(502, f"Upstream llama-server error: {e}")
     finally:
@@ -496,27 +548,23 @@ async def _proxy_stream(
     model_name = body["model"]
 
     async def gen():
-        usage: dict = {}
         leftover = b""
         try:
-            async with client.stream("POST", "/v1/chat/completions", json=body) as r:
-                async for chunk in r.aiter_bytes():
-                    yield chunk
-                    # Look for a `usage` field in each SSE chunk (OpenAI-style
-                    # servers put it in the final one) without buffering the
-                    # whole stream.
-                    events, leftover = _parse_sse_json_lines(chunk, leftover)
-                    for ev in events:
-                        if ev.get("usage"):
-                            usage = ev["usage"]
+            async with UsageTracker(key_id, model_name) as tracker:
+                async with client.stream(
+                    "POST", "/v1/chat/completions", json=body
+                ) as r:
+                    async for chunk in r.aiter_bytes():
+                        yield chunk
+                        # Look for a `usage` field in each SSE chunk (OpenAI-style
+                        # servers put it in the final one) without buffering the
+                        # whole stream.
+                        events, leftover = _parse_sse_json_lines(chunk, leftover)
+                        for ev in events:
+                            if ev.get("usage"):
+                                tracker.update(ev["usage"])
         finally:
             await client.aclose()
-            key_store.record_usage(
-                key_id,
-                model_name,
-                usage.get("prompt_tokens", 0),
-                usage.get("completion_tokens", 0),
-            )
             await release()
 
     return StreamingResponse(gen(), media_type="text/event-stream")
@@ -637,7 +685,6 @@ async def _generate_chat_response(
     """
     FLUSH_INTERVAL = 0.75
 
-    usage: dict = {}
     content_parts: list[str] = []
     search_records: list[dict] = []
     last_flush = time.time()
@@ -650,104 +697,103 @@ async def _generate_chat_response(
         body = {**body, "tools": [WEB_SEARCH_TOOL]}
 
     try:
-        await manager.acquire(model_cfg)
-        acquired = True
-        timeout = CONFIG["server"].get("request_timeout_seconds", 300)
-        client = httpx.AsyncClient(base_url=manager.base_url, timeout=timeout)
+        async with UsageTracker(key_id, model_cfg["name"]) as tracker:
+            await manager.acquire(model_cfg)
+            acquired = True
+            timeout = CONFIG["server"].get("request_timeout_seconds", 300)
+            client = httpx.AsyncClient(base_url=manager.base_url, timeout=timeout)
 
-        for round_num in range(MAX_TOOL_ROUNDS):
-            if round_num == MAX_TOOL_ROUNDS - 1:
-                body.pop("tools", None)  # force a text answer on the last round
+            for round_num in range(MAX_TOOL_ROUNDS):
+                if round_num == MAX_TOOL_ROUNDS - 1:
+                    body.pop("tools", None)  # force a text answer on the last round
 
-            leftover = b""
-            tool_calls: dict[int, dict] = {}
-            async with client.stream("POST", "/v1/chat/completions", json=body) as r:
-                async for chunk in r.aiter_bytes():
-                    await queue.put(chunk)
-                    events, leftover = _parse_sse_json_lines(chunk, leftover)
-                    for ev in events:
-                        if ev.get("usage"):
-                            usage = ev["usage"]
-                        choices = ev.get("choices") or []
-                        if not choices:
-                            continue
-                        delta = choices[0].get("delta") or {}
-                        if delta.get("content"):
-                            content_parts.append(delta["content"])
-                        for tc in delta.get("tool_calls") or []:
-                            slot = tool_calls.setdefault(
-                                tc.get("index", 0),
-                                {"id": "", "name": "", "arguments": ""},
+                leftover = b""
+                tool_calls: dict[int, dict] = {}
+                async with client.stream(
+                    "POST", "/v1/chat/completions", json=body
+                ) as r:
+                    async for chunk in r.aiter_bytes():
+                        await queue.put(chunk)
+                        events, leftover = _parse_sse_json_lines(chunk, leftover)
+                        for ev in events:
+                            if ev.get("usage"):
+                                tracker.update(ev["usage"])
+                            choices = ev.get("choices") or []
+                            if not choices:
+                                continue
+                            delta = choices[0].get("delta") or {}
+                            if delta.get("content"):
+                                content_parts.append(delta["content"])
+                            for tc in delta.get("tool_calls") or []:
+                                slot = tool_calls.setdefault(
+                                    tc.get("index", 0),
+                                    {"id": "", "name": "", "arguments": ""},
+                                )
+                                if tc.get("id"):
+                                    slot["id"] = tc["id"]
+                                fn = tc.get("function") or {}
+                                if fn.get("name"):
+                                    slot["name"] += fn["name"]
+                                if fn.get("arguments"):
+                                    slot["arguments"] += fn["arguments"]
+                        if time.time() - last_flush > FLUSH_INTERVAL:
+                            await _append_chat_message(
+                                assistant_message_id,
+                                "".join(content_parts),
+                                "streaming",
+                                tool_calls=search_records,
                             )
-                            if tc.get("id"):
-                                slot["id"] = tc["id"]
-                            fn = tc.get("function") or {}
-                            if fn.get("name"):
-                                slot["name"] += fn["name"]
-                            if fn.get("arguments"):
-                                slot["arguments"] += fn["arguments"]
-                    if time.time() - last_flush > FLUSH_INTERVAL:
-                        await _append_chat_message(
-                            assistant_message_id,
-                            "".join(content_parts),
-                            "streaming",
-                            tool_calls=search_records,
-                        )
-                        last_flush = time.time()
+                            last_flush = time.time()
 
-            if not tool_calls:
-                break  # final answer for this turn
+                if not tool_calls:
+                    break  # final answer for this turn
 
-            ordered = [tool_calls[i] for i in sorted(tool_calls)]
-            body["messages"] = body["messages"] + [
-                {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": tc["id"] or f"call_{i}",
-                            "type": "function",
-                            "function": {
-                                "name": tc["name"],
-                                "arguments": tc["arguments"],
-                            },
-                        }
-                        for i, tc in enumerate(ordered)
-                    ],
-                }
-            ]
-            for i, tc in enumerate(ordered):
-                try:
-                    args = json.loads(tc["arguments"] or "{}")
-                except ValueError:
-                    args = {}
-                query = args.get("query", "")
-                results = await _web_search(query) if tc["name"] == "web_search" else []
-                if tc["name"] == "web_search":
-                    search_records.append({"query": query, "results": results})
-                body["messages"].append(
+                ordered = [tool_calls[i] for i in sorted(tool_calls)]
+                body["messages"] = body["messages"] + [
                     {
-                        "role": "tool",
-                        "tool_call_id": tc["id"] or f"call_{i}",
-                        "content": json.dumps(results),
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": tc["id"] or f"call_{i}",
+                                "type": "function",
+                                "function": {
+                                    "name": tc["name"],
+                                    "arguments": tc["arguments"],
+                                },
+                            }
+                            for i, tc in enumerate(ordered)
+                        ],
                     }
-                )
+                ]
+                for i, tc in enumerate(ordered):
+                    try:
+                        args = json.loads(tc["arguments"] or "{}")
+                    except ValueError:
+                        args = {}
+                    query = args.get("query", "")
+                    results = (
+                        await _web_search(query) if tc["name"] == "web_search" else []
+                    )
+                    if tc["name"] == "web_search":
+                        search_records.append({"query": query, "results": results})
+                    body["messages"].append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc["id"] or f"call_{i}",
+                            "content": json.dumps(results),
+                        }
+                    )
 
-        await _append_chat_message(
-            assistant_message_id,
-            "".join(content_parts),
-            "complete",
-            tokens_in=usage.get("prompt_tokens", 0),
-            tokens_out=usage.get("completion_tokens", 0),
-            response_ms=int((time.time() - start) * 1000),
-            tool_calls=search_records,
-        )
-        key_store.record_usage(
-            key_id,
-            model_cfg["name"],
-            usage.get("prompt_tokens", 0),
-            usage.get("completion_tokens", 0),
-        )
+            await _append_chat_message(
+                assistant_message_id,
+                "".join(content_parts),
+                "complete",
+                tokens_in=tracker.tokens_in,
+                tokens_out=tracker.tokens_out,
+                response_ms=int((time.time() - start) * 1000),
+                tool_calls=search_records,
+            )
     except Exception as e:
         print(f"[gateway] chat generation failed: {e}")
         await _append_chat_message(
@@ -788,6 +834,12 @@ async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
 
     body["model"] = model_cfg["name"]
     body["stream"] = True
+    # Some llama-server builds only include token counts in a streamed
+    # response's `usage` field when this is set (see the README's
+    # Limitations section) -- without it, every chat message would still
+    # get a usage row (UsageTracker always records one), just with 0/0
+    # tokens, silently under-reporting real usage rather than omitting it.
+    body["stream_options"] = {"include_usage": True}
 
     messages = body.get("messages") or []
     if not messages or messages[-1].get("role") != "user":
