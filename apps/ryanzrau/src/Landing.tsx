@@ -613,7 +613,13 @@ const hobbies = [
   },
 ];
 
-export function Landing({ onSignIn }: { onSignIn: () => void }) {
+type LandingProps =
+  // The dashboard's nav (Apps/Settings/Admin/Account) lives behind a
+  // hamburger instead of a persistent sideNav rail: this page is meant to
+  // read as ryanzrau.dev's home even when signed in, not as dashboard chrome.
+  { signedIn: true; onOpenMenu: () => void } | { signedIn?: false; onSignIn: () => void };
+
+export function Landing(props: LandingProps) {
   const [projects, setProjects] = useState<PublicApp[] | null>(null);
 
   useEffect(() => {
@@ -627,9 +633,22 @@ export function Landing({ onSignIn }: { onSignIn: () => void }) {
       <div className={shellClass}>
         <div className={topBarClass}>
           <span className={wordmarkClass}>Ryan Rau</span>
-          <button className={signInButtonClass} onClick={onSignIn}>
-            Sign in
-          </button>
+          {props.signedIn ? (
+            <button className={signInButtonClass} onClick={props.onOpenMenu} aria-label="Open menu">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M4 7h16M4 12h16M4 17h16"
+                  stroke="#3a3126"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          ) : (
+            <button className={signInButtonClass} onClick={props.onSignIn}>
+              Sign in
+            </button>
+          )}
         </div>
 
         <div className={heroClass}>
@@ -864,13 +883,15 @@ export function Landing({ onSignIn }: { onSignIn: () => void }) {
               LinkedIn
             </a>
           </div>
-          <div className={footerNoteClass}>
-            Have access to an app here?{" "}
-            <button className={footerSignInClass} onClick={onSignIn}>
-              Sign in
-            </button>
-            .
-          </div>
+          {!props.signedIn && (
+            <div className={footerNoteClass}>
+              Have access to an app here?{" "}
+              <button className={footerSignInClass} onClick={props.onSignIn}>
+                Sign in
+              </button>
+              .
+            </div>
+          )}
         </div>
       </div>
     </div>

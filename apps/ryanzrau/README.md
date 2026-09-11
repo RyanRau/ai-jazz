@@ -3,11 +3,18 @@
 The personal site at [ryanzrau.dev](https://ryanzrau.dev) — the root-domain app
 (`subdomain: ""` in the repo-root `deploy.yml`).
 
-Signed out, visitors get `Landing.tsx` — a warm "nature journal" personal-site
-page (bio, experience, skills, personal projects, hobbies) that intentionally
-sits outside bluestar's dashboard look; a "Sign in" control opens a
-`LoginForm` modal. Signed in, the `AppShell` sidebar (Apps, Settings, Admin)
-takes over and the root path shows a short dashboard welcome instead.
+`Landing.tsx` — a warm "nature journal" personal-site page (bio, experience,
+skills, personal projects, hobbies) that intentionally sits outside
+bluestar's dashboard look — is the root path either way, signed in or out.
+Signed out, its top-right control opens a `LoginForm` modal. Signed in, that
+control becomes a hamburger that opens the dashboard nav (Apps, Admin,
+Settings, account) in a `Drawer` overlay instead of a permanent sideNav
+rail — the home page should read as ryanzrau.dev's home, not as dashboard
+chrome, even for the signed-in owner. The drawer reuses the exact same
+`SideNav` instance `/apps`, `/admin`, and `/settings` render inside
+`AppShell`'s own rail, wrapped in bluestar's (now-exported) `SideNavMobileContext`
+so it renders full-width and non-collapsible, the same way `AppShell`'s own
+mobile drawer does — those three paths are otherwise unchanged.
 
 The Personal Projects section fetches `GET /api/custom/public-apps`
 (`apps/pocketbase/pb_hooks/registry_public.pb.js`) — the subset of
