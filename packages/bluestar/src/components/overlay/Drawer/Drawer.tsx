@@ -10,7 +10,17 @@ export type DrawerProps = {
   isOpen: boolean;
   /** Called on Esc, backdrop click, or the close button. */
   onClose: () => void;
-  title: string;
+  /**
+   * Heading shown in the drawer's header bar. Omit for a bare bar (just the
+   * close button, right-aligned) — the same chrome-less look `AppShell`'s
+   * own mobile nav drawer uses, appropriate when `children` already reads
+   * as its own section (e.g. a `SideNav` whose own `top` slot is the
+   * heading) and a second, redundant title would just add noise. The
+   * dialog keeps an accessible label either way, via `ariaLabel`.
+   */
+  title?: string;
+  /** Accessible label for the dialog when there's no visible `title` (falls back to `title`, then `"Navigation"`). */
+  ariaLabel?: string;
   children: ReactNode;
   /** Which viewport edge the panel is flush against. Defaults to `"left"`. */
   side?: "left" | "right";
@@ -35,6 +45,7 @@ export default function Drawer({
   isOpen,
   onClose,
   title,
+  ariaLabel,
   children,
   side = "left",
   width = 320,
@@ -77,7 +88,7 @@ export default function Drawer({
   return (
     <dialog
       ref={ref}
-      aria-label={title}
+      aria-label={ariaLabel ?? title ?? "Navigation"}
       onClick={(event) => {
         // The dialog element covers the whole viewport, so a click landing on
         // it rather than on the panel inside means the backdrop was clicked.
@@ -117,7 +128,7 @@ export default function Drawer({
       >
         <Flexbox
           direction="row"
-          justifyContent="space-between"
+          justifyContent={title ? "space-between" : "flex-end"}
           alignItems="center"
           gap={12}
           style={{
@@ -126,7 +137,7 @@ export default function Drawer({
             borderBottom: `1px solid ${theme.colors.border}`,
           }}
         >
-          <Header variant="h3">{title}</Header>
+          {title && <Header variant="h3">{title}</Header>}
           <button
             type="button"
             aria-label="Close"

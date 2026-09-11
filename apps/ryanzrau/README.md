@@ -17,7 +17,21 @@ The drawer reuses the exact same `SideNav` instance `/apps`, `/admin`, and
 links back to `/`), wrapped in bluestar's (now-exported)
 `SideNavMobileContext` so it renders full-width and non-collapsible, the
 same way `AppShell`'s own mobile drawer does — those three paths are
-otherwise unchanged.
+otherwise unchanged. It carries no "Menu"/"Navigation" heading of its own
+(bluestar's `Drawer` takes an optional `title` now, for exactly this); the
+`SideNav` content — `AppSwitcher`'s own brand row at the top — reads as if
+it were just there, the same chrome-less look `AppShell`'s own mobile drawer
+already had.
+
+`AppSwitcher.tsx` draws a real icon per entry (`appIcons.tsx`'s per-slug set
+for a registry app, bluestar's `grid` icon for the built-in "Apps" catalog
+link) instead of `registry_apps`' emoji, and a small "R" monogram badge as
+this app's own brand mark — shown beside "Ryan Rau" when the rail is
+expanded, and alone, via `SideNav`'s new `collapsedTop`, in the rail's
+"brand spot" when collapsed (a plain badge rather than reusing an icon like
+`home`, since the "Home" nav item right below it already owns that glyph —
+two identical icons stacked with nothing to distinguish them read as a
+rendering mistake, not branding).
 
 The Personal Projects section fetches `GET /api/custom/public-apps`
 (`apps/pocketbase/pb_hooks/registry_public.pb.js`) — the subset of

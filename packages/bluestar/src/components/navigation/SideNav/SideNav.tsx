@@ -54,6 +54,17 @@ export type SideNavProps = {
    */
   top?: ReactNode;
   /**
+   * Rendered in `top`'s place while collapsed — a compact, icon-only
+   * stand-in (a brand mark, the current app's own icon) for the piece of
+   * `top` that still needs to be visible at the 64px rail width. Gets its
+   * own bottom border, same as `footer`'s top border, so it reads as a
+   * distinct brand zone rather than blurring into the first nav item right
+   * below it — worth a shape/mark that doesn't visually double up with any
+   * single item's own icon (a "Home" item's house glyph, say). Omit to
+   * keep the current behavior of hiding `top` entirely while collapsed.
+   */
+  collapsedTop?: ReactNode;
+  /**
    * Rendered pinned to the bottom of the rail, above a top border — an
    * account/profile block. Hidden while collapsed; expand to reach it,
    * unless `collapsedFooter` gives it an icon-only stand-in.
@@ -127,6 +138,7 @@ export default function SideNav({
   activeKey = "",
   onSelect = () => {},
   top,
+  collapsedTop,
   footer,
   collapsedFooter,
   storageKey = "bluestar-sidenav-collapsed",
@@ -171,6 +183,19 @@ export default function SideNav({
           `}
         >
           {top}
+        </div>
+      )}
+
+      {collapsedTop && collapsed && (
+        <div
+          className={css`
+            display: flex;
+            justify-content: center;
+            padding: 12px 8px;
+            border-bottom: 1px solid ${theme.colors.border};
+          `}
+        >
+          {collapsedTop}
         </div>
       )}
 
