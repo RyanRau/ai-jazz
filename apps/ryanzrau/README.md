@@ -3,11 +3,11 @@
 The personal site at [ryanzrau.dev](https://ryanzrau.dev) — the root-domain app
 (`subdomain: ""` in the repo-root `deploy.yml`).
 
-The site's `AppShell` header (title left, an account control right) is
-present whether or not you're signed in — signed out, the right slot holds a
-"Sign in" button that opens a `LoginForm` modal; signed in, it's the same
-`AccountMenu` every other app uses. Either way the page body is just a short
-welcome message — there's no app-specific content or data yet beyond auth.
+Signed out, visitors get `Landing.tsx` — a warm, editorial personal-site page
+(bio, experience, skills, hobbies) that intentionally sits outside bluestar's
+dashboard look; a "Sign in" control opens a `LoginForm` modal. Signed in, the
+`AppShell` sidebar (Apps, Settings, Admin) takes over and the root path shows
+a short dashboard welcome instead.
 
 ## Local development
 
