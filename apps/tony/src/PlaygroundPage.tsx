@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  AsyncButton,
   Button,
   Card,
   Dropdown,
@@ -10,10 +11,10 @@ import {
   Text,
   TextAreaInput,
   TextInput,
+  useTheme,
 } from "bluestar";
 import type { FileDropzoneValue } from "bluestar";
-import { useAuthRecord } from "./useAuth";
-import { getOrCreatePlaygroundKey, mintPlaygroundKey, clearPlaygroundKey } from "./playgroundKey";
+import { usePlaygroundKey } from "./usePlaygroundKey";
 import { GATEWAY_URL } from "./gateway";
 
 type ModelInfo = { id: string; vision: boolean };
@@ -30,16 +31,15 @@ function formatElapsed(ms: number): string {
  * reachable there's no reason to proxy a request that isn't going anywhere
  * near PocketBase's own data.
  *
- * Uses a personal key created automatically on first visit (see
- * playgroundKey.ts) rather than asking for one to be pasted in -- usage
- * still attributes to the signed-in user, since it's a real key created via
- * the same self-service route the Keys page uses, just triggered for them
- * instead of by them.
+ * Uses a personal key (see playgroundKey.ts and usePlaygroundKey.ts) rather
+ * than asking for one to be pasted in -- usage still attributes to the
+ * signed-in user, since it's a real key created via the same self-service
+ * route the Keys page uses, just triggered from a prompt here instead of
+ * from that page directly.
  */
 export function PlaygroundPage() {
-  const record = useAuthRecord();
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [keyError, setKeyError] = useState<string | null>(null);
+  const theme = useTheme();
+  const { apiKey, needsKey, keyError, createKey, recoverFromUnauthorized } = usePlaygroundKey();
   // null = not loaded yet, "unavailable" = the gateway couldn't be reached
   // (fall back to a plain text field rather than blocking model entry).
   const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
@@ -52,13 +52,6 @@ export function PlaygroundPage() {
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const startRef = useRef(0);
-
-  useEffect(() => {
-    if (!record) return;
-    getOrCreatePlaygroundKey(record.id)
-      .then(setApiKey)
-      .catch(() => setKeyError("Couldn't set up your personal key. Try reloading."));
-  }, [record]);
 
   useEffect(() => {
     if (!apiKey) return;
@@ -133,13 +126,12 @@ export function PlaygroundPage() {
       }),
     });
 
-    if (r.status === 401 && retryOn401 && record) {
-      // The cached key was revoked (e.g. from the Keys page) or the cache
-      // was cleared -- mint a fresh one and retry once rather than
-      // surfacing a confusing auth error for a key the user never typed in
-      // themselves.
-      const fresh = await mintPlaygroundKey(record.id);
-      setApiKey(fresh);
+    if (r.status === 401 && retryOn401) {
+      // The cached key was revoked -- known-bad, so recover (or surface why
+      // that failed) rather than a confusing auth error for a key the user
+      // never typed in themselves.
+      const fresh = await recoverFromUnauthorized();
+      if (!fresh) return;
       return sendWith(fresh, false);
     }
 
@@ -172,28 +164,27 @@ export function PlaygroundPage() {
     }
   }
 
-  async function resetKey() {
-    if (!record) return;
-    clearPlaygroundKey(record.id);
-    setKeyError(null);
-    setApiKey(null);
-    try {
-      setApiKey(await mintPlaygroundKey(record.id));
-    } catch {
-      setKeyError("Couldn't set up your personal key. Try reloading.");
-    }
-  }
-
   return (
     <Card padding={24}>
       <Flexbox direction="column" gap={16}>
         <Header variant="h2">Playground</Header>
         <Text variant="caption">
-          Sends one chat completion directly to {GATEWAY_URL} using your personal key — created
-          automatically the first time you visit, so there's nothing to paste in. It's a real key
-          like any other and shows up on the Keys page, marked as your default so it can't be
+          Sends one chat completion directly to {GATEWAY_URL} using your personal key. It's a real
+          key like any other and shows up on the Keys page, marked as your default so it can't be
           revoked from under this page.
         </Text>
+        {needsKey && (
+          <Alert variant="warning" title="No Playground key in this browser">
+            <Flexbox direction="column" gap={8} alignItems="flex-start">
+              <Text variant="body">
+                Create one to start sending prompts -- it's yours alone and only ever shown once
+                you've created it.
+              </Text>
+              <AsyncButton label="Create key" density="dense" onClick={createKey} />
+              {keyError && <Text color={theme.colors.error}>{keyError}</Text>}
+            </Flexbox>
+          </Alert>
+        )}
         {modelList ? (
           <Dropdown
             label="Model"
@@ -236,16 +227,10 @@ export function PlaygroundPage() {
             onClick={send}
             isDisabled={sending || !apiKey || !prompt}
           />
-          <Button label="Reset key" variant="secondary" density="dense" onClick={resetKey} />
           {!sending && elapsedMs !== null && (
             <Text variant="caption">Responded in {formatElapsed(elapsedMs)}</Text>
           )}
         </Flexbox>
-        {keyError && (
-          <Alert variant="error" title="Couldn't set up your key">
-            {keyError}
-          </Alert>
-        )}
         {error && (
           <Alert variant="error" title="Request failed">
             {error}

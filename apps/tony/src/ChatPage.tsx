@@ -1,5 +1,7 @@
 import { css } from "goober";
 import {
+  Alert,
+  AsyncButton,
   Badge,
   Button,
   ChatBubble,
@@ -41,6 +43,8 @@ export function ChatPage({ chat }: { chat: ChatState }) {
   const theme = useTheme();
   const {
     apiKey,
+    needsKey,
+    createKey,
     keyError,
     modelList,
     model,
@@ -83,6 +87,19 @@ export function ChatPage({ chat }: { chat: ChatState }) {
             </div>
           ) : null)}
       </Flexbox>
+
+      {needsKey && (
+        <Alert variant="warning" title="No Playground key in this browser">
+          <Flexbox direction="column" gap={8} alignItems="flex-start">
+            <Text variant="body">
+              Create one to start chatting -- it's yours alone and only ever shown once you've
+              created it.
+            </Text>
+            <AsyncButton label="Create key" density="dense" onClick={createKey} />
+            {keyError && <Text color={theme.colors.error}>{keyError}</Text>}
+          </Flexbox>
+        </Alert>
+      )}
 
       <Flexbox direction="column" gap={12}>
         {messages.length === 0 ? (
@@ -162,7 +179,6 @@ export function ChatPage({ chat }: { chat: ChatState }) {
               </Flexbox>
             )}
           </Flexbox>
-          {keyError && <Text color={theme.colors.error}>{keyError}</Text>}
           {error && <Text color={theme.colors.error}>{error}</Text>}
         </Flexbox>
       </div>

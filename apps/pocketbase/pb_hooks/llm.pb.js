@@ -25,7 +25,13 @@
 // below will refuse to touch -- it's the caller's own key either way, so
 // there's no privilege being granted, only a self-inflicted-footgun guard
 // for the key apps/tony/src/playgroundKey.ts mints (see its is_default
-// migration for why the Playground needs this).
+// migration for why the Playground needs this). At most one active default
+// per user is allowed -- checked here for a clean error message, backstopped
+// regardless of entry point by the onRecordCreate/onRecordUpdate hooks below
+// and, at the database level, by a unique index (see migration
+// 1789099510_llm_api_keys_one_default_index.js). playgroundKey.ts used to
+// mint a fresh default on every cache miss even when the user already had
+// one, which is what let these pile up.
 routerAdd(
   "POST",
   "/api/custom/llm/keys",
@@ -40,6 +46,20 @@ routerAdd(
     if (!label) {
       throw new BadRequestError("label is required.");
     }
+    const isDefault = body.is_default === true;
+    if (isDefault) {
+      const existingDefaults = e.app.findRecordsByFilter(
+        "llm_api_keys",
+        "user = {:userId} && is_default = true && revoked_at = ''",
+        "",
+        1,
+        0,
+        { userId: auth.id }
+      );
+      if (existingDefaults.length > 0) {
+        throw new BadRequestError("You already have a default key.");
+      }
+    }
 
     const secret = "sk-" + $security.randomString(48);
     const collection = e.app.findCollectionByNameOrId("llm_api_keys");
@@ -48,7 +68,7 @@ routerAdd(
       label: label,
       key_hash: $security.sha256(secret),
       key_prefix: secret.substring(0, 10),
-      is_default: body.is_default === true,
+      is_default: isDefault,
     });
     e.app.save(record);
 
@@ -262,3 +282,52 @@ routerAdd(
   },
   $apis.requireAuth()
 );
+
+// Backstops the same "at most one active default key per user" rule POST
+// /keys already checks, but at the model level -- onRecordCreate/
+// onRecordUpdate fire for every save that goes through app.save() (this
+// file's own routes included), unlike the *Request hooks, which only cover
+// PocketBase's built-in REST record endpoints -- llm_api_keys has none
+// exposed, since every read/write already goes through the custom routes
+// above. This is what actually catches a write those routes don't (a future
+// route, a direct edit in the admin UI); the database itself holds the same
+// line via a unique index (see migration
+// 1789099510_llm_api_keys_one_default_index.js), so this pair exists purely
+// to turn what would otherwise be a raw "UNIQUE constraint failed" error
+// into the same message POST /keys already gives.
+//
+// Self-contained rather than sharing a helper function with each other or
+// with POST /keys above -- same JSVM top-level-function caveat noted up top.
+$app.onRecordCreate("llm_api_keys").bindFunc((e) => {
+  if (e.record.getBool("is_default") && e.record.getString("revoked_at") === "") {
+    const dupes = e.app.findRecordsByFilter(
+      "llm_api_keys",
+      "user = {:userId} && is_default = true && revoked_at = ''",
+      "",
+      1,
+      0,
+      { userId: e.record.getString("user") }
+    );
+    if (dupes.length > 0) {
+      throw new BadRequestError("You already have a default key.");
+    }
+  }
+  return e.next();
+});
+
+$app.onRecordUpdate("llm_api_keys").bindFunc((e) => {
+  if (e.record.getBool("is_default") && e.record.getString("revoked_at") === "") {
+    const dupes = e.app.findRecordsByFilter(
+      "llm_api_keys",
+      "user = {:userId} && is_default = true && revoked_at = '' && id != {:id}",
+      "",
+      1,
+      0,
+      { userId: e.record.getString("user"), id: e.record.id }
+    );
+    if (dupes.length > 0) {
+      throw new BadRequestError("You already have a default key.");
+    }
+  }
+  return e.next();
+});

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { pb } from "./pb";
-import { useAuthRecord } from "./useAuth";
-import { getOrCreatePlaygroundKey, mintPlaygroundKey } from "./playgroundKey";
+import { usePlaygroundKey } from "./usePlaygroundKey";
 import { GATEWAY_URL } from "./gateway";
 
 export type ChatSummary = {
@@ -90,10 +89,9 @@ function deltaContent(ev: Record<string, unknown>): string | null {
  * ten minutes later."
  */
 export function useChat() {
-  const record = useAuthRecord();
+  const playgroundKey = usePlaygroundKey();
+  const { apiKey, keyError, recoverFromUnauthorized } = playgroundKey;
 
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [keyError, setKeyError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
   const [model, setModel] = useState("");
 
@@ -108,13 +106,6 @@ export function useChat() {
   const sendingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!record) return;
-    getOrCreatePlaygroundKey(record.id)
-      .then(setApiKey)
-      .catch(() => setKeyError("Couldn't set up your personal key. Try reloading."));
-  }, [record]);
 
   useEffect(() => {
     if (!apiKey) return;
@@ -230,9 +221,9 @@ export function useChat() {
         signal: controller.signal,
       });
 
-      if (r.status === 401 && retryOn401 && record) {
-        const fresh = await mintPlaygroundKey(record.id);
-        setApiKey(fresh);
+      if (r.status === 401 && retryOn401) {
+        const fresh = await recoverFromUnauthorized();
+        if (!fresh) return; // keyError from the hook already explains why
         setDraft(content); // restore -- sendWith re-reads `draft` on retry
         return sendWith(fresh, false);
       }
@@ -355,6 +346,9 @@ export function useChat() {
 
   return {
     apiKey,
+    needsKey: playgroundKey.needsKey,
+    creatingKey: playgroundKey.creating,
+    createKey: playgroundKey.createKey,
     keyError,
     modelList,
     model,
