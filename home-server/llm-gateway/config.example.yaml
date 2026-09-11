@@ -24,6 +24,12 @@ llama_server:
   port: 8100
   startup_timeout_seconds: 180
 
+# Optional. When set, Chat (/v1/chat/send) offers the model a `web_search`
+# tool backed by a local SearXNG instance -- see README.md#web-search. Omit
+# this whole section to leave Chat exactly as it is today.
+# web_search:
+#   searxng_url: "http://127.0.0.1:8080"
+
 models:
   - name: "qwen3.5-2b"
     aliases: ["2b"]

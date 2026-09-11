@@ -9,6 +9,7 @@ import {
   EmptyState,
   Flexbox,
   Header,
+  Link,
   ListRow,
   Spinner,
   Text,
@@ -23,6 +24,8 @@ import { GATEWAY_URL } from "./gateway";
 
 type ChatSummary = { id: string; title: string; model: string; created: string; updated: string };
 type MessageStatus = "pending" | "streaming" | "complete" | "error";
+type SearchResult = { title: string; url: string; snippet: string };
+type ToolCallRecord = { query: string; results: SearchResult[] };
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -31,6 +34,7 @@ type ChatMessage = {
   tokens_in: number;
   tokens_out: number;
   response_ms: number;
+  tool_calls: ToolCallRecord[];
   created: string;
 };
 type ModelInfo = { id: string; vision: boolean };
@@ -293,6 +297,7 @@ export function ChatPage() {
                 tokens_in: 0,
                 tokens_out: 0,
                 response_ms: 0,
+                tool_calls: [],
                 created: now,
               },
               {
@@ -303,6 +308,7 @@ export function ChatPage() {
                 tokens_in: 0,
                 tokens_out: 0,
                 response_ms: 0,
+                tool_calls: [],
                 created: now,
               },
             ]);
@@ -435,7 +441,40 @@ export function ChatPage() {
               />
             ) : (
               messages.map((m) => (
-                <ChatBubble key={m.id} role={m.role} content={m.content} status={m.status} />
+                <Flexbox key={m.id} direction="column" gap={8}>
+                  {m.tool_calls.length > 0 && (
+                    <Flexbox direction="column" gap={8} style={{ padding: "0 4px" }}>
+                      {m.tool_calls.map((tc, i) => (
+                        <Flexbox key={i} direction="column" gap={4}>
+                          <Text variant="caption">Searched the web: "{tc.query}"</Text>
+                          {tc.results.length > 0 && (
+                            <Flexbox direction="row" gap={12} flexWrap="wrap">
+                              {tc.results.map((r) => (
+                                <Link key={r.url} href={r.url} external variant="muted">
+                                  <Text variant="caption">{r.title}</Text>
+                                </Link>
+                              ))}
+                            </Flexbox>
+                          )}
+                        </Flexbox>
+                      ))}
+                    </Flexbox>
+                  )}
+                  <ChatBubble role={m.role} content={m.content} status={m.status} />
+                  {m.role === "assistant" &&
+                    m.status === "complete" &&
+                    (m.tokens_in > 0 || m.tokens_out > 0 || m.response_ms > 0) && (
+                      <Text variant="caption" color={theme.colors.textMuted}>
+                        {[
+                          m.tokens_in > 0 && `${m.tokens_in.toLocaleString()} in`,
+                          m.tokens_out > 0 && `${m.tokens_out.toLocaleString()} out`,
+                          m.response_ms > 0 && formatElapsed(m.response_ms),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </Text>
+                    )}
+                </Flexbox>
               ))
             )}
             <div ref={threadEndRef} />
@@ -464,14 +503,6 @@ export function ChatPage() {
                   <Text variant="caption">Still generating…</Text>
                 </Flexbox>
               )}
-              {!sending &&
-                lastMessage?.role === "assistant" &&
-                lastMessage.status === "complete" &&
-                lastMessage.response_ms > 0 && (
-                  <Text variant="caption">
-                    Responded in {formatElapsed(lastMessage.response_ms)}
-                  </Text>
-                )}
             </Flexbox>
           </Flexbox>
 
