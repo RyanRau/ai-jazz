@@ -113,12 +113,19 @@ export function ActivatePage() {
       )}
       {tokenError && <Alert variant="error">{tokenError}</Alert>}
       <Form form={form} maxWidth={null}>
-        <TextInput {...form.field("name")} label="Name" />
-        <TextInput {...form.field("password")} label="Password" type="password" required />
+        <TextInput {...form.field("name")} label="Name" autoComplete="name" />
+        <TextInput
+          {...form.field("password")}
+          label="Password"
+          type="password"
+          autoComplete="new-password"
+          required
+        />
         <TextInput
           {...form.field("passwordConfirm")}
           label="Confirm password"
           type="password"
+          autoComplete="new-password"
           required
         />
         <SubmitButton label="Activate" />

@@ -23,8 +23,20 @@ export function LoginForm({ onSuccess }: { onSuccess?: () => void }) {
 
   return (
     <Form form={form}>
-      <TextInput {...form.field("email")} label="Email" type="email" required />
-      <TextInput {...form.field("password")} label="Password" type="password" required />
+      <TextInput
+        {...form.field("email")}
+        label="Email"
+        type="email"
+        autoComplete="username"
+        required
+      />
+      <TextInput
+        {...form.field("password")}
+        label="Password"
+        type="password"
+        autoComplete="current-password"
+        required
+      />
       <SubmitButton label="Log in" />
     </Form>
   );
