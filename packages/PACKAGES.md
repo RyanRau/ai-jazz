@@ -360,9 +360,7 @@ promise settles, including on rejection.
 A dense, single-select toggle group for picking one of a small set of views
 (chart vs. table, a time range) — not a form field, so it takes no
 `label`/`description`. The selected segment lifts on a sunken track with a
-small functional shadow (`theme.shadow.sm`) — the same
-lift-to-indicate-state convention `SideNav`'s collapse handle uses, not an
-ambient card shadow.
+small functional shadow (`theme.shadow.sm`), not an ambient card shadow.
 
 ### Form controls
 
@@ -803,10 +801,12 @@ based on `sideNav` being passed and the viewport width.
 
 `SideNavItem` is `{ key, label, icon?, expandedContent?, action? }`. A collapsible left rail for an
 app's top-level pages — meant for `AppShell`'s `sideNav` slot. Collapses to
-an icon-only strip via a small circular toggle straddling the rail's right
-border at vertical centre (the convention most dashboard component
-libraries — Bootstrap, Tailwind UI — use, rather than a full-width row).
-Give every item an `icon` or it becomes unusable once collapsed. Collapsed
+an icon-only strip via a full-width chevron row pinned to the very bottom
+of the rail, below `footer`/`collapsedFooter` (the convention most
+developer tooling — VS Code, Linear, Notion — uses, rather than a floating
+handle on the rail's border); the chevron flips to point the direction the
+rail's edge is about to move. Give every item an `icon` or it becomes
+unusable once collapsed. Collapsed
 state persists to `localStorage` the same way `useColorScheme` persists its
 own choice — pass `storageKey={null}` to disable that; `defaultCollapsed`
 only decides the very first render, before anything is stored (e.g. a

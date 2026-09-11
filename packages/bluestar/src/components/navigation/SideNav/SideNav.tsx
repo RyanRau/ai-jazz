@@ -90,7 +90,6 @@ export type SideNavProps = {
 const canUseDOM = typeof window !== "undefined" && typeof document !== "undefined";
 const EXPANDED_WIDTH = 220;
 const COLLAPSED_WIDTH = 64;
-const TOGGLE_SIZE = 24;
 
 function readStored(storageKey: string | null | undefined, defaultCollapsed: boolean): boolean {
   if (!canUseDOM || !storageKey) return defaultCollapsed;
@@ -124,10 +123,11 @@ export const SideNavMobileContext = createContext(false);
  * single-page app can render `SideNav` for just its `top`/`footer` chrome
  * with nothing to switch between.
  *
- * The collapse toggle is a small circular handle straddling the rail's
- * right border at vertical centre -- the convention most dashboard
- * component libraries (Bootstrap, Tailwind UI) use, rather than a
- * full-width row at the bottom.
+ * The collapse toggle is a full-width row pinned to the very bottom of the
+ * rail (below `footer`/`collapsedFooter`), a chevron flipping to point the
+ * direction the rail's edge is about to move -- the convention most
+ * developer tooling (VS Code, Linear, Notion) uses, rather than a floating
+ * handle straddling the rail's border.
  *
  * Collapsed state persists to localStorage the same way `useColorScheme`
  * persists its own choice — `defaultCollapsed` only decides the very first
@@ -165,7 +165,6 @@ export default function SideNav({
     <nav
       aria-label="Sections"
       className={css`
-        position: relative;
         width: ${isMobileDrawer ? "100%" : `${collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH}px`};
         height: 100%;
         flex-shrink: 0;
@@ -415,26 +414,21 @@ export default function SideNav({
           onClick={() => setCollapsed((c) => !c)}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={css`
-            position: absolute;
-            top: 50%;
-            right: -${TOGGLE_SIZE / 2}px;
-            transform: translateY(-50%);
-            width: ${TOGGLE_SIZE}px;
-            height: ${TOGGLE_SIZE}px;
             display: flex;
             align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            border: 1px solid ${theme.colors.border};
-            background-color: ${theme.colors.background};
-            box-shadow: ${theme.shadow.sm};
+            justify-content: ${collapsed ? "center" : "flex-start"};
+            width: 100%;
+            flex-shrink: 0;
+            padding: 12px;
+            border: none;
+            border-top: 1px solid ${theme.colors.border};
+            background: none;
             cursor: pointer;
             color: ${theme.colors.textMuted};
-            padding: 0;
 
             &:hover {
               color: ${theme.colors.text};
-              border-color: ${theme.colors.borderStrong};
+              background-color: ${theme.colors.surfaceHover};
             }
             &:focus-visible {
               outline: 2px solid ${theme.colors.focusRing};
@@ -445,12 +439,13 @@ export default function SideNav({
           <span
             style={{
               display: "inline-flex",
-              // chevronDown rotated: -90deg points right (expand), 90deg points left (collapse).
-              transform: collapsed ? "rotate(-90deg)" : "rotate(90deg)",
+              // chevronLeft points "inward" (collapse); flipped points
+              // "outward" (expand) -- the direction the rail's edge moves.
+              transform: collapsed ? "rotate(180deg)" : "none",
               transition: "transform 0.15s ease",
             }}
           >
-            <Icon name="chevronDown" size={12} />
+            <Icon name="chevronLeft" size={16} />
           </span>
         </button>
       )}

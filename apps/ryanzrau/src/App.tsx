@@ -10,7 +10,6 @@ import {
   Link,
   Modal,
   SideNav,
-  SideNavMobileContext,
   Spinner,
   Text,
   breakpoints,
@@ -246,12 +245,22 @@ function App() {
   // Root path, signed in: the same public Landing page signed-out visitors
   // see (this is ryanzrau.dev's home either way), with a hamburger opening
   // the dashboard nav in an overlay instead of a permanent sideNav rail.
+  // header={false} and a content-hugging width: no drawer chrome of its
+  // own (no title bar, no X) -- it's just the same SideNav /apps, /admin,
+  // and /settings render in AppShell's rail, collapse toggle and all, so
+  // the panel should resize with it rather than sit fixed-width around it.
   return (
     <>
       <Landing signedIn onOpenMenu={() => setNavOpen(true)} name={record.name || record.email} />
 
-      <Drawer isOpen={navOpen} onClose={() => setNavOpen(false)} ariaLabel="Navigation">
-        <SideNavMobileContext.Provider value={true}>{sideNav}</SideNavMobileContext.Provider>
+      <Drawer
+        isOpen={navOpen}
+        onClose={() => setNavOpen(false)}
+        ariaLabel="Navigation"
+        header={false}
+        width="fit-content"
+      >
+        {sideNav}
       </Drawer>
     </>
   );
