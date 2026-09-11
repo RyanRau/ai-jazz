@@ -21,6 +21,7 @@ export * from "./components/feedback/Toast";
 
 // Display
 export * from "./components/display/Avatar";
+export * from "./components/display/AppIcon";
 export * from "./components/display/Icon";
 export * from "./components/display/Badge";
 export * from "./components/display/Table";
@@ -43,6 +44,7 @@ export * from "./components/overlay/Tooltip";
 // Navigation
 export * from "./components/navigation/Link";
 export * from "./components/navigation/AppShell";
+export * from "./components/navigation/AppSwitcher";
 export * from "./components/navigation/SideNav";
 export * from "./components/navigation/Tabs";
 export * from "./components/navigation/Breadcrumbs";

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { css } from "goober";
 import {
+  AppIcon,
   AppShell,
   Card,
   Drawer,
@@ -24,7 +25,6 @@ import { AppSwitcher } from "./AppSwitcher";
 import { AdminPage } from "./AdminPage";
 import { SettingsPage } from "./SettingsPage";
 import { ActivatePage } from "./ActivatePage";
-import { AppIcon } from "./appIcons";
 import { pb } from "./pb";
 
 type GrantedApp = {

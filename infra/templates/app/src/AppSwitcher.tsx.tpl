@@ -1,25 +1,29 @@
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Flexbox, Icon, Menu, MenuItem } from "bluestar";
+import { AppSwitcher as BluestarAppSwitcher } from "bluestar";
+import type { AppSwitcherEntry } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { pb } from "./pb";
 
-type SwitcherApp = { name: string; url: string; icon?: string; description?: string };
+type SwitcherApp = { slug: string; name: string; url: string; description?: string };
 
 // Every user can always get back to the app catalog, even though it isn't
-// itself a registry_apps row.
+// itself a registry_apps row. slug: "apps" is the shared catalog sentinel
+// bluestar's own AppIcon resolves to its grid icon.
 const HOME: SwitcherApp = {
+  slug: "apps",
   name: "Apps",
   url: "https://ryanzrau.dev/apps",
-  icon: "🏠",
   description: "Manage your apps and account.",
 };
 
 /**
  * Kept in app code rather than bluestar, same reason AccountMenu is: it
  * needs the `pocketbase` package directly, and bluestar must not depend on
- * it (see packages/bluestar/AUDIT.md).
+ * it (see packages/bluestar/AUDIT.md). Just fetches this viewer's apps and
+ * hands them to bluestar's shared `AppSwitcher` for rendering.
  */
-export function AppSwitcher() {
+export function AppSwitcher({ icon }: { icon?: ReactNode }) {
   const record = useAuthRecord();
   const [apps, setApps] = useState<SwitcherApp[]>([]);
 
@@ -43,22 +47,12 @@ export function AppSwitcher() {
 
   if (!record) return null;
 
-  const entries = [HOME, ...apps];
-  if (entries.length <= 1) return null;
+  const entries: AppSwitcherEntry[] = [HOME, ...apps].map((app) => ({
+    slug: app.slug,
+    title: app.name,
+    subtitle: app.description,
+    href: app.url,
+  }));
 
-  return (
-    <Menu trigger={<Icon name="chevronDown" size={16} />} triggerLabel="Switch apps" width={320}>
-      <Flexbox direction="column" gap={4}>
-        {entries.map((app) => (
-          <MenuItem
-            key={app.url}
-            href={app.url}
-            icon={app.icon}
-            title={app.name}
-            subtitle={app.description}
-          />
-        ))}
-      </Flexbox>
-    </Menu>
-  );
+  return <BluestarAppSwitcher appName="__TITLE__" icon={icon} entries={entries} />;
 }

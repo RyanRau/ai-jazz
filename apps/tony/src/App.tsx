@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppShell, EmptyState, Flexbox, SideNav } from "bluestar";
+import { AppIcon, AppShell, EmptyState, Flexbox, SideNav } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu } from "./AccountMenu";
@@ -91,7 +91,7 @@ function App() {
           }}
           top={
             <Flexbox direction="column" gap={4}>
-              <AppSwitcher appName="Tony" />
+              <AppSwitcher appName="Tony" icon={<AppIcon slug="tony" size={20} />} />
               <div style={{ padding: "0 12px" }}>
                 <GatewayStatus />
               </div>
