@@ -17,7 +17,7 @@ import {
 import type { SideNavItem } from "bluestar";
 import { useAuthRecord } from "./useAuth";
 import { LoginForm } from "./LoginForm";
-import { AccountMenu } from "./AccountMenu";
+import { AccountMenu, CollapsedAccountMenu } from "./AccountMenu";
 import { AppSwitcher } from "./AppSwitcher";
 import { AdminPage } from "./AdminPage";
 import { SettingsPage } from "./SettingsPage";
@@ -111,7 +111,7 @@ function App() {
     <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
       <Card padding={24}>
         <Flexbox direction="column" gap={8}>
-          <Header variant="h1">Howdy 🤠</Header>
+          <Header variant="hero">Howdy 🤠</Header>
           <Text variant="body">
             Welcome! This is Ryan Rau's site.
             {!record && " Sign in to reach the dashboard and its apps."}
@@ -158,6 +158,8 @@ function App() {
       }}
       top={<AppSwitcher appName="Ryan Rau" />}
       footer={<AccountMenu />}
+      collapsedFooter={<CollapsedAccountMenu />}
+      defaultCollapsed
     />
   );
 

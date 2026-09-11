@@ -28,11 +28,25 @@ export type SideNavProps = {
   top?: ReactNode;
   /**
    * Rendered pinned to the bottom of the rail, above a top border — an
-   * account/profile block. Hidden while collapsed; expand to reach it.
+   * account/profile block. Hidden while collapsed; expand to reach it,
+   * unless `collapsedFooter` gives it an icon-only stand-in.
    */
   footer?: ReactNode;
+  /**
+   * Rendered in `footer`'s place while collapsed — a compact,
+   * icon-only version (e.g. an avatar + a log-out button) for the pieces
+   * of `footer` that still need to be reachable at the 64px rail width.
+   * Omit to keep the current behavior of hiding `footer` entirely.
+   */
+  collapsedFooter?: ReactNode;
   /** localStorage key for remembering the collapsed state. Pass `null` to disable persistence. */
   storageKey?: string | null;
+  /**
+   * Initial collapsed state before any `storageKey` value has been stored
+   * (i.e. a visitor's first time on this device). Once a value is stored,
+   * that value wins regardless of this prop. Defaults to `false`.
+   */
+  defaultCollapsed?: boolean;
 };
 
 const canUseDOM = typeof window !== "undefined" && typeof document !== "undefined";
@@ -40,9 +54,10 @@ const EXPANDED_WIDTH = 220;
 const COLLAPSED_WIDTH = 64;
 const TOGGLE_SIZE = 24;
 
-function readStored(storageKey: string | null | undefined): boolean {
-  if (!canUseDOM || !storageKey) return false;
-  return window.localStorage.getItem(storageKey) === "1";
+function readStored(storageKey: string | null | undefined, defaultCollapsed: boolean): boolean {
+  if (!canUseDOM || !storageKey) return defaultCollapsed;
+  const stored = window.localStorage.getItem(storageKey);
+  return stored === null ? defaultCollapsed : stored === "1";
 }
 
 /**
@@ -64,7 +79,8 @@ function readStored(storageKey: string | null | undefined): boolean {
  * full-width row at the bottom.
  *
  * Collapsed state persists to localStorage the same way `useColorScheme`
- * persists its own choice.
+ * persists its own choice — `defaultCollapsed` only decides the very first
+ * render before any value has been stored.
  */
 export default function SideNav({
   items = [],
@@ -72,10 +88,12 @@ export default function SideNav({
   onSelect = () => {},
   top,
   footer,
+  collapsedFooter,
   storageKey = "bluestar-sidenav-collapsed",
+  defaultCollapsed = false,
 }: SideNavProps) {
   const theme = useTheme();
-  const [collapsed, setCollapsed] = useState(() => readStored(storageKey));
+  const [collapsed, setCollapsed] = useState(() => readStored(storageKey, defaultCollapsed));
 
   useEffect(() => {
     if (!canUseDOM || !storageKey) return;
@@ -173,6 +191,21 @@ export default function SideNav({
           `}
         >
           {footer}
+        </div>
+      )}
+
+      {collapsedFooter && collapsed && (
+        <div
+          className={css`
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 8px;
+            border-top: 1px solid ${theme.colors.border};
+          `}
+        >
+          {collapsedFooter}
         </div>
       )}
 

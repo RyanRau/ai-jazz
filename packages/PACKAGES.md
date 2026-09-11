@@ -157,7 +157,7 @@ type Theme = {
     caption | body | subtitle | label | display:
       { size: string; weight: string; style: string; color: string };
   };
-  headings: { h1 | h2 | h3: { size: string; weight: string } };
+  headings: { hero | h1 | h2 | h3: { size: string; weight: string } };
   radius: { none; sm; md; lg; full };
   shadow: { none; sm; md; lg };
 };
@@ -300,7 +300,10 @@ genuinely elevated (rare; reserve real shadow for overlays like `Menu` and
 
 #### `Header`
 
-`variant`: `"h1" | "h2" | "h3"` (default `"h1"`). Renders the matching element.
+`variant`: `"hero" | "h1" | "h2" | "h3"` (default `"h1"`). Renders the
+matching element, except `"hero"` — bigger than `"h1"` (44px vs. 28px),
+for a one-per-page hero/landing headline — which still renders as an
+`<h1>` tag since it isn't a real heading level.
 
 #### `Text`
 
@@ -371,8 +374,14 @@ ambient card shadow.
 | `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                                                                                                       |
 | `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`                                                                                         |
 | `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                                                                                            |
+| `TokenSelect`   | `string[]`                                   | `options: { label, value }[]`, `addLabel` (default `"Add"`)                                                                         |
 
 An empty `NumberInput` yields `null`, never `NaN`.
+
+`TokenSelect` renders selected values as removable `Badge` pills plus a
+"+ Add" `Menu` picker listing the remaining options — a discrete-choice
+tokenizer for a small, closed list (e.g. which apps a user can access),
+not a free-text/autocomplete combobox.
 
 `Dropdown` is custom-rendered, not a native `<select>` — a bare `<select>`
 keeps its own OS popup and doesn't fully respect the shared control
@@ -463,7 +472,8 @@ A small curated set of stroke icons (adapted from Lucide, ISC License) — not
 a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `chevronLeft`,
 `chevronRight`, `check`, `user`, `plus`, `trash`, `search`, `externalLink`,
-`image`, `key`, `chat`, `menu`, `upload`, `grid`, `switch`, `palette`
+`image`, `key`, `chat`, `menu`, `upload`, `grid`, `switch`, `palette`,
+`edit`
 (`key`/`chat`/`menu`/`switch`/`palette` are hand-drawn for this repo, not
 adapted from Lucide).
 `color` defaults to `"currentColor"` so it inherits surrounding text/button
@@ -701,14 +711,16 @@ based on `sideNav` being passed and the viewport width.
 
 #### `SideNav`
 
-| Prop         | Type                    | Default                        |
-| ------------ | ----------------------- | ------------------------------ |
-| `items`      | `SideNavItem[]`         | `[]`                           |
-| `activeKey`  | `string`                | `""`                           |
-| `onSelect`   | `(key: string) => void` | no-op                          |
-| `top`        | `ReactNode`             | —                              |
-| `footer`     | `ReactNode`             | —                              |
-| `storageKey` | `string \| null`        | `"bluestar-sidenav-collapsed"` |
+| Prop               | Type                    | Default                        |
+| ------------------ | ----------------------- | ------------------------------ |
+| `items`            | `SideNavItem[]`         | `[]`                           |
+| `activeKey`        | `string`                | `""`                           |
+| `onSelect`         | `(key: string) => void` | no-op                          |
+| `top`              | `ReactNode`             | —                              |
+| `footer`           | `ReactNode`             | —                              |
+| `collapsedFooter`  | `ReactNode`             | — (hides `footer` if omitted)  |
+| `storageKey`       | `string \| null`        | `"bluestar-sidenav-collapsed"` |
+| `defaultCollapsed` | `boolean`               | `false`                        |
 
 `SideNavItem` is `{ key, label, icon? }`. A collapsible left rail for an
 app's top-level pages — meant for `AppShell`'s `sideNav` slot. Collapses to
@@ -717,18 +729,23 @@ border at vertical centre (the convention most dashboard component
 libraries — Bootstrap, Tailwind UI — use, rather than a full-width row).
 Give every item an `icon` or it becomes unusable once collapsed. Collapsed
 state persists to `localStorage` the same way `useColorScheme` persists its
-own choice — pass `storageKey={null}` to disable that. The active item is a
-3px left accent bar + tinted background, not a solid fill — the same
-flat-selection language `Tabs` uses for the underline.
+own choice — pass `storageKey={null}` to disable that; `defaultCollapsed`
+only decides the very first render, before anything is stored (e.g. a
+visitor's first visit on that device) — once a value is stored, it wins.
+The active item is a 3px left accent bar + tinted background, not a solid
+fill — the same flat-selection language `Tabs` uses for the underline.
 
 `top` and `footer` turn the rail into the app's whole chrome, so `AppShell`
 needs no header at all (see its own doc above) — `top` is each app's own
 `AppSwitcher.tsx` (branding + a `switch`-icon `Menu` for jumping to another
 app, scaffolded like `AccountMenu.tsx`), `footer` an account/profile block
-pinned above a top border. Both are hidden while collapsed rather than
-squeezed into 64px — expand to reach them. `items` is optional: a
-single-page app can render `SideNav` for just its `top`/`footer` chrome with
-an empty (or omitted) `items` array and nothing to switch between.
+pinned above a top border. Both are hidden while collapsed — `footer`
+because arbitrary content can't shrink to the 64px rail the way a
+`SideNavItem`'s own label does, unless `collapsedFooter` gives it an
+icon-only stand-in (e.g. an avatar + a log-out icon button) for that
+state instead of hiding it outright. `items` is optional: a single-page
+app can render `SideNav` for just its `top`/`footer` chrome with an empty
+(or omitted) `items` array and nothing to switch between.
 
 #### `ThemeToggle`
 

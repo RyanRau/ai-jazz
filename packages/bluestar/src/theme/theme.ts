@@ -90,6 +90,7 @@ export type Theme = {
     display: TextStyle;
   };
   headings: {
+    hero: HeadingStyle;
     h1: HeadingStyle;
     h2: HeadingStyle;
     h3: HeadingStyle;
@@ -136,6 +137,7 @@ const textTypes: Theme["textTypes"] = {
 };
 
 const headings: Theme["headings"] = {
+  hero: { size: "44px", weight: "800" },
   h1: { size: "28px", weight: "800" },
   h2: { size: "20px", weight: "700" },
   h3: { size: "16px", weight: "700" },
