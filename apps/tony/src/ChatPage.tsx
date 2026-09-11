@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { css } from "goober";
 import {
+  AsyncButton,
   Badge,
   Button,
   ChatBubble,
@@ -20,7 +21,11 @@ import {
 } from "bluestar";
 import { formatDate, formatMessageTime } from "./usageHelpers";
 import { useAuthRecord } from "./useAuth";
-import type { ChatState, ChatSummary, ModelInfo } from "./useChat";
+import type { ChatState, ChatSummary } from "./useChat";
+import type { ModelInfo } from "./useModels";
+import type { ModelParams } from "./modelParams";
+import { ModelParamControls } from "./ModelParamControls";
+import { ModelInfoModal } from "./ModelInfoModal";
 
 // Room for AppShell's own header (~72px) plus main's top/bottom padding
 // (48px) plus a little slack for a wrapped nav row -- not pixel-exact, just
@@ -109,12 +114,14 @@ function ChatHeader({
   onRename,
   onModelChange,
   onDeleteRequest,
+  onInfoRequest,
 }: {
   chat: ChatSummary;
   modelList: ModelInfo[] | null;
   onRename: (title: string) => void;
   onModelChange: (model: string) => void;
   onDeleteRequest: () => void;
+  onInfoRequest: () => void;
 }) {
   const theme = useTheme();
   const [editingTitle, setEditingTitle] = useState(false);
@@ -221,6 +228,17 @@ function ChatHeader({
         ) : (
           <Badge variant="neutral">{chat.model}</Badge>
         )}
+        {modelList?.some((m) => m.id === chat.model) && (
+          <Button
+            label="Model info"
+            aria-label={`About ${chat.model}`}
+            appearance="text"
+            variant="secondary"
+            onClick={onInfoRequest}
+          >
+            <Icon name="info" size={18} />
+          </Button>
+        )}
         <Button
           label="Delete chat"
           aria-label="Delete chat"
@@ -233,6 +251,52 @@ function ChatHeader({
         </Button>
       </Flexbox>
     </Flexbox>
+  );
+}
+
+/**
+ * Collapsed by default -- adjusting params for one message doesn't change
+ * what a chat falls back to next time unless "Save as default" is actually
+ * clicked (see useChat's saveChatDefaultParams). "Save" is disabled until a
+ * chat exists to save against; a brand-new chat can still set params here
+ * before its first send, they just apply to that first turn without being
+ * persisted anywhere until saved.
+ */
+function ChatParamsPanel({
+  chatParams,
+  setChatParams,
+  onSave,
+  onReset,
+  canSave,
+}: {
+  chatParams: ModelParams;
+  setChatParams: (next: ModelParams) => void;
+  onSave: () => Promise<void>;
+  onReset: () => void;
+  canSave: boolean;
+}) {
+  return (
+    <Disclosure label="Model params">
+      <Flexbox direction="column" gap={12}>
+        <ModelParamControls params={chatParams} onChange={setChatParams} />
+        <Flexbox gap={8}>
+          <AsyncButton
+            label="Save as default for this chat"
+            onClick={onSave}
+            isDisabled={!canSave}
+            variant="secondary"
+            density="dense"
+          />
+          <Button
+            label="Reset to defaults"
+            onClick={onReset}
+            variant="secondary"
+            appearance="text"
+            density="dense"
+          />
+        </Flexbox>
+      </Flexbox>
+    </Disclosure>
   );
 }
 
@@ -271,11 +335,16 @@ export function ChatPage({ chat }: { chat: ChatState }) {
     renameChat,
     updateChatModel,
     deleteChat,
+    chatParams,
+    setChatParams,
+    saveChatDefaultParams,
+    resetChatParams,
     generating,
     threadEndRef,
   } = chat;
 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [infoModel, setInfoModel] = useState<ModelInfo | null>(null);
   const canSend = !sending && Boolean(apiKey) && draft.trim().length > 0;
 
   if (!selectedChat) {
@@ -307,20 +376,42 @@ export function ChatPage({ chat }: { chat: ChatState }) {
               autoFocus
             />
             {modelList && (
-              <div style={{ width: 260, maxWidth: "100%", margin: "0 auto" }}>
-                <Dropdown
-                  label="Model"
-                  options={[
-                    { label: "Gateway default", value: "" },
-                    ...modelList.map((m) => ({ label: m.id, value: m.id })),
-                  ]}
-                  value={model}
-                  onChange={(v) => setModel(v ?? "")}
-                />
-              </div>
+              <Flexbox gap={8} alignItems="flex-end" justifyContent="center">
+                <div style={{ width: 260, maxWidth: "100%" }}>
+                  <Dropdown
+                    label="Model"
+                    options={[
+                      { label: "Gateway default", value: "" },
+                      ...modelList.map((m) => ({ label: m.id, value: m.id })),
+                    ]}
+                    value={model}
+                    onChange={(v) => setModel(v ?? "")}
+                  />
+                </div>
+                {modelList.some((m) => m.id === model) && (
+                  <Button
+                    label="Model info"
+                    aria-label={`About ${model}`}
+                    appearance="text"
+                    variant="secondary"
+                    onClick={() => setInfoModel(modelList.find((m) => m.id === model) ?? null)}
+                  >
+                    <Icon name="info" size={18} />
+                  </Button>
+                )}
+              </Flexbox>
             )}
+            <ChatParamsPanel
+              chatParams={chatParams}
+              setChatParams={setChatParams}
+              onSave={saveChatDefaultParams}
+              onReset={resetChatParams}
+              canSave={false}
+            />
           </Flexbox>
         </div>
+
+        <ModelInfoModal model={infoModel} onClose={() => setInfoModel(null)} />
       </Flexbox>
     );
   }
@@ -338,6 +429,9 @@ export function ChatPage({ chat }: { chat: ChatState }) {
         onRename={(title) => renameChat(selectedChat.id, title)}
         onModelChange={(m) => updateChatModel(selectedChat.id, m)}
         onDeleteRequest={() => setConfirmingDelete(true)}
+        onInfoRequest={() =>
+          setInfoModel(modelList?.find((m) => m.id === selectedChat.model) ?? null)
+        }
       />
 
       {/* The thread reads better as a comfortable column even in a
@@ -432,15 +526,24 @@ export function ChatPage({ chat }: { chat: ChatState }) {
             padding-top: 12px;
           `}
         >
-          <Composer
-            draft={draft}
-            setDraft={setDraft}
-            onSend={send}
-            canSend={canSend}
-            sending={sending}
-            generating={generating}
-            error={error}
-          />
+          <Flexbox direction="column" gap={12}>
+            <ChatParamsPanel
+              chatParams={chatParams}
+              setChatParams={setChatParams}
+              onSave={saveChatDefaultParams}
+              onReset={resetChatParams}
+              canSave
+            />
+            <Composer
+              draft={draft}
+              setDraft={setDraft}
+              onSend={send}
+              canSend={canSend}
+              sending={sending}
+              generating={generating}
+              error={error}
+            />
+          </Flexbox>
         </div>
       </div>
 
@@ -452,6 +555,7 @@ export function ChatPage({ chat }: { chat: ChatState }) {
         message={`"${selectedChat.title}" and all its messages will be permanently deleted.`}
         confirmLabel="Delete"
       />
+      <ModelInfoModal model={infoModel} onClose={() => setInfoModel(null)} />
     </Flexbox>
   );
 }

@@ -40,10 +40,43 @@ routerAdd(
       id: r.id,
       title: r.getString("title"),
       model: r.getString("model"),
+      params: r.get("params") || null,
       created: r.getString("created"),
       updated: r.getString("updated"),
     }));
     return e.json(200, { chats: chats });
+  },
+  $apis.requireAuth()
+);
+
+// Save (or clear) a chat's default sampling params. Body: { chat_id, params }
+// -- params is an arbitrary JSON object merged into future requests the same
+// way Playground's own params are (see modelParams.ts in tony), or `null`/
+// omitted to clear it back to plain defaults. Ownership-checked the same way
+// as the other browser-facing chat routes.
+routerAdd(
+  "POST",
+  "/api/custom/llm/chats/params",
+  (e) => {
+    const auth = e.requestInfo().auth;
+    if (!auth) {
+      throw new ForbiddenError("Sign-in required.");
+    }
+
+    const body = e.requestInfo().body;
+    const chatId = (body.chat_id || "").trim();
+    if (!chatId) {
+      throw new BadRequestError("chat_id is required.");
+    }
+
+    const chat = e.app.findRecordById("llm_chats", chatId);
+    if (chat.getString("user") !== auth.id) {
+      throw new ForbiddenError("You don't own this chat.");
+    }
+    chat.set("params", body.params || null);
+    e.app.save(chat);
+
+    return e.json(200, { id: chat.id, params: chat.get("params") || null });
   },
   $apis.requireAuth()
 );

@@ -486,7 +486,7 @@ a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `chevronLeft`,
 `chevronRight`, `check`, `user`, `plus`, `trash`, `search`, `externalLink`,
 `image`, `key`, `chat`, `menu`, `upload`, `grid`, `switch`, `palette`,
-`edit`
+`edit`, `docs`, `copy`, `info`
 (`key`/`chat`/`menu`/`switch`/`palette` are hand-drawn for this repo, not
 adapted from Lucide).
 `color` defaults to `"currentColor"` so it inherits surrounding text/button

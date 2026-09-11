@@ -176,7 +176,14 @@ export default function AppShell({
             position: fixed;
             top: 12px;
             left: 12px;
-            z-index: 1;
+            /* Higher than a plain sticky-in-content z-index (1 is the
+               obvious first value a page reaches for, e.g. a page's own
+               sticky header staying above its own scrolling content) --
+               this button is app-level chrome, the only way to open nav on
+               mobile, and must never end up underneath a page's content
+               just because that content is also positioned and also
+               happens to render later in the DOM at this same corner. */
+            z-index: 10;
             background-color: ${theme.colors.background};
             border: 1px solid ${theme.colors.border};
             box-shadow: ${theme.shadow.sm};

@@ -38,6 +38,8 @@ cp config.example.yaml config.yaml
   model_path: "~/models/qwen3.5-9b/Qwen3.5-9B-Q4_K_M.gguf"
   mmproj_path: "~/models/qwen3.5-9b/mmproj-BF16.gguf"
   vision: true
+  notes: |
+    Freeform markdown shown in Tony's model info modal -- optional.
   args:
     ctx-size: 16384
     n-gpu-layers: 99
@@ -45,6 +47,11 @@ cp config.example.yaml config.yaml
 ```
 
 Set `llama_server.binary` to your `llama-server` path (`which llama-server`).
+
+`GET /v1/models` echoes back each model's `args.ctx-size` and
+`args.reasoning-budget` as `context_size`/`reasoning_budget` (read-only --
+neither is a request parameter, see the "Any request-body param..." section
+under Run below) alongside `notes`, for Tony's model info modal.
 
 ## Auth
 
@@ -119,17 +126,24 @@ First request to a model is slow (load time). Same model on subsequent requests
 reuses the running process.
 
 **Any request-body param not shown above already works** — `temperature`,
-`top_p`, `max_tokens`, `seed`, `stream`/`stream_options`, and anything else your
-`llama-server` build accepts pass straight through to it untouched; this file
-only ever touches `model` (alias → real name) and, for `/v1/chat/send`,
-forces `stream: true`. Tony's Playground (`apps/tony/src/PlaygroundPage.tsx`)
-puts dedicated controls in front of the common ones plus a streaming toggle,
-and a raw-JSON field for everything else — see that app's Docs page for the
-user-facing version of this reference.
+`top_p`, `top_k`, `min_p`, `presence_penalty`, `frequency_penalty`,
+`max_tokens`, `seed`, `reasoning_effort`, `stream`/`stream_options`, and
+anything else your `llama-server` build accepts pass straight through to it
+untouched; this file only ever touches `model` (alias → real name) and, for
+`/v1/chat/send`, forces `stream: true`. Tony's Playground
+(`apps/tony/src/PlaygroundPage.tsx`) and Chat (`apps/tony/src/ChatPage.tsx`,
+via a saved-per-chat `params` field) both put dedicated controls in front
+of these plus a raw-JSON field for everything else (shared between the two
+in `apps/tony/src/modelParams.ts`/`ModelParamControls.tsx`) — see Tony's
+Docs page for the user-facing version of this reference.
 
-**Reasoning budget**: fixed per model in `config.yaml`, not per-request. If your
-`llama-server` build accepts `reasoning_budget` in the request body, that already
-passes through untouched — no gateway change needed.
+**Reasoning effort vs. reasoning budget** — easy to conflate, distinct
+knobs: `reasoning_effort` (`none`/`minimal`/`low`/`medium`/`high`/`xhigh`/
+`max`) is a _per-request_ param some `llama-server` builds accept, passed
+straight through untouched, same as any other request-body field above.
+`reasoning_budget` is fixed per model in `config.yaml`'s `args` — a startup
+flag, not a request parameter — and acts as the ceiling `reasoning_effort`
+operates within, not the same setting under a different name.
 
 **Context size**: also fixed per model in `config.yaml` (`args.ctx-size`),
 set when that model's `llama-server` process starts — not something a
@@ -200,7 +214,7 @@ GGUF.
 | Route                       | Auth | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | --------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /health`               | no   | gateway + loaded-model status                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `GET /v1/models`            | yes  | configured models + aliases + per-model `vision` flag                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `GET /v1/models`            | yes  | configured models + aliases + per-model `vision`/`context_size`/`reasoning_budget`/`notes`                                                                                                                                                                                                                                                                                                                                                                                        |
 | `POST /v1/chat/completions` | yes  | chat, streaming, vision                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `POST /v1/chat/send`        | yes  | persistent chat turn (`tony`'s Chat page) — generation runs as a background task in PocketBase (`llm_chats`/`llm_chat_messages`, via `apps/pocketbase/pb_hooks/chat.pb.js`) independent of the request, so it keeps going and gets saved even if the client disconnects. The response is an SSE relay of the same chunks for as long as the client stays connected; a client that leaves polls `GET /api/custom/llm/chats/messages?chat=<id>` instead to see the finished result. |
 
