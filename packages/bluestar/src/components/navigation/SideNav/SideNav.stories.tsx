@@ -109,44 +109,42 @@ export const WithChrome: Story = {
   },
 };
 
-function ScrollingTopDemo() {
-  const [active, setActive] = useState("playground");
-  const [selectedRow, setSelectedRow] = useState("row-0");
-  const rows = Array.from({ length: 30 }, (_, i) => `row-${i}`);
+function ExpandedContentDemo() {
+  const [active, setActive] = useState("chat");
+  const [selectedChat, setSelectedChat] = useState("chat-0");
+  const recentChats = ["Trip planning", "Recipe ideas", "Debugging notes"];
   return (
     <Flexbox style={{ height: "100vh" }}>
       <SideNav
         items={[
+          {
+            key: "chat",
+            label: "Chat",
+            icon: "chat",
+            expandedContent: (
+              <Flexbox direction="column" gap={4} style={{ padding: "4px 0" }}>
+                <Button label="New chat" variant="creation" density="dense" onClick={() => {}} />
+                {recentChats.map((title, i) => (
+                  <ListRow
+                    key={title}
+                    title={title}
+                    subtitle="2 hours ago"
+                    selected={`chat-${i}` === selectedChat}
+                    onClick={() => setSelectedChat(`chat-${i}`)}
+                  />
+                ))}
+                <Text variant="caption" color="var(--bs-color-primary)">
+                  Show all chats →
+                </Text>
+              </Flexbox>
+            ),
+          },
           { key: "playground", label: "Playground", icon: "search" },
           { key: "keys", label: "Keys", icon: "settings" },
         ]}
         activeKey={active}
         onSelect={setActive}
         storageKey={null}
-        top={
-          <Flexbox direction="column" gap={8}>
-            <Flexbox
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              style={{ padding: "2px 12px 0" }}
-            >
-              <Text variant="label">Chats</Text>
-              <Button label="New chat" variant="creation" density="dense" onClick={() => {}} />
-            </Flexbox>
-            <Flexbox direction="column" gap={4}>
-              {rows.map((r, i) => (
-                <ListRow
-                  key={r}
-                  title={`Chat ${i + 1}`}
-                  subtitle="2 hours ago"
-                  selected={r === selectedRow}
-                  onClick={() => setSelectedRow(r)}
-                />
-              ))}
-            </Flexbox>
-          </Flexbox>
-        }
         footer={
           <Flexbox direction="row" alignItems="center" gap={8}>
             <Avatar name="Ryan Rau" size={32} />
@@ -166,13 +164,13 @@ function ScrollingTopDemo() {
   );
 }
 
-export const WithScrollingTop: Story = {
-  render: () => <ScrollingTopDemo />,
+export const WithExpandedContent: Story = {
+  render: () => <ExpandedContentDemo />,
   parameters: {
     docs: {
       description: {
         story:
-          "`top` is the region that takes the rail's leftover vertical space and scrolls internally when its own content overflows it, rather than `items` — so an unbounded per-page list (chat history, here) belongs directly in `top` rather than behind a separate drawer. `items` (Playground/Keys) and `footer` (the account block) keep their natural height, pinned just above the bottom regardless of how long the list in `top` gets.",
+          "An item's `expandedContent` renders indented directly below it while it's the active one — a short sub-section (a page's own top few things to jump to) rather than a whole second panel. `items` still keeps its natural top-aligned position, with `footer` pinned to the bottom; a long list belongs on its own page (linked from here, e.g. \"Show all chats\") rather than trying to make this scroll on its own.",
       },
     },
   },

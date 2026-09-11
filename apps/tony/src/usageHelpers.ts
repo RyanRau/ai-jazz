@@ -14,6 +14,22 @@ export function formatDate(iso: string) {
   return new Date(iso).toLocaleString();
 }
 
+// Compact "how long ago" for a tight space (the chat list in SideNav's
+// expandedContent) -- formatDate's full timestamp is the right amount of
+// detail for a page like Keys, but too wide for a ~200px-wide nav row.
+export function formatRelativeTime(iso: string): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso.replace(" ", "T")).getTime();
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso.replace(" ", "T")).toLocaleDateString();
+}
+
 // PocketBase datetimes are "YYYY-MM-DD HH:MM:SS.sssZ" -- the date portion is
 // already a stable grouping key without parsing a Date.
 export function dayKey(created: string): string {

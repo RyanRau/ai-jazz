@@ -12,6 +12,16 @@ export type SideNavItem = {
   label: string;
   /** Shown at all times, including collapsed (icon-only) width. */
   icon?: IconName;
+  /**
+   * Rendered indented directly below this item, only while it's the active
+   * one (and the rail isn't collapsed) — a sub-section for a page that has
+   * its own short list of things to jump to (a chat's recent conversations,
+   * say). Keep it short: this expands the rail's own natural height rather
+   * than scrolling on its own, so a handful of rows is the right size —
+   * cap a longer list and link to a dedicated page for the rest, the way
+   * `ListRow` already reads as "a chat list" for exactly that page.
+   */
+  expandedContent?: ReactNode;
 };
 
 export type SideNavProps = {
@@ -133,32 +143,13 @@ export default function SideNav({
         <div
           className={css`
             padding: 8px 8px 0 8px;
-            /* \`top\` takes the leftover vertical space (and scrolls
-               internally if its own content overflows it) rather than
-               \`items\` below, so an app that puts something unbounded in
-               \`top\` -- a chat-history list, say -- gets a real scroll
-               region instead of silently clipping past the rail's bottom.
-               \`items\` stays its natural (short) height and sits flush
-               above \`footer\` either way, since nothing here changes for
-               apps that don't grow \`top\` past a single row. */
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
           `}
         >
           {top}
         </div>
       )}
 
-      <Flexbox
-        direction="column"
-        gap={4}
-        style={{
-          padding: 8,
-          flexShrink: 0,
-          ...(top && !collapsed ? {} : { flex: 1, overflow: "hidden" }),
-        }}
-      >
+      <Flexbox direction="column" gap={4} style={{ padding: 8, flex: 1, overflowY: "auto" }}>
         {items.map((item) => {
           const isActive = item.key === activeKey;
           // A left accent bar + tinted background reads as "selected" without
@@ -168,51 +159,61 @@ export default function SideNav({
           const fg = isActive ? theme.colors.primary : theme.colors.text;
           const ACCENT_WIDTH = 3;
           return (
-            <button
-              key={item.key}
-              type="button"
-              aria-current={isActive ? "page" : undefined}
-              onClick={() => onSelect(item.key)}
-              title={collapsed ? item.label : undefined}
-              className={css`
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                width: 100%;
-                padding: 10px 12px 10px ${12 - ACCENT_WIDTH}px;
-                border: none;
-                border-left: ${ACCENT_WIDTH}px solid
-                  ${isActive ? theme.colors.primary : "transparent"};
-                border-radius: 0 ${theme.radius.sm} ${theme.radius.sm} 0;
-                background-color: ${
-                  isActive
-                    ? `color-mix(in srgb, ${theme.colors.primary} 12%, transparent)`
-                    : "transparent"
-                };
-                cursor: pointer;
-                text-align: left;
-                white-space: nowrap;
-
-                &:hover {
+            <div key={item.key}>
+              <button
+                type="button"
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => onSelect(item.key)}
+                title={collapsed ? item.label : undefined}
+                className={css`
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+                  width: 100%;
+                  padding: 10px 12px 10px ${12 - ACCENT_WIDTH}px;
+                  border: none;
+                  border-left: ${ACCENT_WIDTH}px solid
+                    ${isActive ? theme.colors.primary : "transparent"};
+                  border-radius: 0 ${theme.radius.sm} ${theme.radius.sm} 0;
                   background-color: ${
                     isActive
-                      ? `color-mix(in srgb, ${theme.colors.primary} 18%, transparent)`
-                      : theme.colors.surfaceHover
+                      ? `color-mix(in srgb, ${theme.colors.primary} 12%, transparent)`
+                      : "transparent"
                   };
-                }
-                &:focus-visible {
-                  outline: 2px solid ${theme.colors.focusRing};
-                  outline-offset: 2px;
-                }
-              `}
-            >
-              {item.icon && <Icon name={item.icon} size={18} color={fg} />}
-              {!collapsed && (
-                <Text variant="label" color={fg}>
-                  {item.label}
-                </Text>
+                  cursor: pointer;
+                  text-align: left;
+                  white-space: nowrap;
+
+                  &:hover {
+                    background-color: ${
+                      isActive
+                        ? `color-mix(in srgb, ${theme.colors.primary} 18%, transparent)`
+                        : theme.colors.surfaceHover
+                    };
+                  }
+                  &:focus-visible {
+                    outline: 2px solid ${theme.colors.focusRing};
+                    outline-offset: 2px;
+                  }
+                `}
+              >
+                {item.icon && <Icon name={item.icon} size={18} color={fg} />}
+                {!collapsed && (
+                  <Text variant="label" color={fg}>
+                    {item.label}
+                  </Text>
+                )}
+              </button>
+              {item.expandedContent && isActive && !collapsed && (
+                <div
+                  className={css`
+                    padding-left: ${ACCENT_WIDTH}px;
+                  `}
+                >
+                  {item.expandedContent}
+                </div>
               )}
-            </button>
+            </div>
           );
         })}
       </Flexbox>

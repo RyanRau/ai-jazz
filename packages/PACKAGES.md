@@ -776,7 +776,7 @@ based on `sideNav` being passed and the viewport width.
 | `storageKey`       | `string \| null`        | `"bluestar-sidenav-collapsed"` |
 | `defaultCollapsed` | `boolean`               | `false`                        |
 
-`SideNavItem` is `{ key, label, icon? }`. A collapsible left rail for an
+`SideNavItem` is `{ key, label, icon?, expandedContent? }`. A collapsible left rail for an
 app's top-level pages — meant for `AppShell`'s `sideNav` slot. Collapses to
 an icon-only strip via a small circular toggle straddling the rail's right
 border at vertical centre (the convention most dashboard component
@@ -801,13 +801,17 @@ state instead of hiding it outright. `items` is optional: a single-page
 app can render `SideNav` for just its `top`/`footer` chrome with an empty
 (or omitted) `items` array and nothing to switch between.
 
-`top` — not `items` — is the region that takes the rail's leftover vertical
-space and scrolls internally if its own content overflows it, so `top` is
-also where an unbounded per-page list belongs (a chat-history list beneath
-an app switcher, say): render it directly in `top`, below whatever
-branding sits above it, rather than building a separate nested drawer for
-it. `items` stays pinned at its natural (short) height directly above
-`footer` whenever `top` is present.
+`items` itself is the region that takes the rail's leftover vertical space
+(scrolling internally on the rare rail short enough that even the items
+list overflows it), with `footer` pinned below it at the true bottom.
+An individual item's own `expandedContent` renders indented directly below
+it while that item is the active one (`item.key === activeKey`) — a short
+sub-section for a page that has its own few things to jump to (a chat's
+most recent conversations, say). Keep it short: it expands the rail's
+natural height rather than scrolling on its own, so cap a longer list at a
+handful of rows and link the rest to a dedicated page (the way `ListRow`
+already reads as "a chat list" for exactly that page) rather than trying to
+cram an unbounded list into the rail.
 
 On mobile, `AppShell` renders the same `sideNav` element a second time inside
 a full-screen drawer rather than the permanent rail — collapsing makes no

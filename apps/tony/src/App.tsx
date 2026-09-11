@@ -7,6 +7,7 @@ import { AppSwitcher } from "./AppSwitcher";
 import { GatewayStatus } from "./GatewayStatus";
 import { ChatPage } from "./ChatPage";
 import { ChatHistoryList } from "./ChatHistoryList";
+import { AllChatsPage } from "./AllChatsPage";
 import { KeysPage } from "./KeysPage";
 import { PlaygroundPage } from "./PlaygroundPage";
 import { DocsPage } from "./DocsPage";
@@ -63,27 +64,37 @@ function App() {
       sideNav={
         <SideNav
           items={[
-            { key: "chat", label: "Chat", icon: "chat" },
+            {
+              key: "chat",
+              label: "Chat",
+              icon: "chat",
+              expandedContent: <ChatHistoryList chat={chat} />,
+            },
             { key: "playground", label: "Playground", icon: "search" },
             { key: "keys", label: "Keys", icon: "key" },
             { key: "docs", label: "Docs", icon: "docs" },
           ]}
           activeKey={tab}
-          onSelect={(key) => setTab(key as Tab)}
+          onSelect={(key) => {
+            // Clicking "Chat" while already there (e.g. from All chats)
+            // goes back to the thread, the same as clicking a chat row does.
+            if (key === "chat") chat.backToThread();
+            setTab(key as Tab);
+          }}
           top={
             <Flexbox direction="column" gap={4}>
               <AppSwitcher appName="Tony" />
               <div style={{ padding: "0 12px" }}>
                 <GatewayStatus />
               </div>
-              {tab === "chat" && <ChatHistoryList chat={chat} />}
             </Flexbox>
           }
           footer={<AccountMenu />}
         />
       }
     >
-      {tab === "chat" && <ChatPage chat={chat} />}
+      {tab === "chat" &&
+        (chat.chatsView === "all" ? <AllChatsPage chat={chat} /> : <ChatPage chat={chat} />)}
       {tab === "playground" && <PlaygroundPage />}
       {tab === "keys" && <KeysPage />}
       {tab === "docs" && <DocsPage />}
