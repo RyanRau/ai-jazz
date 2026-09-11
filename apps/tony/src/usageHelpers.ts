@@ -30,6 +30,27 @@ export function formatRelativeTime(iso: string): string {
   return new Date(iso.replace(" ", "T")).toLocaleDateString();
 }
 
+// A per-message timestamp in a chat thread -- just the time (e.g. "2:45 PM")
+// when it's from today, since the thread's own header already gives the
+// date it started; falls back to a short date for anything older, the way
+// most chat UIs (iMessage, Slack) distinguish "still today" from "earlier".
+export function formatMessageTime(iso: string): string {
+  if (!iso) return "";
+  const date = new Date(iso.replace(" ", "T"));
+  const now = new Date();
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  if (sameDay) return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 // PocketBase datetimes are "YYYY-MM-DD HH:MM:SS.sssZ" -- the date portion is
 // already a stable grouping key without parsing a Date.
 export function dayKey(created: string): string {

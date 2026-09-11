@@ -20,6 +20,15 @@ A side nav switches between four pages:
   the browser tab (see `_generate_chat_response` in the gateway), so a
   message keeps going and gets saved even if you close it; replies render
   as markdown (`bluestar`'s `Markdown`/`ChatBubble`), code blocks included.
+  The composer sends on Enter and inserts a newline on Shift+Enter
+  (`TextAreaInput`'s `onKeyDown` passthrough); every message shows its own
+  timestamp (`formatMessageTime` in `usageHelpers.ts` — just the time for
+  today, a short date for anything older) alongside token in/out and
+  elapsed time for a completed assistant reply. A web-search tool call
+  (when `web_search.searxng_url` is configured on the gateway) shows up
+  under its message as a `Disclosure` — "N tools used", collapsed by
+  default — rather than an always-open block, since the query/results are
+  useful to check but not something worth taking up space by default.
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
   browser, the same as any other API client. Model is a dropdown populated
@@ -41,23 +50,27 @@ A side nav switches between four pages:
   `apps/pocketbase/pb_hooks/llm.pb.js`: an `is_admin` account sees and can
   revoke every key across every user; anyone else only ever sees their own.
   A key's plaintext is shown exactly once, at creation — the server never
-  stores it, only its hash. Chat and Playground share one personal
-  _default_ key (`src/playgroundKey.ts`/`src/usePlaygroundKey.ts`) — shown
-  on this page as `"Tony Playground (auto)"`, with no Revoke button, since
-  the route refuses to revoke a default key even for an admin (there'd be
-  no way to recover it: its plaintext is cached only in whatever browser
-  minted it, never stored server-side). If a page finds no key cached
-  locally, it shows a warning with a "Create key" button rather than
-  minting one silently — the old silent-mint-on-every-cache-miss behavior
-  is what let a user end up with several defaults; the server now also
-  refuses to create a second active default per user outright (checked in
-  `llm.pb.js`'s POST /keys route, its `onRecordCreate`/`onRecordUpdate`
-  hooks, and a partial unique index — see migration
-  `1789099510_llm_api_keys_one_default_index.js`). Revoking any other key is
-  a soft delete: it drops out of the table and usage dropdown, but a "Show
-  revoked keys" toggle brings it (and its usage) back into view rather than
-  deleting the row. The usage stats and chart are built on bluestar's
-  `StatTile` and `LineChart`.
+  stores it, only its hash. Chat and Playground don't hold a key
+  client-side at all: they authenticate to the gateway with the signed-in
+  user's own PocketBase session token (`src/useGatewayAuth.ts`), which the
+  gateway resolves server-side to a personal _default_ `llm_api_keys` row it
+  auto-provisions on first use (`POST /api/custom/llm/keys/default` in
+  `llm.pb.js`) — shown on this page as `"Tony Playground (auto)"`, with no
+  Revoke button, since the route refuses to revoke a default key even for an
+  admin. Because it's driven by your PocketBase login rather than a
+  client-cached secret, it's already there on every browser/device the
+  moment you're signed in — nothing to create, and nothing that can be lost
+  by clearing one browser's storage (a real gap in the old
+  localStorage-cached-key design, which had no way to recover a lost
+  default's plaintext and no fallback once it was gone). The server refuses
+  a second active default per user regardless of entry point (checked in
+  `llm.pb.js`'s POST /keys and POST /keys/default routes, its
+  `onRecordCreate`/`onRecordUpdate` hooks, and a partial unique index — see
+  migration `1789099510_llm_api_keys_one_default_index.js`). Revoking any
+  other key is a soft delete: it drops out of the table and usage dropdown,
+  but a "Show revoked keys" toggle brings it (and its usage) back into view
+  rather than deleting the row. The usage stats and chart are built on
+  bluestar's `StatTile` and `LineChart`.
 - **Docs** (`src/DocsPage.tsx`) — the gateway's request/response reference
   (parameters, streaming, images) rendered as markdown via `bluestar`'s
   `Markdown` component, the same one Chat/Playground use for replies. Plain

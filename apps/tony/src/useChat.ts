@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { pb } from "./pb";
 import { useAuthRecord } from "./useAuth";
-import { usePlaygroundKey } from "./usePlaygroundKey";
+import { useGatewayAuth } from "./useGatewayAuth";
 import { GATEWAY_URL } from "./gateway";
 import { parseSseLines, deltaContent } from "./sse";
 
@@ -66,8 +66,7 @@ export function useChat() {
   // exists the way it could when this lived inside ChatPage, a component
   // that only ever mounted post-login.
   const record = useAuthRecord();
-  const playgroundKey = usePlaygroundKey();
-  const { apiKey, keyError, recoverFromUnauthorized } = playgroundKey;
+  const { apiKey, recoverFromUnauthorized } = useGatewayAuth();
 
   const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
   const [model, setModel] = useState("");
@@ -216,7 +215,9 @@ export function useChat() {
 
       if (r.status === 401 && retryOn401) {
         const fresh = await recoverFromUnauthorized();
-        if (!fresh) return; // keyError from the hook already explains why
+        // null means the session itself is gone -- recoverFromUnauthorized
+        // already cleared it, so App.tsx drops back to the login screen.
+        if (!fresh) return;
         setDraft(content); // restore -- sendWith re-reads `draft` on retry
         return sendWith(fresh, false);
       }
@@ -339,10 +340,6 @@ export function useChat() {
 
   return {
     apiKey,
-    needsKey: playgroundKey.needsKey,
-    creatingKey: playgroundKey.creating,
-    createKey: playgroundKey.createKey,
-    keyError,
     modelList,
     model,
     setModel,

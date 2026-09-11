@@ -17,6 +17,7 @@ auth:
   service_password: "REPLACE-ME"
   key_refresh_seconds: 60 # how often to re-pull the active-key list
   usage_flush_seconds: 20 # how often to push buffered usage rows
+  session_cache_seconds: 60 # how long a resolved PocketBase session token stays cached
 
 llama_server:
   binary: "/opt/homebrew/bin/llama-server" # `which llama-server`

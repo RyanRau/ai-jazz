@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
-  AsyncButton,
   Button,
   Card,
   Dropdown,
@@ -14,10 +13,9 @@ import {
   Text,
   TextAreaInput,
   TextInput,
-  useTheme,
 } from "bluestar";
 import type { FileDropzoneValue } from "bluestar";
-import { usePlaygroundKey } from "./usePlaygroundKey";
+import { useGatewayAuth } from "./useGatewayAuth";
 import { parseSseLines, deltaContent, eventUsage } from "./sse";
 import { GATEWAY_URL } from "./gateway";
 
@@ -87,15 +85,13 @@ function buildBody(params: {
  * reachable there's no reason to proxy a request that isn't going anywhere
  * near PocketBase's own data.
  *
- * Uses a personal key (see playgroundKey.ts and usePlaygroundKey.ts) rather
- * than asking for one to be pasted in -- usage still attributes to the
- * signed-in user, since it's a real key created via the same self-service
- * route the Keys page uses, just triggered from a prompt here instead of
- * from that page directly.
+ * Authenticates with your own PocketBase session (see useGatewayAuth.ts)
+ * rather than asking for a key to be pasted in -- usage still attributes to
+ * you individually, via the same server-managed default key the Keys page
+ * shows, just resolved from your login instead of a client-cached secret.
  */
 export function PlaygroundPage() {
-  const theme = useTheme();
-  const { apiKey, needsKey, keyError, createKey, recoverFromUnauthorized } = usePlaygroundKey();
+  const { apiKey, recoverFromUnauthorized } = useGatewayAuth();
   // null = not loaded yet, "unavailable" = the gateway couldn't be reached
   // (fall back to a plain text field rather than blocking model entry).
   const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
@@ -202,9 +198,9 @@ export function PlaygroundPage() {
     });
 
     if (r.status === 401 && retryOn401) {
-      // The cached key was revoked -- known-bad, so recover (or surface why
-      // that failed) rather than a confusing auth error for a key the user
-      // never typed in themselves.
+      // The token went stale between renders -- refresh and retry once.
+      // null means the underlying session is gone entirely, which already
+      // dropped this back to the login screen.
       const fresh = await recoverFromUnauthorized();
       if (!fresh) return;
       return sendWith(fresh, false);
@@ -279,22 +275,9 @@ export function PlaygroundPage() {
       <Flexbox direction="column" gap={16}>
         <Header variant="h2">Playground</Header>
         <Text variant="caption">
-          Sends one chat completion directly to {GATEWAY_URL} using your personal key. It's a real
-          key like any other and shows up on the Keys page, marked as your default so it can't be
-          revoked from under this page.
+          Sends one chat completion directly to {GATEWAY_URL}, authenticated as you. Usage shows up
+          on the Keys page under your default key, which can't be revoked from under this page.
         </Text>
-        {needsKey && (
-          <Alert variant="warning" title="No Playground key in this browser">
-            <Flexbox direction="column" gap={8} alignItems="flex-start">
-              <Text variant="body">
-                Create one to start sending prompts -- it's yours alone and only ever shown once
-                you've created it.
-              </Text>
-              <AsyncButton label="Create key" density="dense" onClick={createKey} />
-              {keyError && <Text color={theme.colors.error}>{keyError}</Text>}
-            </Flexbox>
-          </Alert>
-        )}
         {modelList ? (
           <Dropdown
             label="Model"

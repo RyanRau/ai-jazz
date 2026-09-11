@@ -51,24 +51,41 @@ def resolve_model(model_field: Optional[str]) -> dict:
     return lookup[model_field]
 
 
-def check_api_key(
+async def check_api_key(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
     """Returns the matched key's PocketBase record id and owning user id --
     usage attribution needs the former, the chat routes need the latter to
-    attribute a new chat/message to the right person."""
-    entry = creds and key_store.check(creds.credentials)
+    attribute a new chat/message to the right person.
+
+    Accepts two credential shapes on the same Authorization header: an
+    opaque `llm_api_keys` key (checked locally against the cached hash set,
+    no network call) or -- on a miss -- a live PocketBase user session
+    token (Tony's own browser sends this; see key_store.resolve_session),
+    which resolves to that user's own server-managed default key. A token
+    that's neither just fails both and 401s.
+    """
+    if not creds:
+        raise HTTPException(401, "Invalid or missing API key")
+    entry = key_store.check(creds.credentials)
+    if not entry:
+        entry = await key_store.resolve_session(creds.credentials)
     if not entry:
         raise HTTPException(401, "Invalid or missing API key")
     return {"key_id": entry["id"], "user_id": entry["user"]}
 
 
 class KeyStore:
-    """Caches active API-key hashes pulled from PocketBase, and batches usage
-    rows back to it. Deny-by-default: a key is only ever accepted if it's
-    present in the last successful pull, so a PocketBase outage can't turn
-    into open access -- it can only make new keys and revocations take effect
-    late, using the last known-good cache in the meantime.
+    """Caches active API-key hashes pulled from PocketBase, resolves
+    PocketBase user session tokens (see resolve_session) on demand with a
+    short per-token cache, and batches usage rows back to PocketBase.
+    Deny-by-default for the key-hash path: a key is only ever accepted if
+    it's present in the last successful pull, so a PocketBase outage can't
+    turn into open access -- it can only make new keys and revocations take
+    effect late, using the last known-good cache in the meantime. The
+    session-token path instead asks PocketBase fresh (subject to its own
+    short cache), since there's no way to pre-pull tokens PocketBase hasn't
+    issued yet.
     """
 
     def __init__(self, cfg: dict):
@@ -77,8 +94,16 @@ class KeyStore:
         self.service_password = auth_cfg["service_password"]
         self.refresh_interval = auth_cfg.get("key_refresh_seconds", 60)
         self.flush_interval = auth_cfg.get("usage_flush_seconds", 20)
+        self.session_cache_ttl = auth_cfg.get("session_cache_seconds", 60)
         self._token: Optional[str] = None
         self._active_hashes: dict[str, dict] = {}  # sha256(key) -> {"id", "user"}
+        # sha256(session token) -> ({"id", "user"}, cached-until epoch seconds).
+        # Session tokens aren't known ahead of time the way llm_api_keys are
+        # (they're minted by PocketBase itself on login, not by us), so this
+        # can't be a periodic wholesale pull like _active_hashes -- each
+        # distinct token gets resolved against PocketBase once and cached
+        # briefly, rather than round-tripped on every request.
+        self._session_cache: dict[str, tuple[dict, float]] = {}
         self._usage_queue: asyncio.Queue = asyncio.Queue(maxsize=10_000)
         self._client = httpx.AsyncClient(
             base_url=auth_cfg["pocketbase_url"].rstrip("/"), timeout=10
@@ -99,6 +124,32 @@ class KeyStore:
     def check(self, presented_key: str) -> Optional[dict]:
         digest = hashlib.sha256(presented_key.encode()).hexdigest()
         return self._active_hashes.get(digest)
+
+    async def resolve_session(self, token: str) -> Optional[dict]:
+        """Resolves a PocketBase user session token (not one of our own
+        opaque keys, or check() above would already have matched it) to
+        that user's own default key, by forwarding the token to PocketBase's
+        POST /keys/default -- which authenticates it as that user's own
+        session, not ours. Caches successes briefly; failures aren't
+        cached, since a garbage/expired token is already a fast, cheap
+        rejection on PocketBase's side."""
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        now = time.time()
+        cached = self._session_cache.get(digest)
+        if cached and cached[1] > now:
+            return cached[0]
+        try:
+            r = await self._client.post(
+                "/api/custom/llm/keys/default",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            r.raise_for_status()
+        except httpx.HTTPError:
+            return None
+        data = r.json()
+        entry = {"id": data["key_id"], "user": data["user_id"]}
+        self._session_cache[digest] = (entry, now + self.session_cache_ttl)
+        return entry
 
     def record_usage(self, key_id: str, model: str, tokens_in: int, tokens_out: int):
         row = {
@@ -144,6 +195,14 @@ class KeyStore:
                 }
             except httpx.HTTPError as e:
                 print(f"[gateway] key refresh failed, keeping cached keys: {e}")
+            # Piggyback pruning expired session-cache entries on this same
+            # tick rather than running a separate loop for it.
+            now = time.time()
+            self._session_cache = {
+                digest: entry
+                for digest, entry in self._session_cache.items()
+                if entry[1] > now
+            }
             await asyncio.sleep(self.refresh_interval)
 
     async def _flush_loop(self):
