@@ -656,7 +656,8 @@ Built on native `<dialog>`, so focus trapping and Esc-to-close come for free.
 | ----------------- | ------------------- | -------- |
 | `isOpen`          | `boolean`           | required |
 | `onClose`         | `() => void`        | required |
-| `title`           | `string`            | required |
+| `title`           | `string`            | —        |
+| `ariaLabel`       | `string`            | —        |
 | `side`            | `"left" \| "right"` | `"left"` |
 | `width`           | `number \| string`  | `320`    |
 | `closeOnBackdrop` | `boolean`           | `true`   |
@@ -671,6 +672,12 @@ narrow ones, closing it yourself once the user picks something (unlike
 own `Drawer` state, so closing on selection is just calling `onClose` from
 the click handler). This is the same list-over-content pattern `AppShell`
 uses internally for mobile navigation, generalized for reuse inside a page.
+Omit `title` for a bare header bar (just the close button, right-aligned) —
+the same chrome-less look `AppShell`'s own mobile nav drawer uses, right when
+`children` already reads as its own section (e.g. a `SideNav` whose `top`
+slot is the heading) and a second, redundant title would just be noise. The
+dialog keeps an accessible label regardless (`ariaLabel`, then `title`, then
+a generic `"Navigation"` fallback).
 
 #### `ConfirmDialog`
 
@@ -788,6 +795,7 @@ based on `sideNav` being passed and the viewport width.
 | `activeKey`        | `string`                | `""`                           |
 | `onSelect`         | `(key: string) => void` | no-op                          |
 | `top`              | `ReactNode`             | —                              |
+| `collapsedTop`     | `ReactNode`             | — (hides `top` if omitted)     |
 | `footer`           | `ReactNode`             | —                              |
 | `collapsedFooter`  | `ReactNode`             | — (hides `footer` if omitted)  |
 | `storageKey`       | `string \| null`        | `"bluestar-sidenav-collapsed"` |
@@ -810,13 +818,18 @@ fill — the same flat-selection language `Tabs` uses for the underline.
 needs no header at all (see its own doc above) — `top` is each app's own
 `AppSwitcher.tsx` (branding + a `switch`-icon `Menu` for jumping to another
 app, scaffolded like `AccountMenu.tsx`), `footer` an account/profile block
-pinned above a top border. Both are hidden while collapsed — `footer`
-because arbitrary content can't shrink to the 64px rail the way a
-`SideNavItem`'s own label does, unless `collapsedFooter` gives it an
-icon-only stand-in (e.g. an avatar + a log-out icon button) for that
-state instead of hiding it outright. `items` is optional: a single-page
-app can render `SideNav` for just its `top`/`footer` chrome with an empty
-(or omitted) `items` array and nothing to switch between.
+pinned above a top border. Both are hidden while collapsed, since arbitrary
+content can't shrink to the 64px rail the way a `SideNavItem`'s own label
+does — unless `collapsedTop`/`collapsedFooter` give them an icon-only
+stand-in instead of hiding outright (a brand mark for `top`; an avatar + a
+log-out icon button for `footer`). `collapsedTop` gets its own bottom
+border, matching `footer`'s top one, so it reads as a distinct brand zone
+rather than blurring into the first nav item right below it — give it a
+mark that doesn't visually double up with any single item's own icon (a
+"Home" item's house glyph, say — a plain initial in a colored badge is a
+safer default than reusing an `IconName`). `items` is optional: a
+single-page app can render `SideNav` for just its `top`/`footer` chrome
+with an empty (or omitted) `items` array and nothing to switch between.
 
 `items` itself is the region that takes the rail's leftover vertical space
 (scrolling internally on the rare rail short enough that even the items

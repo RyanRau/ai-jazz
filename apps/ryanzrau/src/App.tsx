@@ -136,6 +136,33 @@ function App() {
     { key: "apps", label: "Apps", icon: "grid" },
     ...(record.is_admin ? [{ key: "admin", label: "Admin", icon: "user" } as SideNavItem] : []),
   ];
+  // This app's own brand mark -- shown next to its name in the expanded
+  // AppSwitcher row, and alone (via collapsedTop) as the rail's "brand
+  // spot" when collapsed, the same place a granted app would show its own
+  // icon if this were its SideNav instead. A monogram rather than
+  // reusing the "home" icon: the "Home" nav item right below it already
+  // owns that glyph, and two identical house icons stacked with nothing
+  // to distinguish them reads as a rendering mistake, not branding.
+  const brandIcon = (
+    <div
+      style={{
+        width: 20,
+        height: 20,
+        borderRadius: "50%",
+        background: theme.colors.primary,
+        color: theme.colors.textOnAccent,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        fontFamily: theme.fonts.heading,
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      R
+    </div>
+  );
   const sideNav = (
     <SideNav
       items={navItems}
@@ -143,7 +170,8 @@ function App() {
       onSelect={(key) => {
         window.location.href = key === "home" ? "/" : `/${key}`;
       }}
-      top={<AppSwitcher appName="Ryan Rau" />}
+      top={<AppSwitcher appName="Ryan Rau" icon={brandIcon} />}
+      collapsedTop={brandIcon}
       footer={<AccountMenu />}
       collapsedFooter={<CollapsedAccountMenu />}
       defaultCollapsed
@@ -222,7 +250,7 @@ function App() {
     <>
       <Landing signedIn onOpenMenu={() => setNavOpen(true)} name={record.name || record.email} />
 
-      <Drawer isOpen={navOpen} onClose={() => setNavOpen(false)} title="Menu">
+      <Drawer isOpen={navOpen} onClose={() => setNavOpen(false)} ariaLabel="Navigation">
         <SideNavMobileContext.Provider value={true}>{sideNav}</SideNavMobileContext.Provider>
       </Drawer>
     </>
