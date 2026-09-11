@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { css } from "goober";
 import { useTheme } from "../../../theme";
@@ -61,6 +61,15 @@ function readStored(storageKey: string | null | undefined, defaultCollapsed: boo
 }
 
 /**
+ * Set by `AppShell` around the copy of `sideNav` it renders inside the
+ * mobile drawer (never the permanent desktop rail) — full-width and
+ * always-expanded there isn't a `SideNav` prop apps pass themselves, it's
+ * purely a function of which of AppShell's two rendering contexts a given
+ * instance is in.
+ */
+export const SideNavMobileContext = createContext(false);
+
+/**
  * A persistent left rail for switching between an app's top-level pages,
  * collapsible to an icon-only strip. Meant for `AppShell`'s `sideNav` slot,
  * which locks it to the true left edge and its own height rather than
@@ -93,19 +102,25 @@ export default function SideNav({
   defaultCollapsed = false,
 }: SideNavProps) {
   const theme = useTheme();
-  const [collapsed, setCollapsed] = useState(() => readStored(storageKey, defaultCollapsed));
+  const isMobileDrawer = useContext(SideNavMobileContext);
+  const [collapsedState, setCollapsed] = useState(() => readStored(storageKey, defaultCollapsed));
+  // Full-width and always-expanded in the mobile drawer -- a collapsed,
+  // icon-only rail makes no sense floating full-screen on a touch device,
+  // and there's no edge to collapse toward.
+  const collapsed = isMobileDrawer ? false : collapsedState;
 
   useEffect(() => {
     if (!canUseDOM || !storageKey) return;
-    window.localStorage.setItem(storageKey, collapsed ? "1" : "0");
-  }, [collapsed, storageKey]);
+    window.localStorage.setItem(storageKey, collapsedState ? "1" : "0");
+  }, [collapsedState, storageKey]);
 
   return (
     <nav
       aria-label="Sections"
       className={css`
         position: relative;
-        width: ${collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH}px;
+        width: ${isMobileDrawer ? "100%" : `${collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH}px`};
+        height: 100%;
         flex-shrink: 0;
         border-right: 1px solid ${theme.colors.border};
         background-color: ${theme.colors.surface};
@@ -209,49 +224,51 @@ export default function SideNav({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className={css`
-          position: absolute;
-          top: 50%;
-          right: -${TOGGLE_SIZE / 2}px;
-          transform: translateY(-50%);
-          width: ${TOGGLE_SIZE}px;
-          height: ${TOGGLE_SIZE}px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 50%;
-          border: 1px solid ${theme.colors.border};
-          background-color: ${theme.colors.background};
-          box-shadow: ${theme.shadow.sm};
-          cursor: pointer;
-          color: ${theme.colors.textMuted};
-          padding: 0;
+      {!isMobileDrawer && (
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={css`
+            position: absolute;
+            top: 50%;
+            right: -${TOGGLE_SIZE / 2}px;
+            transform: translateY(-50%);
+            width: ${TOGGLE_SIZE}px;
+            height: ${TOGGLE_SIZE}px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 1px solid ${theme.colors.border};
+            background-color: ${theme.colors.background};
+            box-shadow: ${theme.shadow.sm};
+            cursor: pointer;
+            color: ${theme.colors.textMuted};
+            padding: 0;
 
-          &:hover {
-            color: ${theme.colors.text};
-            border-color: ${theme.colors.borderStrong};
-          }
-          &:focus-visible {
-            outline: 2px solid ${theme.colors.focusRing};
-            outline-offset: 2px;
-          }
-        `}
-      >
-        <span
-          style={{
-            display: "inline-flex",
-            // chevronDown rotated: -90deg points right (expand), 90deg points left (collapse).
-            transform: collapsed ? "rotate(-90deg)" : "rotate(90deg)",
-            transition: "transform 0.15s ease",
-          }}
+            &:hover {
+              color: ${theme.colors.text};
+              border-color: ${theme.colors.borderStrong};
+            }
+            &:focus-visible {
+              outline: 2px solid ${theme.colors.focusRing};
+              outline-offset: 2px;
+            }
+          `}
         >
-          <Icon name="chevronDown" size={12} />
-        </span>
-      </button>
+          <span
+            style={{
+              display: "inline-flex",
+              // chevronDown rotated: -90deg points right (expand), 90deg points left (collapse).
+              transform: collapsed ? "rotate(-90deg)" : "rotate(90deg)",
+              transition: "transform 0.15s ease",
+            }}
+          >
+            <Icon name="chevronDown" size={12} />
+          </span>
+        </button>
+      )}
     </nav>
   );
 }

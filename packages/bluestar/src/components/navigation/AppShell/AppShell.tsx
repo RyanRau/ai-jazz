@@ -5,6 +5,7 @@ import { useTheme, breakpoints } from "../../../theme";
 import Flexbox from "../../layout/Flexbox/Flexbox";
 import Header from "../../text/Header/Header";
 import Icon from "../../display/Icon/Icon";
+import { SideNavMobileContext } from "../SideNav/SideNav";
 
 const MOBILE_QUERY = `(max-width: ${breakpoints.sm}px)`;
 const canUseDOM = typeof window !== "undefined" && typeof document !== "undefined";
@@ -257,48 +258,65 @@ export default function AppShell({
         >
           <div
             className={css`
-              position: relative;
               height: 100%;
-              width: fit-content;
+              width: 100%;
+              display: flex;
+              flex-direction: column;
               box-shadow: ${theme.shadow.lg};
             `}
           >
-            {sideNav}
-            {/* showModal() makes everything outside the dialog inert, so the
+            {/* A dedicated bar for the close control, rather than floating it
+                over the panel -- the full-width drawer leaves no backdrop
+                gutter to float it in, and overlaying it on SideNav's own
+                content would collide with the `top` slot's own controls
+                (e.g. an app switcher's own icon in the same corner).
+                showModal() makes everything outside the dialog inert, so the
                 header's own hamburger button is unreachable while this is
-                open -- and there's no Escape key on a touchscreen. A visible
-                close control inside the drawer is the only way out on
-                mobile besides tapping the backdrop. */}
-            <button
-              type="button"
-              aria-label="Close navigation"
-              onClick={() => setMobileNavRequestedOpen(false)}
+                open -- and there's no Escape key on a touchscreen, so this
+                is the only way out besides tapping the backdrop. */}
+            <div
               className={css`
-                /* Floats just outside the panel's right edge, in the
-                   backdrop -- inside it would overlap SideNav's own first
-                   item, which also anchors to the top of the same box. */
-                position: absolute;
-                top: 8px;
-                left: 100%;
-                margin-left: 8px;
-                background: ${theme.colors.surface};
-                border: 1px solid ${theme.colors.border};
-                cursor: pointer;
                 display: flex;
+                justify-content: flex-end;
+                flex-shrink: 0;
                 padding: 8px;
-                border-radius: ${theme.radius.md};
-                color: ${theme.colors.textMuted};
-                &:hover {
-                  background-color: ${theme.colors.surfaceHover};
-                }
-                &:focus-visible {
-                  outline: 2px solid ${theme.colors.focusRing};
-                  outline-offset: 2px;
-                }
+                background-color: ${theme.colors.surface};
+                border-bottom: 1px solid ${theme.colors.border};
               `}
             >
-              <Icon name="close" size={18} />
-            </button>
+              <button
+                type="button"
+                aria-label="Close navigation"
+                onClick={() => setMobileNavRequestedOpen(false)}
+                className={css`
+                  background: transparent;
+                  border: 1px solid ${theme.colors.border};
+                  cursor: pointer;
+                  display: flex;
+                  padding: 8px;
+                  border-radius: ${theme.radius.md};
+                  color: ${theme.colors.textMuted};
+                  &:hover {
+                    background-color: ${theme.colors.surfaceHover};
+                  }
+                  &:focus-visible {
+                    outline: 2px solid ${theme.colors.focusRing};
+                    outline-offset: 2px;
+                  }
+                `}
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+            <div
+              className={css`
+                flex: 1;
+                min-height: 0;
+                display: flex;
+              `}
+            >
+              <SideNavMobileContext.Provider value={true}>{sideNav}</SideNavMobileContext.Provider>
+            </div>
           </div>
         </dialog>
       )}
