@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import { css } from "goober";
 import {
   BarChart,
   Badge,
+  breakpoints,
   Button,
   Card,
   ConfirmDialog,
   Divider,
+  Drawer,
   EmptyState,
   Flexbox,
   Form,
@@ -197,6 +200,7 @@ export function KeysPage() {
   const [selectedKeyId, setSelectedKeyId] = useState("");
   const [keyScopedUsage, setKeyScopedUsage] = useState<UsageRow[] | null>(null);
   const [showRevoked, setShowRevoked] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
 
   function load() {
     return Promise.all([
@@ -275,12 +279,59 @@ export function KeysPage() {
     ? (keyScopedUsage ?? [])
     : allUsage.filter((r) => visibleKeyIds.has(r.key));
 
+  const keyList = (onNavigate: () => void) => (
+    <Flexbox direction="column" gap={12}>
+      <Switch label="Show revoked" value={showRevoked} onChange={toggleShowRevoked} />
+
+      <Flexbox direction="column" gap={4}>
+        <ListRow
+          title="All keys"
+          selected={selectedKeyId === ""}
+          onClick={() => {
+            setSelectedKeyId("");
+            onNavigate();
+          }}
+        />
+        {visibleKeys.map((k) => (
+          <ListRow
+            key={k.id}
+            title={k.label}
+            subtitle={isAdmin ? k.owner_email : undefined}
+            badge={k.is_default ? <Badge variant="neutral">Default</Badge> : undefined}
+            muted={Boolean(k.revoked_at)}
+            selected={selectedKeyId === k.id}
+            onClick={() => {
+              setSelectedKeyId(k.id);
+              onNavigate();
+            }}
+          />
+        ))}
+      </Flexbox>
+    </Flexbox>
+  );
+
   return (
     <Card padding={24}>
-      <Flexbox gap={20} alignItems="flex-start">
-        <Flexbox direction="column" gap={12} width={260} style={{ flexShrink: 0 }}>
-          <Flexbox justifyContent="space-between" alignItems="center">
-            <Header variant="h2">Keys</Header>
+      <Flexbox direction="column" gap={16}>
+        <Flexbox justifyContent="space-between" alignItems="center" gap={12}>
+          <Header variant="h2">Keys</Header>
+          <Flexbox gap={8} alignItems="center">
+            <div
+              className={css`
+                display: none;
+                @media (max-width: ${breakpoints.md}px) {
+                  display: flex;
+                }
+              `}
+            >
+              <Button
+                label={selectedKey ? selectedKey.label : "All keys"}
+                variant="secondary"
+                appearance="outline"
+                density="dense"
+                onClick={() => setListOpen(true)}
+              />
+            </div>
             <Button
               label="New"
               variant="creation"
@@ -288,86 +339,94 @@ export function KeysPage() {
               onClick={() => setCreating(true)}
             />
           </Flexbox>
-          <Switch label="Show revoked" value={showRevoked} onChange={toggleShowRevoked} />
-
-          <Flexbox direction="column" gap={4}>
-            <ListRow
-              title="All keys"
-              selected={selectedKeyId === ""}
-              onClick={() => setSelectedKeyId("")}
-            />
-            {visibleKeys.map((k) => (
-              <ListRow
-                key={k.id}
-                title={k.label}
-                subtitle={isAdmin ? k.owner_email : undefined}
-                badge={k.is_default ? <Badge variant="neutral">Default</Badge> : undefined}
-                muted={Boolean(k.revoked_at)}
-                selected={selectedKeyId === k.id}
-                onClick={() => setSelectedKeyId(k.id)}
-              />
-            ))}
-          </Flexbox>
         </Flexbox>
 
-        <Divider direction="vertical" />
+        <Flexbox gap={20} alignItems="flex-start">
+          <div
+            className={css`
+              width: 260px;
+              flex-shrink: 0;
+              @media (max-width: ${breakpoints.md}px) {
+                display: none;
+              }
+            `}
+          >
+            {keyList(() => {})}
+          </div>
 
-        <Flexbox direction="column" gap={16} grow={1} style={{ minWidth: 0 }}>
-          {selectedKey ? (
-            <>
-              <Flexbox
-                justifyContent="space-between"
-                alignItems="flex-start"
-                flexWrap="wrap"
-                gap={12}
-              >
-                <Flexbox direction="column" gap={4}>
-                  <Flexbox gap={8} alignItems="center">
-                    <Header variant="h2">{selectedKey.label}</Header>
-                    {selectedKey.is_default && <Badge variant="neutral">Default</Badge>}
-                    {selectedKey.revoked_at ? (
-                      <Badge variant="error">Revoked</Badge>
-                    ) : (
-                      <Badge variant="success">Active</Badge>
+          <div
+            className={css`
+              flex-shrink: 0;
+              align-self: stretch;
+              @media (max-width: ${breakpoints.md}px) {
+                display: none;
+              }
+            `}
+          >
+            <Divider direction="vertical" />
+          </div>
+
+          <Flexbox direction="column" gap={16} grow={1} style={{ minWidth: 0 }}>
+            {selectedKey ? (
+              <>
+                <Flexbox
+                  justifyContent="space-between"
+                  alignItems="flex-start"
+                  flexWrap="wrap"
+                  gap={12}
+                >
+                  <Flexbox direction="column" gap={4}>
+                    <Flexbox gap={8} alignItems="center">
+                      <Header variant="h2">{selectedKey.label}</Header>
+                      {selectedKey.is_default && <Badge variant="neutral">Default</Badge>}
+                      {selectedKey.revoked_at ? (
+                        <Badge variant="error">Revoked</Badge>
+                      ) : (
+                        <Badge variant="success">Active</Badge>
+                      )}
+                    </Flexbox>
+                    <Text variant="caption">
+                      {selectedKey.key_prefix}…
+                      {isAdmin && selectedKey.owner_email ? ` · ${selectedKey.owner_email}` : ""}
+                    </Text>
+                    <Text variant="caption">
+                      Created {formatDate(selectedKey.created)} · Last used{" "}
+                      {formatDate(selectedKey.last_used_at)}
+                    </Text>
+                  </Flexbox>
+                  <Flexbox gap={8}>
+                    <Button
+                      label="Rename"
+                      variant="secondary"
+                      density="dense"
+                      onClick={() => setRenameTarget(selectedKey)}
+                    />
+                    {!selectedKey.revoked_at && !selectedKey.is_default && (
+                      <Button
+                        label="Revoke"
+                        variant="destructive"
+                        density="dense"
+                        onClick={() => setRevokeTarget(selectedKey)}
+                      />
                     )}
                   </Flexbox>
-                  <Text variant="caption">
-                    {selectedKey.key_prefix}…
-                    {isAdmin && selectedKey.owner_email ? ` · ${selectedKey.owner_email}` : ""}
-                  </Text>
-                  <Text variant="caption">
-                    Created {formatDate(selectedKey.created)} · Last used{" "}
-                    {formatDate(selectedKey.last_used_at)}
-                  </Text>
                 </Flexbox>
-                <Flexbox gap={8}>
-                  <Button
-                    label="Rename"
-                    variant="secondary"
-                    density="dense"
-                    onClick={() => setRenameTarget(selectedKey)}
-                  />
-                  {!selectedKey.revoked_at && !selectedKey.is_default && (
-                    <Button
-                      label="Revoke"
-                      variant="destructive"
-                      density="dense"
-                      onClick={() => setRevokeTarget(selectedKey)}
-                    />
-                  )}
-                </Flexbox>
-              </Flexbox>
-              <Divider />
-              <UsageSection rows={rows} />
-            </>
-          ) : (
-            <>
-              <Header variant="h2">All keys</Header>
-              <UsageSection rows={rows} />
-            </>
-          )}
+                <Divider />
+                <UsageSection rows={rows} />
+              </>
+            ) : (
+              <>
+                <Header variant="h2">All keys</Header>
+                <UsageSection rows={rows} />
+              </>
+            )}
+          </Flexbox>
         </Flexbox>
       </Flexbox>
+
+      <Drawer isOpen={listOpen} onClose={() => setListOpen(false)} title="Keys">
+        {keyList(() => setListOpen(false))}
+      </Drawer>
 
       <Modal isOpen={creating} onClose={() => setCreating(false)} title="New API key">
         <Form form={form}>
