@@ -9,13 +9,17 @@ sits outside bluestar's dashboard look; a "Sign in" control opens a
 `LoginForm` modal. Signed in, the `AppShell` sidebar (Apps, Settings, Admin)
 takes over and the root path shows a short dashboard welcome instead.
 
-The Personal Projects list on the landing page is currently static sample
-data (Stash, Tony, Bluestar), mirroring what's in PocketBase's `registry_apps`
-collection — the same catalog that backs the signed-in Apps dashboard. Wiring
-it to that collection for real needs a public-readable subset (`registry_apps`
-today requires auth to read); the plan is a `public` boolean field plus a
-`pb_hooks` route that serves just the public rows, so the dashboard keeps
-reading the full authenticated collection unchanged.
+The Personal Projects section fetches `GET /api/custom/public-apps`
+(`apps/pocketbase/pb_hooks/registry_public.pb.js`) — the subset of
+PocketBase's `registry_apps` collection marked `public: true`
+(`apps/pocketbase/pb_migrations/1789099600_registry_apps_public.js`). This is
+the same catalog that backs the signed-in Apps dashboard; `registry_apps`
+itself still requires auth to read (`listRule`), so this route serves just
+the public rows without loosening that. The landing page draws its own
+custom SVG icon per app slug (`projectIcons` in `Landing.tsx`) rather than
+reusing the emoji `registry_apps` stores for the dashboard — a slug with no
+matching icon falls back to a generic mark. Mark a new app public in the
+Admin UI (`registry_apps` → the app's row → `public`) to add it here.
 
 ## Local development
 

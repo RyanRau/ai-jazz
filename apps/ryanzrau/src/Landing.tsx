@@ -1,4 +1,6 @@
+import { useEffect, useState, type ReactNode } from "react";
 import { css } from "goober";
+import { pb } from "./pb";
 
 /**
  * The public, signed-out home page. Deliberately outside the bluestar
@@ -6,6 +8,8 @@ import { css } from "goober";
  * tuned for dashboard UI, and this is a personal/marketing page that wants
  * its own warm, "nature journal" feel instead of the app shell.
  */
+
+type PublicApp = { slug: string; name: string; url: string; description: string };
 
 const palette = {
   paper: "#f6f0e2",
@@ -433,62 +437,58 @@ const skills = [
   "AI-agent tooling",
 ];
 
-const projects = [
-  {
-    rotate: "-1.5deg",
-    label: "Stash",
-    sub: "Household inventory, shared with family",
-    icon: (
-      <path
-        d="M4 8l8-4 8 4-8 4-8-4zM4 8v8l8 4 8-4V8M12 12v8"
+// Custom icon per known project slug, drawn once and reused regardless of
+// how the registry describes the app -- keeps emoji (what registry_apps
+// uses for the signed-in dashboard) off this public page. Any future public
+// app without an entry here falls back to a plain generic mark rather than
+// breaking the layout.
+const projectIcons: Record<string, ReactNode> = {
+  stash: (
+    <path
+      d="M4 8l8-4 8 4-8 4-8-4zM4 8v8l8 4 8-4V8M12 12v8"
+      stroke="#b6603c"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  tony: (
+    <>
+      <rect
+        x="7"
+        y="7"
+        width="10"
+        height="10"
+        rx="1.5"
         stroke="#b6603c"
         strokeWidth="1.6"
-        strokeLinejoin="round"
         fill="none"
       />
-    ),
-  },
-  {
-    rotate: "1deg",
-    label: "Tony",
-    sub: "Home-lab LLM dashboard",
-    icon: (
-      <>
-        <rect
-          x="7"
-          y="7"
-          width="10"
-          height="10"
-          rx="1.5"
-          stroke="#b6603c"
-          strokeWidth="1.6"
-          fill="none"
-        />
-        <path
-          d="M9.5 7V4M14.5 7V4M9.5 20v-3M14.5 20v-3M7 9.5H4M7 14.5H4M20 9.5h-3M20 14.5h-3"
-          stroke="#b6603c"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          fill="none"
-        />
-      </>
-    ),
-  },
-  {
-    rotate: "-1deg",
-    label: "Bluestar",
-    sub: "The component library this site runs on",
-    icon: (
       <path
-        d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2L12 3z"
+        d="M9.5 7V4M14.5 7V4M9.5 20v-3M14.5 20v-3M7 9.5H4M7 14.5H4M20 9.5h-3M20 14.5h-3"
         stroke="#b6603c"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
+        strokeWidth="1.6"
+        strokeLinecap="round"
         fill="none"
       />
-    ),
-  },
-];
+    </>
+  ),
+  bluestar: (
+    <path
+      d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2L12 3z"
+      stroke="#b6603c"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+};
+
+const defaultProjectIcon = (
+  <rect x="4" y="4" width="16" height="16" rx="3" stroke="#b6603c" strokeWidth="1.6" fill="none" />
+);
+
+const projectRotations = ["-1.5deg", "1deg", "-1deg", "1.5deg", "-1deg", "1deg"];
 
 const hobbies = [
   {
@@ -614,6 +614,14 @@ const hobbies = [
 ];
 
 export function Landing({ onSignIn }: { onSignIn: () => void }) {
+  const [projects, setProjects] = useState<PublicApp[] | null>(null);
+
+  useEffect(() => {
+    pb.send<{ apps: PublicApp[] }>("/api/custom/public-apps", { method: "GET" })
+      .then((res) => setProjects(res.apps))
+      .catch(() => setProjects([]));
+  }, []);
+
   return (
     <div className={pageClass}>
       <div className={shellClass}>
@@ -747,24 +755,26 @@ export function Landing({ onSignIn }: { onSignIn: () => void }) {
           </div>
         </div>
 
-        <div className={sectionClass}>
-          <h2 className={sectionHeadClass}>Personal projects</h2>
-          <div className={tagGridClass}>
-            {projects.map((p) => (
-              <div
-                key={p.label}
-                className={tagCardClass}
-                style={{ transform: `rotate(${p.rotate})` }}
-              >
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                  {p.icon}
-                </svg>
-                <span className={tagLabelClass}>{p.label}</span>
-                <span className={tagSubClass}>{p.sub}</span>
-              </div>
-            ))}
+        {projects && projects.length > 0 && (
+          <div className={sectionClass}>
+            <h2 className={sectionHeadClass}>Personal projects</h2>
+            <div className={tagGridClass}>
+              {projects.map((p, i) => (
+                <div
+                  key={p.slug}
+                  className={tagCardClass}
+                  style={{ transform: `rotate(${projectRotations[i % projectRotations.length]})` }}
+                >
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                    {projectIcons[p.slug] ?? defaultProjectIcon}
+                  </svg>
+                  <span className={tagLabelClass}>{p.name}</span>
+                  <span className={tagSubClass}>{p.description}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className={sectionClass}>
           <h2 className={sectionHeadClass}>Off the clock</h2>
