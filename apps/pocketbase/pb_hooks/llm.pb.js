@@ -125,7 +125,11 @@ routerAdd(
 );
 
 // List keys (no hash, ever). Admin: every key, with the owner's email
-// attached. Otherwise: only your own.
+// attached -- unless ?mine=true forces it back down to just their own,
+// the same escape hatch GET /usage has and for the same reason: an
+// admin's own keys aren't otherwise distinguishable inside an unscoped
+// list of everyone's, so the Keys page defaults here too. Otherwise
+// (non-admin): always just your own, ?mine ignored.
 routerAdd(
   "GET",
   "/api/custom/llm/keys",
@@ -135,8 +139,9 @@ routerAdd(
       throw new ForbiddenError("Sign-in required.");
     }
     const isAdmin = auth.get("is_admin") === true;
+    const mineOnly = e.requestInfo().query["mine"] === "true";
 
-    const filter = isAdmin ? "" : "user = {:userId}";
+    const filter = isAdmin && !mineOnly ? "" : "user = {:userId}";
     const records = e.app.findRecordsByFilter("llm_api_keys", filter, "-created", 0, 0, {
       userId: auth.id,
     });

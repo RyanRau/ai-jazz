@@ -47,15 +47,16 @@ A side nav switches between four pages:
 - **Keys** — create/revoke API keys and see both per-key and aggregate usage
   (call count, tokens in/out, a daily time-series chart) in one place, with
   a dropdown to scope the usage section to one key or "All keys". Backed by
-  `apps/pocketbase/pb_hooks/llm.pb.js`: an `is_admin` account sees and can
-  revoke every key across every user; anyone else only ever sees their own.
-  The aggregate ("All keys") view itself defaults to just the signed-in
-  user's own usage even for an admin — a `My usage`/`All users`
-  `SegmentedControl` (admin-only; a regular user has no broader view to
-  switch to) opts into everyone's, via `GET /api/custom/llm/usage?mine=true`
-  forcing the same per-user filter a non-admin always gets. Otherwise an
-  admin's own usage would be lost inside an unscoped dump of every user's
-  rows with no way to isolate it.
+  `apps/pocketbase/pb_hooks/llm.pb.js`: an `is_admin` account can revoke
+  every key across every user; anyone else only ever sees or acts on their
+  own. Both the key list and the aggregate usage view default to just the
+  signed-in user's own, admin included — a `Mine`/`All users`
+  `SegmentedControl` in the key-list panel (admin-only; a regular user has
+  no broader view to switch to) opts into everyone's, via
+  `?mine=true` on both `GET /api/custom/llm/keys` and
+  `GET /api/custom/llm/usage`, forcing the same per-user filter a
+  non-admin always gets. Otherwise an admin's own keys/usage would be lost
+  inside an unscoped dump of every user's, with no way to isolate them.
   A key's plaintext is shown exactly once, at creation — the server never
   stores it, only its hash. Chat and Playground don't hold a key
   client-side at all: they authenticate to the gateway with the signed-in
