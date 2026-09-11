@@ -86,6 +86,15 @@ routerAdd(
           content = "";
         }
       }
+      const toolCallsCipher = r.getString("tool_calls");
+      let toolCalls = [];
+      if (toolCallsCipher) {
+        try {
+          toolCalls = JSON.parse($security.decrypt(toolCallsCipher, encKey));
+        } catch (err) {
+          toolCalls = [];
+        }
+      }
       return {
         id: r.id,
         role: r.getString("role"),
@@ -94,6 +103,7 @@ routerAdd(
         tokens_in: r.getInt("tokens_in"),
         tokens_out: r.getInt("tokens_out"),
         response_ms: r.getInt("response_ms"),
+        tool_calls: toolCalls,
         created: r.getString("created"),
       };
     });
@@ -162,11 +172,13 @@ routerAdd(
 );
 
 // Gateway-facing: append to a message while streaming (and mark it done).
-// Body: { message_id, content, status, tokens_in?, tokens_out?, response_ms? }.
-// Called repeatedly with the running content while status is "streaming",
-// once more at the end with status "complete" -- content is re-encrypted
-// in full each call, not diffed, since a message never gets long enough
-// for that to matter.
+// Body: { message_id, content, status, tokens_in?, tokens_out?, response_ms?,
+// tool_calls? }. Called repeatedly with the running content while status is
+// "streaming", once more at the end with status "complete" -- content is
+// re-encrypted in full each call, not diffed, since a message never gets
+// long enough for that to matter. `tool_calls` is gateway.py's own
+// already-JSON-encoded string (query + results per web_search call this
+// turn made); re-encrypted here the same as content, not touched otherwise.
 routerAdd(
   "POST",
   "/api/custom/llm/chats/messages/append",
@@ -190,6 +202,7 @@ routerAdd(
     if (body.tokens_in !== undefined) message.set("tokens_in", body.tokens_in);
     if (body.tokens_out !== undefined) message.set("tokens_out", body.tokens_out);
     if (body.response_ms !== undefined) message.set("response_ms", body.response_ms);
+    if (body.tool_calls) message.set("tool_calls", $security.encrypt(body.tool_calls, encKey));
     e.app.save(message);
 
     // Bump the parent chat's `updated` so the chat list sorts by recent

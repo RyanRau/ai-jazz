@@ -117,18 +117,52 @@ Set `web_search.searxng_url` in `config.yaml` to a running SearXNG instance
 `web_search` tool automatically — nothing else to configure. Leave it unset
 and Chat behaves exactly as before.
 
-SearXNG's default `settings.yml` only enables the `html` output format; the
-JSON API this needs will 403 until you add `json` to `search.formats` and set
-a `secret_key`:
+SearXNG itself has no GPU need, unlike `llama-server` (see Limitations below)
+— running it in Docker on the same Mac as the gateway is fine.
 
-```yaml
-search:
-  formats:
-    - html
-    - json
-server:
-  secret_key: "generate-one-with-openssl-rand-hex-32"
-```
+1. **Run the container**, bound to `127.0.0.1` only — this is a local search
+   backend for `gateway.py` on the same machine, not something to expose to
+   the LAN or internet:
+
+   ```bash
+   mkdir -p ~/searxng
+   docker run -d --name searxng \
+     --restart unless-stopped \
+     -p 127.0.0.1:8080:8080 \
+     -v ~/searxng:/etc/searxng \
+     searxng/searxng:latest
+   ```
+
+   First run generates a default `~/searxng/settings.yml`.
+
+2. **Enable the JSON API.** SearXNG's default `settings.yml` only enables the
+   `html` output format — the JSON API `gateway.py` needs will 403 until you
+   add `json` to `search.formats` and set a `secret_key`. Edit
+   `~/searxng/settings.yml`:
+
+   ```yaml
+   search:
+     formats:
+       - html
+       - json
+   server:
+     secret_key: "generate-one-with-openssl-rand-hex-32" # `openssl rand -hex 32`
+   ```
+
+   Then `docker restart searxng` to pick it up.
+
+3. **Point the gateway at it** — `config.yaml`:
+
+   ```yaml
+   web_search:
+     searxng_url: "http://127.0.0.1:8080"
+   ```
+
+   Restart `gateway.py` (or `launchctl kickstart` it, if you've set up
+   continuous deploy) to pick up the change.
+
+Verify it's working: `curl "http://127.0.0.1:8080/search?q=test&format=json"`
+should return JSON results, not a 403.
 
 Whether a given model actually emits correct `tool_calls` depends on its
 chat template — every model in `config.example.yaml` already runs with

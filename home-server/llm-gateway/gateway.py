@@ -527,6 +527,7 @@ async def _append_chat_message(
     tokens_in: int = 0,
     tokens_out: int = 0,
     response_ms: Optional[int] = None,
+    tool_calls: Optional[list[dict]] = None,
 ):
     """Persists the running (or final) content of a chat message via
     PocketBase's service-account-only route. Best-effort: a failure here
@@ -540,6 +541,8 @@ async def _append_chat_message(
         payload["tokens_out"] = tokens_out
         if response_ms is not None:
             payload["response_ms"] = response_ms
+    if tool_calls:
+        payload["tool_calls"] = json.dumps(tool_calls)
     try:
         await key_store._request(
             "POST", "/api/custom/llm/chats/messages/append", json=payload
@@ -577,6 +580,7 @@ async def _generate_chat_response(
 
     usage: dict = {}
     content_parts: list[str] = []
+    search_records: list[dict] = []
     last_flush = time.time()
     start = time.time()
     acquired = False
@@ -625,7 +629,10 @@ async def _generate_chat_response(
                                 slot["arguments"] += fn["arguments"]
                     if time.time() - last_flush > FLUSH_INTERVAL:
                         await _append_chat_message(
-                            assistant_message_id, "".join(content_parts), "streaming"
+                            assistant_message_id,
+                            "".join(content_parts),
+                            "streaming",
+                            tool_calls=search_records,
                         )
                         last_flush = time.time()
 
@@ -655,11 +662,10 @@ async def _generate_chat_response(
                     args = json.loads(tc["arguments"] or "{}")
                 except ValueError:
                     args = {}
-                results = (
-                    await _web_search(args.get("query", ""))
-                    if tc["name"] == "web_search"
-                    else []
-                )
+                query = args.get("query", "")
+                results = await _web_search(query) if tc["name"] == "web_search" else []
+                if tc["name"] == "web_search":
+                    search_records.append({"query": query, "results": results})
                 body["messages"].append(
                     {
                         "role": "tool",
@@ -675,6 +681,7 @@ async def _generate_chat_response(
             tokens_in=usage.get("prompt_tokens", 0),
             tokens_out=usage.get("completion_tokens", 0),
             response_ms=int((time.time() - start) * 1000),
+            tool_calls=search_records,
         )
         key_store.record_usage(
             key_id,
@@ -685,7 +692,10 @@ async def _generate_chat_response(
     except Exception as e:
         print(f"[gateway] chat generation failed: {e}")
         await _append_chat_message(
-            assistant_message_id, "".join(content_parts), "error"
+            assistant_message_id,
+            "".join(content_parts),
+            "error",
+            tool_calls=search_records,
         )
     finally:
         # acquire()/the client can fail before either exists -- guard both,
