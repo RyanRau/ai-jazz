@@ -776,7 +776,7 @@ based on `sideNav` being passed and the viewport width.
 | `storageKey`       | `string \| null`        | `"bluestar-sidenav-collapsed"` |
 | `defaultCollapsed` | `boolean`               | `false`                        |
 
-`SideNavItem` is `{ key, label, icon?, expandedContent? }`. A collapsible left rail for an
+`SideNavItem` is `{ key, label, icon?, expandedContent?, action? }`. A collapsible left rail for an
 app's top-level pages — meant for `AppShell`'s `sideNav` slot. Collapses to
 an icon-only strip via a small circular toggle straddling the rail's right
 border at vertical centre (the convention most dashboard component
@@ -812,6 +812,18 @@ natural height rather than scrolling on its own, so cap a longer list at a
 handful of rows and link the rest to a dedicated page (the way `ListRow`
 already reads as "a chat list" for exactly that page) rather than trying to
 cram an unbounded list into the rail.
+
+`expandedContent`'s presence is what makes a row collapsible at all — it
+gets a trailing chevron button, independent of the row's own navigate
+click. It starts expanded automatically the first time (and every time)
+the item becomes `activeKey`; the chevron only toggles it manually from
+there, so navigating away and back re-expands it on the assumption that
+returning to a section means wanting to see it again. `action` (`{ icon,
+label, onClick }`) adds a small icon-button before the chevron — a quick
+action tied to the section (Tony's Chat item uses it for "New chat") that
+shouldn't require expanding the row first: it only ever fires its own
+`onClick`, never navigation or the toggle. Both are hidden while the rail
+is collapsed to its icon-only width, same as the label.
 
 On mobile, `AppShell` renders the same `sideNav` element a second time inside
 a full-screen drawer rather than the permanent rail — collapsing makes no

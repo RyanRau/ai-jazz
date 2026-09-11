@@ -69,6 +69,14 @@ function App() {
               label: "Chat",
               icon: "chat",
               expandedContent: <ChatHistoryList chat={chat} />,
+              action: {
+                icon: "plus",
+                label: "New chat",
+                onClick: () => {
+                  setTab("chat");
+                  chat.newChat();
+                },
+              },
             },
             { key: "playground", label: "Playground", icon: "search" },
             { key: "keys", label: "Keys", icon: "key" },

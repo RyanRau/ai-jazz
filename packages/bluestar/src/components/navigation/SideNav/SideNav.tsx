@@ -13,15 +13,32 @@ export type SideNavItem = {
   /** Shown at all times, including collapsed (icon-only) width. */
   icon?: IconName;
   /**
-   * Rendered indented directly below this item, only while it's the active
-   * one (and the rail isn't collapsed) — a sub-section for a page that has
-   * its own short list of things to jump to (a chat's recent conversations,
-   * say). Keep it short: this expands the rail's own natural height rather
-   * than scrolling on its own, so a handful of rows is the right size —
-   * cap a longer list and link to a dedicated page for the rest, the way
-   * `ListRow` already reads as "a chat list" for exactly that page.
+   * Rendered indented directly below this item, only while it's expanded —
+   * a sub-section for a page that has its own short list of things to jump
+   * to (a chat's recent conversations, say). Keep it short: this expands
+   * the rail's own natural height rather than scrolling on its own, so a
+   * handful of rows is the right size — cap a longer list and link to a
+   * dedicated page for the rest, the way `ListRow` already reads as "a
+   * chat list" for exactly that page.
+   *
+   * Presence of `expandedContent` is what makes the row collapsible at
+   * all: it gets a trailing chevron, and starts expanded automatically the
+   * first time this item becomes `activeKey` — toggle it manually after
+   * that with the chevron, independent of navigating elsewhere and back
+   * (which re-expands it, on the assumption that navigating back to a
+   * section means wanting to see it again).
    */
   expandedContent?: ReactNode;
+  /**
+   * A small icon-button action pinned to the end of the row, next to the
+   * expand chevron (or in its place, if there's no `expandedContent`) — for
+   * a quick action tied to this section (e.g. "start a new one") that
+   * shouldn't require expanding the section first. Independent of
+   * navigation and expansion: clicking it only ever fires `onClick`, never
+   * `onSelect` or the chevron's toggle. Hidden while the rail is collapsed
+   * to its icon-only width, same as the label.
+   */
+  action?: { icon: IconName; label: string; onClick: () => void };
 };
 
 export type SideNavProps = {
@@ -118,6 +135,10 @@ export default function SideNav({
   // icon-only rail makes no sense floating full-screen on a touch device,
   // and there's no edge to collapse toward.
   const collapsed = isMobileDrawer ? false : collapsedState;
+  // Items whose `expandedContent` has been manually collapsed by the
+  // chevron while active. Not persisted -- re-selecting the item (or
+  // navigating back to it) clears its entry here, so it re-expands.
+  const [collapsedItems, setCollapsedItems] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (!canUseDOM || !storageKey) return;
@@ -158,20 +179,15 @@ export default function SideNav({
           // the current section than a fully filled row does.
           const fg = isActive ? theme.colors.primary : theme.colors.text;
           const ACCENT_WIDTH = 3;
+          const hasExpandable = Boolean(item.expandedContent);
+          const isExpanded = hasExpandable && isActive && !collapsedItems.has(item.key);
           return (
             <div key={item.key}>
-              <button
-                type="button"
-                aria-current={isActive ? "page" : undefined}
-                onClick={() => onSelect(item.key)}
-                title={collapsed ? item.label : undefined}
+              <div
                 className={css`
                   display: flex;
                   align-items: center;
-                  gap: 12px;
                   width: 100%;
-                  padding: 10px 12px 10px ${12 - ACCENT_WIDTH}px;
-                  border: none;
                   border-left: ${ACCENT_WIDTH}px solid
                     ${isActive ? theme.colors.primary : "transparent"};
                   border-radius: 0 ${theme.radius.sm} ${theme.radius.sm} 0;
@@ -180,9 +196,6 @@ export default function SideNav({
                       ? `color-mix(in srgb, ${theme.colors.primary} 12%, transparent)`
                       : "transparent"
                   };
-                  cursor: pointer;
-                  text-align: left;
-                  white-space: nowrap;
 
                   &:hover {
                     background-color: ${
@@ -191,20 +204,143 @@ export default function SideNav({
                         : theme.colors.surfaceHover
                     };
                   }
-                  &:focus-visible {
-                    outline: 2px solid ${theme.colors.focusRing};
-                    outline-offset: 2px;
-                  }
                 `}
               >
-                {item.icon && <Icon name={item.icon} size={18} color={fg} />}
-                {!collapsed && (
-                  <Text variant="label" color={fg}>
-                    {item.label}
-                  </Text>
+                <button
+                  type="button"
+                  aria-current={isActive ? "page" : undefined}
+                  onClick={() => {
+                    onSelect(item.key);
+                    // Selecting an item re-expands it -- navigating back to a
+                    // section means wanting to see its expanded content again,
+                    // regardless of whether the chevron had collapsed it.
+                    if (hasExpandable && collapsedItems.has(item.key)) {
+                      setCollapsedItems((prev) => {
+                        const next = new Set(prev);
+                        next.delete(item.key);
+                        return next;
+                      });
+                    }
+                  }}
+                  title={collapsed ? item.label : undefined}
+                  className={css`
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    flex: 1;
+                    min-width: 0;
+                    padding: 10px 4px 10px ${12 - ACCENT_WIDTH}px;
+                    border: none;
+                    background: none;
+                    cursor: pointer;
+                    text-align: left;
+                    white-space: nowrap;
+
+                    &:focus-visible {
+                      outline: 2px solid ${theme.colors.focusRing};
+                      outline-offset: 2px;
+                    }
+                  `}
+                >
+                  {item.icon && <Icon name={item.icon} size={18} color={fg} />}
+                  {!collapsed && (
+                    <Text variant="label" color={fg}>
+                      {item.label}
+                    </Text>
+                  )}
+                </button>
+
+                {!collapsed && item.action && (
+                  <button
+                    type="button"
+                    aria-label={item.action.label}
+                    title={item.action.label}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      item.action?.onClick();
+                    }}
+                    className={css`
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      width: 28px;
+                      height: 28px;
+                      flex-shrink: 0;
+                      border: none;
+                      border-radius: ${theme.radius.sm};
+                      background: none;
+                      cursor: pointer;
+                      color: ${theme.colors.textMuted};
+
+                      &:hover {
+                        color: ${theme.colors.text};
+                        background-color: ${theme.colors.surfaceHover};
+                      }
+                      &:focus-visible {
+                        outline: 2px solid ${theme.colors.focusRing};
+                        outline-offset: 2px;
+                      }
+                    `}
+                  >
+                    <Icon name={item.action.icon} size={16} />
+                  </button>
                 )}
-              </button>
-              {item.expandedContent && isActive && !collapsed && (
+
+                {!collapsed && hasExpandable && (
+                  <button
+                    type="button"
+                    aria-label={isExpanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
+                    aria-expanded={isExpanded}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCollapsedItems((prev) => {
+                        const next = new Set(prev);
+                        if (isExpanded) next.add(item.key);
+                        else next.delete(item.key);
+                        return next;
+                      });
+                    }}
+                    className={css`
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      width: 28px;
+                      height: 28px;
+                      flex-shrink: 0;
+                      margin-right: 4px;
+                      border: none;
+                      border-radius: ${theme.radius.sm};
+                      background: none;
+                      cursor: pointer;
+                      color: ${theme.colors.textMuted};
+
+                      &:hover {
+                        color: ${theme.colors.text};
+                        background-color: ${theme.colors.surfaceHover};
+                      }
+                      &:focus-visible {
+                        outline: 2px solid ${theme.colors.focusRing};
+                        outline-offset: 2px;
+                      }
+                    `}
+                  >
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        // chevronDown pointing down means "expanded, content
+                        // is right below"; rotated to point right means
+                        // "collapsed, click to reveal".
+                        transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)",
+                        transition: "transform 0.15s ease",
+                      }}
+                    >
+                      <Icon name="chevronDown" size={14} />
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {isExpanded && !collapsed && (
                 <div
                   className={css`
                     padding-left: ${ACCENT_WIDTH}px;

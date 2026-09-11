@@ -1,4 +1,4 @@
-import { Button, Flexbox, ListRow, MenuItem, Text } from "bluestar";
+import { Flexbox, ListRow, MenuItem, Text } from "bluestar";
 import { formatRelativeTime } from "./usageHelpers";
 import type { ChatState } from "./useChat";
 
@@ -10,18 +10,16 @@ const RECENT_LIMIT = 5;
 
 /**
  * `expandedContent` for the "Chat" item in App.tsx's `SideNav` -- shown
- * indented below it while Chat is the active tab. New chat first (the
- * primary action), then the most recent chats, then a link to the full
- * list (`AllChatsPage`) for anything older.
+ * indented below it while Chat is the active tab: the most recent chats,
+ * then a link to the full list (`AllChatsPage`) for anything older. "New
+ * chat" lives on the row itself (the item's `action`), not in here -- it's
+ * a quick action that shouldn't require expanding the section first.
  */
 export function ChatHistoryList({ chat }: { chat: ChatState }) {
   const recent = (chat.chats ?? []).slice(0, RECENT_LIMIT);
 
   return (
     <Flexbox direction="column" gap={4} style={{ padding: "4px 0 8px" }}>
-      <div style={{ padding: "0 4px" }}>
-        <Button label="New chat" variant="creation" density="dense" onClick={chat.newChat} />
-      </div>
       {chat.chats === null ? (
         <div style={{ padding: "4px 8px" }}>
           <Text variant="caption">Loading…</Text>

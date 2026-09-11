@@ -7,7 +7,6 @@ import Flexbox from "../../layout/Flexbox/Flexbox";
 import Avatar from "../../display/Avatar/Avatar";
 import ThemeToggle from "../ThemeToggle/ThemeToggle";
 import ListRow from "../ListRow/ListRow";
-import Button from "../../buttons/Button/Button";
 
 const meta = {
   title: "Navigation/SideNav",
@@ -123,7 +122,6 @@ function ExpandedContentDemo() {
             icon: "chat",
             expandedContent: (
               <Flexbox direction="column" gap={4} style={{ padding: "4px 0" }}>
-                <Button label="New chat" variant="creation" density="dense" onClick={() => {}} />
                 {recentChats.map((title, i) => (
                   <ListRow
                     key={title}
@@ -138,6 +136,7 @@ function ExpandedContentDemo() {
                 </Text>
               </Flexbox>
             ),
+            action: { icon: "plus", label: "New chat", onClick: () => {} },
           },
           { key: "playground", label: "Playground", icon: "search" },
           { key: "keys", label: "Keys", icon: "settings" },
@@ -170,7 +169,7 @@ export const WithExpandedContent: Story = {
     docs: {
       description: {
         story:
-          "An item's `expandedContent` renders indented directly below it while it's the active one — a short sub-section (a page's own top few things to jump to) rather than a whole second panel. `items` still keeps its natural top-aligned position, with `footer` pinned to the bottom; a long list belongs on its own page (linked from here, e.g. \"Show all chats\") rather than trying to make this scroll on its own.",
+          'An item\'s `expandedContent` renders indented directly below it while it\'s the active one — a short sub-section (a page\'s own top few things to jump to) rather than a whole second panel. `items` still keeps its natural top-aligned position, with `footer` pinned to the bottom; a long list belongs on its own page (linked from here, e.g. "Show all chats") rather than trying to make this scroll on its own. `expandedContent` also adds a trailing chevron that toggles it independent of navigation, and `action` (here, "New chat") adds a quick-action icon button beside it that never requires expanding the section first.',
       },
     },
   },
