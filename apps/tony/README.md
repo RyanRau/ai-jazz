@@ -5,15 +5,21 @@ A side nav switches between four pages:
 
 - **Chat** — persistent, multi-turn conversations, backed by
   `apps/pocketbase/pb_hooks/chat.pb.js` and gateway.py's `/v1/chat/send`.
-  Recent chats live in the side nav itself (`src/ChatHistoryList.tsx`,
-  rendered in `SideNav`'s `top` slot — see `packages/PACKAGES.md` on why
-  that slot, not a separate page-level panel, is where an unbounded list
-  belongs), with the thread itself in `src/ChatPage.tsx`. Both share one
-  `src/useChat.ts` instance, created once in `App.tsx`. Generation runs as a
-  background task independent of the browser tab (see `_generate_chat_response`
-  in the gateway), so a message keeps going and gets saved even if you close
-  it; replies render as markdown (`bluestar`'s `Markdown`/`ChatBubble`),
-  code blocks included.
+  Recent chats live in the side nav itself: the "Chat" item's
+  `expandedContent` (`src/ChatHistoryList.tsx`) shows the 5 most recent
+  chats and a "Show all chats" row, toggled independently of navigation by
+  a trailing chevron; a separate "New chat" `action` on the row itself (a
+  small `+` icon button, next to the chevron) starts a new thread without
+  requiring the section to be expanded first — see `packages/PACKAGES.md`
+  on why an item's own `expandedContent`, not a separate page-level panel,
+  is where a page's short list of things to jump to belongs, and why it's
+  capped rather than unbounded (the full list is `src/AllChatsPage.tsx`,
+  one click away). The thread itself is
+  `src/ChatPage.tsx`; all three share one `src/useChat.ts` instance, created
+  once in `App.tsx`. Generation runs as a background task independent of
+  the browser tab (see `_generate_chat_response` in the gateway), so a
+  message keeps going and gets saved even if you close it; replies render
+  as markdown (`bluestar`'s `Markdown`/`ChatBubble`), code blocks included.
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
   browser, the same as any other API client. Model is a dropdown populated

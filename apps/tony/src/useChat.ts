@@ -75,6 +75,11 @@ export function useChat() {
   const [chats, setChats] = useState<ChatSummary[] | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // "all" is the full-list page (AllChatsPage), reached from the "Show all
+  // chats" row in SideNav's expandedContent -- selecting a chat or starting
+  // a new one always drops back to "thread", the same way clicking either
+  // one already clears `messages`.
+  const [chatsView, setChatsView] = useState<"thread" | "all">("thread");
 
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -163,12 +168,22 @@ export function useChat() {
     setSelectedChatId(null);
     setDraft("");
     setError(null);
+    setChatsView("thread");
   }
 
   function selectChat(id: string) {
     abortRef.current?.abort();
     setMessages([]);
     setSelectedChatId(id);
+    setChatsView("thread");
+  }
+
+  function showAllChats() {
+    setChatsView("all");
+  }
+
+  function backToThread() {
+    setChatsView("thread");
   }
 
   async function sendWith(key: string, retryOn401: boolean): Promise<void> {
@@ -334,6 +349,9 @@ export function useChat() {
     chats,
     selectedChatId,
     selectedChat,
+    chatsView,
+    showAllChats,
+    backToThread,
     messages,
     draft,
     setDraft,

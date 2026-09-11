@@ -121,15 +121,22 @@ export default function Dropdown(props: DropdownProps) {
               aria-expanded={open}
               aria-invalid={invalid || undefined}
               aria-describedby={describedBy}
-              className={css`
-                ${base}
+              // Two space-joined class names, not `base` interpolated inside
+              // this `css` template -- `base` is already a generated class
+              // name (controlClass's own `css` output), and embedding a
+              // class name as literal text inside another `css` template is
+              // invalid CSS that goober silently drops. See
+              // TextAreaInput.tsx's own version of this comment for the
+              // user-visible fallout (the browser's default styling instead
+              // of the theme's) the same mistake caused there.
+              className={`${base} ${css`
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 gap: 8px;
                 cursor: ${isDisabled ? "not-allowed" : "pointer"};
                 text-align: left;
-              `}
+              `}`}
             >
               <span
                 style={{
