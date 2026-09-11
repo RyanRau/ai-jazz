@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { css } from "goober";
 import {
   AppShell,
-  Button,
   Card,
   EmptyState,
   Flexbox,
@@ -16,6 +15,7 @@ import {
 } from "bluestar";
 import type { SideNavItem } from "bluestar";
 import { useAuthRecord } from "./useAuth";
+import { Landing } from "./Landing";
 import { LoginForm } from "./LoginForm";
 import { AccountMenu, CollapsedAccountMenu } from "./AccountMenu";
 import { AppSwitcher } from "./AppSwitcher";
@@ -104,18 +104,14 @@ function App() {
     );
   }
 
-  // The eventual resume — public regardless of sign-in state. Signed in
-  // adds the sidebar (Apps, Settings, Admin) around it; signed out it's
-  // just this.
-  const landing = (
+  // Signed-in dashboard root, inside the app shell's sidebar (Apps, Settings,
+  // Admin). Signed-out visitors get the public Landing page instead, below.
+  const dashboardHome = (
     <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
       <Card padding={24}>
         <Flexbox direction="column" gap={8}>
           <Header variant="hero">Howdy 🤠</Header>
-          <Text variant="body">
-            Welcome! This is Ryan Rau's site.
-            {!record && " Sign in to reach the dashboard and its apps."}
-          </Text>
+          <Text variant="body">Welcome back!</Text>
         </Flexbox>
       </Card>
     </Flexbox>
@@ -123,23 +119,13 @@ function App() {
 
   if (!record) {
     return (
-      <AppShell
-        title="Ryan Rau"
-        account={
-          <Button
-            label="Sign in"
-            variant="secondary"
-            density="dense"
-            onClick={() => setLoginOpen(true)}
-          />
-        }
-      >
-        {landing}
+      <>
+        <Landing onSignIn={() => setLoginOpen(true)} />
 
         <Modal isOpen={loginOpen} onClose={() => setLoginOpen(false)} title="Sign in">
           <LoginForm onSuccess={() => setLoginOpen(false)} />
         </Modal>
-      </AppShell>
+      </>
     );
   }
 
@@ -230,7 +216,7 @@ function App() {
     );
   }
 
-  return <AppShell sideNav={sideNav}>{landing}</AppShell>;
+  return <AppShell sideNav={sideNav}>{dashboardHome}</AppShell>;
 }
 
 export default App;

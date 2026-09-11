@@ -3,11 +3,23 @@
 The personal site at [ryanzrau.dev](https://ryanzrau.dev) — the root-domain app
 (`subdomain: ""` in the repo-root `deploy.yml`).
 
-The site's `AppShell` header (title left, an account control right) is
-present whether or not you're signed in — signed out, the right slot holds a
-"Sign in" button that opens a `LoginForm` modal; signed in, it's the same
-`AccountMenu` every other app uses. Either way the page body is just a short
-welcome message — there's no app-specific content or data yet beyond auth.
+Signed out, visitors get `Landing.tsx` — a warm "nature journal" personal-site
+page (bio, experience, skills, personal projects, hobbies) that intentionally
+sits outside bluestar's dashboard look; a "Sign in" control opens a
+`LoginForm` modal. Signed in, the `AppShell` sidebar (Apps, Settings, Admin)
+takes over and the root path shows a short dashboard welcome instead.
+
+The Personal Projects section fetches `GET /api/custom/public-apps`
+(`apps/pocketbase/pb_hooks/registry_public.pb.js`) — the subset of
+PocketBase's `registry_apps` collection marked `public: true`
+(`apps/pocketbase/pb_migrations/1789099600_registry_apps_public.js`). This is
+the same catalog that backs the signed-in Apps dashboard; `registry_apps`
+itself still requires auth to read (`listRule`), so this route serves just
+the public rows without loosening that. The landing page draws its own
+custom SVG icon per app slug (`projectIcons` in `Landing.tsx`) rather than
+reusing the emoji `registry_apps` stores for the dashboard — a slug with no
+matching icon falls back to a generic mark. Mark a new app public in the
+Admin UI (`registry_apps` → the app's row → `public`) to add it here.
 
 ## Local development
 
