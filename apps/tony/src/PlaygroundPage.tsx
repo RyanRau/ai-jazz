@@ -271,126 +271,143 @@ export function PlaygroundPage() {
   }
 
   return (
-    <Card padding={24}>
-      <Flexbox direction="column" gap={16}>
+    <Flexbox direction="column" gap={16}>
+      <Flexbox direction="column" gap={4}>
         <Header variant="h2">Playground</Header>
         <Text variant="caption">
           Sends one chat completion directly to {GATEWAY_URL}, authenticated as you. Usage shows up
           on the Keys page under your default key, which can't be revoked from under this page.
         </Text>
-        {modelList ? (
-          <Dropdown
-            label="Model"
-            options={[
-              { label: "Gateway default", value: "" },
-              ...modelList.map((m) => ({
-                label: m.vision ? `${m.id} (vision)` : m.id,
-                value: m.id,
-              })),
-            ]}
-            value={model}
-            onChange={onModelChange}
-          />
-        ) : (
-          <TextInput
-            label="Model"
-            value={model}
-            onChange={setModel}
-            placeholder="leave blank for the gateway's default"
-          />
-        )}
-        <TextAreaInput
-          label="Prompt"
-          value={prompt}
-          onChange={setPrompt}
-          rows={6}
-          placeholder="Ask it something"
-        />
-        <FileDropzone
-          label="Image (optional)"
-          value={image}
-          onChange={setImage}
-          accept="image/*"
-          isDisabled={visionUnsupported}
-          warning={visionUnsupported ? `"${model}" doesn't support image input.` : undefined}
-        />
-
-        <Flexbox direction="column" gap={12}>
-          <Text variant="label">Parameters</Text>
-          <Flexbox gap={12} flexWrap="wrap">
-            <div style={{ width: 160 }}>
-              <NumberInput
-                label="Temperature"
-                value={temperature}
-                onChange={setTemperature}
-                min={0}
-                max={2}
-                step={0.1}
-                placeholder="default"
-              />
-            </div>
-            <div style={{ width: 160 }}>
-              <NumberInput
-                label="Max tokens"
-                value={maxTokens}
-                onChange={setMaxTokens}
-                min={1}
-                placeholder="default"
-              />
-            </div>
-            <div style={{ width: 160 }}>
-              <NumberInput
-                label="Top P"
-                value={topP}
-                onChange={setTopP}
-                min={0}
-                max={1}
-                step={0.05}
-                placeholder="default"
-              />
-            </div>
-          </Flexbox>
-          <Switch
-            label="Stream response"
-            value={streamEnabled}
-            onChange={setStreamEnabled}
-            description="Read the reply as it's generated instead of waiting for the whole thing."
-          />
-          <TextAreaInput
-            label="Advanced params (JSON, optional)"
-            value={advancedParamsText}
-            onChange={setAdvancedParamsText}
-            rows={2}
-            placeholder='e.g. {"reasoning_budget": 1024, "min_p": 0.05, "seed": 42}'
-            description="Merged into the request body -- anything your llama-server build accepts passes straight through. Context size is fixed per model in the gateway's config, not something a request can override."
-          />
-        </Flexbox>
-
-        <Flexbox gap={8} alignItems="center">
-          <Button
-            label={sending ? "Sending…" : "Send"}
-            onClick={send}
-            isDisabled={sending || !apiKey || !prompt}
-          />
-          {!sending && elapsedMs !== null && (
-            <Text variant="caption">
-              {formatElapsed(elapsedMs)}
-              {usage &&
-                ` · ${usage.tokens_in.toLocaleString()} in · ${usage.tokens_out.toLocaleString()} out`}
-            </Text>
-          )}
-        </Flexbox>
-        {error && (
-          <Alert variant="error" title="Request failed">
-            {error}
-          </Alert>
-        )}
-        {response && (
-          <Card padding={12}>
-            <Markdown content={response} />
-          </Card>
-        )}
       </Flexbox>
-    </Card>
+
+      <Flexbox gap={20} flexWrap="wrap" alignItems="flex-start">
+        <div style={{ flex: "1 1 380px", minWidth: 320 }}>
+          <Card padding={24}>
+            <Flexbox direction="column" gap={16}>
+              {modelList ? (
+                <Dropdown
+                  label="Model"
+                  options={[
+                    { label: "Gateway default", value: "" },
+                    ...modelList.map((m) => ({
+                      label: m.vision ? `${m.id} (vision)` : m.id,
+                      value: m.id,
+                    })),
+                  ]}
+                  value={model}
+                  onChange={onModelChange}
+                />
+              ) : (
+                <TextInput
+                  label="Model"
+                  value={model}
+                  onChange={setModel}
+                  placeholder="leave blank for the gateway's default"
+                />
+              )}
+              <TextAreaInput
+                label="Prompt"
+                value={prompt}
+                onChange={setPrompt}
+                rows={6}
+                placeholder="Ask it something"
+              />
+              <FileDropzone
+                label="Image (optional)"
+                value={image}
+                onChange={setImage}
+                accept="image/*"
+                isDisabled={visionUnsupported}
+                warning={visionUnsupported ? `"${model}" doesn't support image input.` : undefined}
+              />
+
+              <Flexbox direction="column" gap={12}>
+                <Text variant="label">Parameters</Text>
+                <Flexbox gap={12} flexWrap="wrap">
+                  <div style={{ width: 130 }}>
+                    <NumberInput
+                      label="Temperature"
+                      value={temperature}
+                      onChange={setTemperature}
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      placeholder="default"
+                    />
+                  </div>
+                  <div style={{ width: 130 }}>
+                    <NumberInput
+                      label="Max tokens"
+                      value={maxTokens}
+                      onChange={setMaxTokens}
+                      min={1}
+                      placeholder="default"
+                    />
+                  </div>
+                  <div style={{ width: 130 }}>
+                    <NumberInput
+                      label="Top P"
+                      value={topP}
+                      onChange={setTopP}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      placeholder="default"
+                    />
+                  </div>
+                </Flexbox>
+                <Switch
+                  label="Stream response"
+                  value={streamEnabled}
+                  onChange={setStreamEnabled}
+                  description="Read the reply as it's generated instead of waiting for the whole thing."
+                />
+                <TextAreaInput
+                  label="Advanced params (JSON, optional)"
+                  value={advancedParamsText}
+                  onChange={setAdvancedParamsText}
+                  rows={2}
+                  placeholder='e.g. {"reasoning_budget": 1024, "min_p": 0.05, "seed": 42}'
+                  description="Merged into the request body -- anything your llama-server build accepts passes straight through. Context size is fixed per model in the gateway's config, not something a request can override."
+                />
+              </Flexbox>
+
+              <Button
+                label={sending ? "Sending…" : "Send"}
+                onClick={send}
+                isDisabled={sending || !apiKey || !prompt}
+              />
+            </Flexbox>
+          </Card>
+        </div>
+
+        <div style={{ flex: "2 1 420px", minWidth: 320 }}>
+          <Card padding={24}>
+            <Flexbox direction="column" gap={16}>
+              <Flexbox justifyContent="space-between" alignItems="center">
+                <Header variant="h3">Response</Header>
+                {!sending && elapsedMs !== null && (
+                  <Text variant="caption">
+                    {formatElapsed(elapsedMs)}
+                    {usage &&
+                      ` · ${usage.tokens_in.toLocaleString()} in · ${usage.tokens_out.toLocaleString()} out`}
+                  </Text>
+                )}
+              </Flexbox>
+              {error && (
+                <Alert variant="error" title="Request failed">
+                  {error}
+                </Alert>
+              )}
+              {response ? (
+                <Markdown content={response} />
+              ) : (
+                !error && <Text variant="caption">Send a prompt to see the response here.</Text>
+              )}
+            </Flexbox>
+          </Card>
+        </div>
+      </Flexbox>
+    </Flexbox>
   );
 }

@@ -741,19 +741,19 @@ Native anchor props plus `variant` (`"primary" | "muted"`) and `external` (adds
 
 #### `AppShell`
 
-| Prop          | Type        | Default  |
-| ------------- | ----------- | -------- |
-| `title`       | `string`    | —        |
-| `appSwitcher` | `ReactNode` | —        |
-| `nav`         | `ReactNode` | —        |
-| `account`     | `ReactNode` | —        |
-| `sideNav`     | `ReactNode` | —        |
-| `children`    | `ReactNode` | required |
-| `footer`      | `ReactNode` | —        |
-| `maxWidth`    | `number`    | `960`    |
+| Prop          | Type        | Default   |
+| ------------- | ----------- | --------- |
+| `title`       | `string`    | —         |
+| `appSwitcher` | `ReactNode` | —         |
+| `nav`         | `ReactNode` | —         |
+| `account`     | `ReactNode` | —         |
+| `sideNav`     | `ReactNode` | —         |
+| `children`    | `ReactNode` | required  |
+| `footer`      | `ReactNode` | —         |
+| `maxWidth`    | `number`    | see below |
 
 Full-width header (title pinned left, `nav` then `account` pinned right —
-`account` is always the rightmost element), centred content column below it,
+`account` is always the rightmost element), a content region below it,
 optional footer. **The header only renders at all when it has something to
 show** — `title`, `appSwitcher`, `nav`, or `account`. An app whose branding
 and app switcher already live in `SideNav`'s own `top` slot (see below) has
@@ -761,6 +761,20 @@ no reason to pass any of these, and gets no header at all: just the rail and
 content, without a second bar repeating the same app name above it. `title`
 without a `sideNav` (e.g. a public landing page with nothing to switch
 between) still works exactly as before — pass it and the header renders.
+
+**`maxWidth` defaults differently depending on `sideNav`.** With no
+`sideNav`, it defaults to `960` — a plain page (a document, a form, a
+landing page) reads better as a centred reading column than stretched edge
+to edge. With `sideNav` given, it defaults to unset — a dashboard shell's
+content isn't a document, and it's already flanked by the rail on one
+side, so capping it too just wastes the rest of the viewport instead of
+resembling a centred column. Pass a number either way to override (e.g.
+a settings/profile page still wants a narrow column even inside a
+dashboard shell — see `apps/ryanzrau`'s `/settings` route). A page that
+itself has a comfortable reading width regardless of the shell's own cap
+(a chat thread, say) can add its own inner `max-width` wrapper around just
+that region instead of fighting the shell's default — see
+`apps/tony/src/ChatPage.tsx`.
 
 `sideNav` (typically a `SideNav`) is locked to the true left edge, below the
 header (if any), spanning its own full height — not inside the centred

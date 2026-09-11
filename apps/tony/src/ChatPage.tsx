@@ -84,111 +84,120 @@ export function ChatPage({ chat }: { chat: ChatState }) {
           ) : null)}
       </Flexbox>
 
-      <Flexbox direction="column" gap={12}>
-        {messages.length === 0 ? (
-          <EmptyState
-            title={selectedChat ? "No messages" : "Start a new chat"}
-            description="Send a message below to begin."
-          />
-        ) : (
-          messages.map((m) => {
-            const isUser = m.role === "user";
-            const meta = [
-              formatMessageTime(m.created),
-              m.role === "assistant" &&
-                m.status === "complete" &&
-                m.tokens_in > 0 &&
-                `${m.tokens_in.toLocaleString()} in`,
-              m.role === "assistant" &&
-                m.status === "complete" &&
-                m.tokens_out > 0 &&
-                `${m.tokens_out.toLocaleString()} out`,
-              m.role === "assistant" &&
-                m.status === "complete" &&
-                m.response_ms > 0 &&
-                formatElapsed(m.response_ms),
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            const toolCount = m.tool_calls.length;
-
-            return (
-              <Flexbox key={m.id} direction="column" gap={4}>
-                <ChatBubble role={m.role} content={m.content} status={m.status} />
-                {meta && (
-                  <Flexbox justifyContent={isUser ? "flex-end" : "flex-start"}>
-                    <Text variant="caption" color={theme.colors.textMuted}>
-                      {meta}
-                    </Text>
-                  </Flexbox>
-                )}
-                {toolCount > 0 && (
-                  <Disclosure label={`${toolCount} tool${toolCount === 1 ? "" : "s"} used`}>
-                    <Flexbox direction="column" gap={8}>
-                      {m.tool_calls.map((tc, i) => (
-                        <Flexbox key={i} direction="column" gap={4}>
-                          <Text variant="caption">Searched the web: "{tc.query}"</Text>
-                          {tc.results.length > 0 && (
-                            <Flexbox direction="row" gap={12} flexWrap="wrap">
-                              {tc.results.map((r) => (
-                                <Link key={r.url} href={r.url} external variant="muted">
-                                  <Text variant="caption">{r.title}</Text>
-                                </Link>
-                              ))}
-                            </Flexbox>
-                          )}
-                        </Flexbox>
-                      ))}
-                    </Flexbox>
-                  </Disclosure>
-                )}
-              </Flexbox>
-            );
-          })
-        )}
-        <div ref={threadEndRef} />
-      </Flexbox>
-
-      <div
-        className={css`
-          position: sticky;
-          bottom: 0;
-          background-color: ${theme.colors.background};
-          border-top: 1px solid ${theme.colors.border};
-          padding-top: 12px;
-        `}
-      >
-        <Flexbox direction="column" gap={8}>
-          <TextAreaInput
-            label="Message"
-            description="Enter to send, Shift+Enter for a new line"
-            value={draft}
-            onChange={setDraft}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (!sending && apiKey && draft.trim()) send();
-              }
-            }}
-            rows={3}
-            placeholder="Ask it something"
-            isDisabled={sending}
-          />
-          <Flexbox gap={8} alignItems="center">
-            <Button
-              label={sending ? "Sending…" : "Send"}
-              onClick={send}
-              isDisabled={sending || !apiKey || !draft.trim()}
+      {/* The thread reads better as a comfortable column even in a
+          full-width shell -- a chat feed and composer stretched edge to
+          edge is uncomfortable to read/type in, unlike Playground's
+          side-by-side panels or Keys' tables, which actually want the
+          extra width. Just this inner region (messages + composer) is
+          capped; the header above (title, model picker) stays pinned to
+          the shell's own full-width edges. */}
+      <div style={{ maxWidth: 840, width: "100%", margin: "0 auto" }}>
+        <Flexbox direction="column" gap={12}>
+          {messages.length === 0 ? (
+            <EmptyState
+              title={selectedChat ? "No messages" : "Start a new chat"}
+              description="Send a message below to begin."
             />
-            {generating && !sending && (
-              <Flexbox gap={4} alignItems="center">
-                <Spinner size={14} />
-                <Text variant="caption">Still generating…</Text>
-              </Flexbox>
-            )}
-          </Flexbox>
-          {error && <Text color={theme.colors.error}>{error}</Text>}
+          ) : (
+            messages.map((m) => {
+              const isUser = m.role === "user";
+              const meta = [
+                formatMessageTime(m.created),
+                m.role === "assistant" &&
+                  m.status === "complete" &&
+                  m.tokens_in > 0 &&
+                  `${m.tokens_in.toLocaleString()} in`,
+                m.role === "assistant" &&
+                  m.status === "complete" &&
+                  m.tokens_out > 0 &&
+                  `${m.tokens_out.toLocaleString()} out`,
+                m.role === "assistant" &&
+                  m.status === "complete" &&
+                  m.response_ms > 0 &&
+                  formatElapsed(m.response_ms),
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              const toolCount = m.tool_calls.length;
+
+              return (
+                <Flexbox key={m.id} direction="column" gap={4}>
+                  <ChatBubble role={m.role} content={m.content} status={m.status} />
+                  {meta && (
+                    <Flexbox justifyContent={isUser ? "flex-end" : "flex-start"}>
+                      <Text variant="caption" color={theme.colors.textMuted}>
+                        {meta}
+                      </Text>
+                    </Flexbox>
+                  )}
+                  {toolCount > 0 && (
+                    <Disclosure label={`${toolCount} tool${toolCount === 1 ? "" : "s"} used`}>
+                      <Flexbox direction="column" gap={8}>
+                        {m.tool_calls.map((tc, i) => (
+                          <Flexbox key={i} direction="column" gap={4}>
+                            <Text variant="caption">Searched the web: "{tc.query}"</Text>
+                            {tc.results.length > 0 && (
+                              <Flexbox direction="row" gap={12} flexWrap="wrap">
+                                {tc.results.map((r) => (
+                                  <Link key={r.url} href={r.url} external variant="muted">
+                                    <Text variant="caption">{r.title}</Text>
+                                  </Link>
+                                ))}
+                              </Flexbox>
+                            )}
+                          </Flexbox>
+                        ))}
+                      </Flexbox>
+                    </Disclosure>
+                  )}
+                </Flexbox>
+              );
+            })
+          )}
+          <div ref={threadEndRef} />
         </Flexbox>
+
+        <div
+          className={css`
+            position: sticky;
+            bottom: 0;
+            background-color: ${theme.colors.background};
+            border-top: 1px solid ${theme.colors.border};
+            padding-top: 12px;
+          `}
+        >
+          <Flexbox direction="column" gap={8}>
+            <TextAreaInput
+              label="Message"
+              description="Enter to send, Shift+Enter for a new line"
+              value={draft}
+              onChange={setDraft}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!sending && apiKey && draft.trim()) send();
+                }
+              }}
+              rows={3}
+              placeholder="Ask it something"
+              isDisabled={sending}
+            />
+            <Flexbox gap={8} alignItems="center">
+              <Button
+                label={sending ? "Sending…" : "Send"}
+                onClick={send}
+                isDisabled={sending || !apiKey || !draft.trim()}
+              />
+              {generating && !sending && (
+                <Flexbox gap={4} alignItems="center">
+                  <Spinner size={14} />
+                  <Text variant="caption">Still generating…</Text>
+                </Flexbox>
+              )}
+            </Flexbox>
+            {error && <Text color={theme.colors.error}>{error}</Text>}
+          </Flexbox>
+        </div>
       </div>
     </Flexbox>
   );
