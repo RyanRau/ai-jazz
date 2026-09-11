@@ -12,6 +12,15 @@ export type TextInputProps = FormFieldProps & {
   /** Value is shown and selectable but not editable — for a copyable
    *  read-only field like a generated link. Defaults to `false`. */
   readOnly?: boolean;
+  /**
+   * The HTML `autocomplete` hint (e.g. `"email"`, `"current-password"`,
+   * `"new-password"`). Password managers key off this far more reliably
+   * than off `type`/`name` alone — without it, autofill (including inside a
+   * `Modal`'s `<dialog>`, which otherwise behaves like any other form) can
+   * silently fail to offer saved credentials. Omit only for a field that
+   * genuinely isn't part of a login/identity flow.
+   */
+  autoComplete?: string;
 };
 
 export default function TextInput({
@@ -27,6 +36,7 @@ export default function TextInput({
   type = "text",
   isDisabled,
   readOnly,
+  autoComplete,
 }: TextInputProps) {
   const theme = useTheme();
 
@@ -49,6 +59,7 @@ export default function TextInput({
           disabled={isDisabled}
           readOnly={readOnly}
           required={required}
+          autoComplete={autoComplete}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
           className={controlClass(theme, { invalid, warning: Boolean(warning) })}

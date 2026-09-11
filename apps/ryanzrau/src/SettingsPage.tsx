@@ -136,18 +136,21 @@ export function SettingsPage({ record }: { record: RecordModel }) {
               {...passwordForm.field("oldPassword")}
               label="Current password"
               type="password"
+              autoComplete="current-password"
               required
             />
             <TextInput
               {...passwordForm.field("password")}
               label="New password"
               type="password"
+              autoComplete="new-password"
               required
             />
             <TextInput
               {...passwordForm.field("passwordConfirm")}
               label="Confirm new password"
               type="password"
+              autoComplete="new-password"
               required
             />
             <SubmitButton label="Update password" />

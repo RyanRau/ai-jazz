@@ -88,11 +88,15 @@ function readStored(storageKey: string | null | undefined, defaultCollapsed: boo
 }
 
 /**
- * Set by `AppShell` around the copy of `sideNav` it renders inside the
+ * Set by `AppShell` around the copy of `sideNav` it renders inside its own
  * mobile drawer (never the permanent desktop rail) — full-width and
  * always-expanded there isn't a `SideNav` prop apps pass themselves, it's
  * purely a function of which of AppShell's two rendering contexts a given
- * instance is in.
+ * instance is in. Exported so a page that renders `SideNav` inside its own
+ * overlay instead of `AppShell` (e.g. a custom, non-`AppShell` layout that
+ * still wants the same "hamburger opens the app's nav" pattern) can opt into
+ * the same full-width, non-collapsible treatment by wrapping its `SideNav`
+ * in `<SideNavMobileContext.Provider value={true}>`.
  */
 export const SideNavMobileContext = createContext(false);
 

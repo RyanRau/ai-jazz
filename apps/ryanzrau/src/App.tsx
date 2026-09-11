@@ -3,12 +3,14 @@ import { css } from "goober";
 import {
   AppShell,
   Card,
+  Drawer,
   EmptyState,
   Flexbox,
   Header,
   Link,
   Modal,
   SideNav,
+  SideNavMobileContext,
   Spinner,
   Text,
   breakpoints,
@@ -71,6 +73,7 @@ const onActivatePath = window.location.pathname === "/activate";
 function App() {
   const record = useAuthRecord();
   const [loginOpen, setLoginOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [apps, setApps] = useState<GrantedApp[] | null>(null);
 
   useEffect(() => {
@@ -103,19 +106,6 @@ function App() {
       </Flexbox>
     );
   }
-
-  // Signed-in dashboard root, inside the app shell's sidebar (Apps, Settings,
-  // Admin). Signed-out visitors get the public Landing page instead, below.
-  const dashboardHome = (
-    <Flexbox direction="column" alignItems="center" gap={24} style={{ padding: 32 }}>
-      <Card padding={24}>
-        <Flexbox direction="column" gap={8}>
-          <Header variant="hero">Howdy 🤠</Header>
-          <Text variant="body">Welcome back!</Text>
-        </Flexbox>
-      </Card>
-    </Flexbox>
-  );
 
   if (!record) {
     return (
@@ -216,7 +206,18 @@ function App() {
     );
   }
 
-  return <AppShell sideNav={sideNav}>{dashboardHome}</AppShell>;
+  // Root path, signed in: the same public Landing page signed-out visitors
+  // see (this is ryanzrau.dev's home either way), with a hamburger opening
+  // the dashboard nav in an overlay instead of a permanent sideNav rail.
+  return (
+    <>
+      <Landing signedIn onOpenMenu={() => setNavOpen(true)} />
+
+      <Drawer isOpen={navOpen} onClose={() => setNavOpen(false)} title="Menu">
+        <SideNavMobileContext.Provider value={true}>{sideNav}</SideNavMobileContext.Provider>
+      </Drawer>
+    </>
+  );
 }
 
 export default App;
