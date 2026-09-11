@@ -29,6 +29,23 @@ A side nav switches between four pages:
   under its message as a `Disclosure` — "N tools used", collapsed by
   default — rather than an always-open block, since the query/results are
   useful to check but not something worth taking up space by default.
+  With no chat selected, the page is a large centred greeting and composer
+  (Claude's own new-chat screen was the direct reference) rather than a
+  mostly-empty thread view; once the first message sends, `useChat`
+  optimistically selects the new chat and the page drops into the normal
+  thread layout below. Once a chat exists, its title is inline-editable
+  (click it, Enter to save, Escape to cancel) and its model is a `Dropdown`
+  in the header — both PATCH `POST /api/custom/llm/chats/update`, which
+  changes what the _next_ message in that chat uses (`useChat`'s
+  `sendWith` always sends with the chat's own saved `model`, never the
+  page-level picker once a chat exists). Deleting a chat
+  (`POST /api/custom/llm/chats/delete`, which also removes its
+  `llm_chat_messages` rows since the relation isn't cascade-delete) sits
+  behind a `ConfirmDialog`, the same pattern Keys uses for revoking a key.
+  The composer stays pinned to the bottom of the viewport even for a short
+  or empty thread (`flex: 1` on the message list, not just
+  `position: sticky` on the composer, which only "sticks" once there's
+  enough content to scroll).
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
   browser, the same as any other API client. Model is a dropdown populated

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useToast } from "bluestar";
 import { pb } from "./pb";
 import { useAuthRecord } from "./useAuth";
 import { useGatewayAuth } from "./useGatewayAuth";
@@ -67,6 +68,7 @@ export function useChat() {
   // that only ever mounted post-login.
   const record = useAuthRecord();
   const { apiKey, recoverFromUnauthorized } = useGatewayAuth();
+  const toast = useToast();
 
   const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
   const [model, setModel] = useState("");
@@ -183,6 +185,31 @@ export function useChat() {
 
   function backToThread() {
     setChatsView("thread");
+  }
+
+  async function renameChat(id: string, title: string) {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    setChats((prev) => prev?.map((c) => (c.id === id ? { ...c, title: trimmed } : c)) ?? prev);
+    await pb.send("/api/custom/llm/chats/update", {
+      method: "POST",
+      body: { chat_id: id, title: trimmed },
+    });
+  }
+
+  async function updateChatModel(id: string, newModel: string) {
+    setChats((prev) => prev?.map((c) => (c.id === id ? { ...c, model: newModel } : c)) ?? prev);
+    await pb.send("/api/custom/llm/chats/update", {
+      method: "POST",
+      body: { chat_id: id, model: newModel },
+    });
+  }
+
+  async function deleteChat(id: string) {
+    await pb.send("/api/custom/llm/chats/delete", { method: "POST", body: { chat_id: id } });
+    setChats((prev) => prev?.filter((c) => c.id !== id) ?? prev);
+    if (id === selectedChatId) newChat();
+    toast.success("Chat deleted");
   }
 
   async function sendWith(key: string, retryOn401: boolean): Promise<void> {
@@ -357,6 +384,9 @@ export function useChat() {
     send,
     newChat,
     selectChat,
+    renameChat,
+    updateChatModel,
+    deleteChat,
     generating,
     threadEndRef,
   };

@@ -48,6 +48,84 @@ routerAdd(
   $apis.requireAuth()
 );
 
+// Rename a chat and/or change which model its next turn uses. Body:
+// { chat_id, title?, model? } -- either or both. Ownership-checked the same
+// way as the messages route below.
+routerAdd(
+  "POST",
+  "/api/custom/llm/chats/update",
+  (e) => {
+    const auth = e.requestInfo().auth;
+    if (!auth) {
+      throw new ForbiddenError("Sign-in required.");
+    }
+
+    const body = e.requestInfo().body;
+    const chatId = (body.chat_id || "").trim();
+    if (!chatId) {
+      throw new BadRequestError("chat_id is required.");
+    }
+    const title = typeof body.title === "string" ? body.title.trim() : undefined;
+    const model = typeof body.model === "string" ? body.model.trim() : undefined;
+    if (title === undefined && model === undefined) {
+      throw new BadRequestError("title and/or model is required.");
+    }
+    if (title !== undefined && !title) {
+      throw new BadRequestError("title can't be empty.");
+    }
+
+    const chat = e.app.findRecordById("llm_chats", chatId);
+    if (chat.getString("user") !== auth.id) {
+      throw new ForbiddenError("You don't own this chat.");
+    }
+    if (title !== undefined) chat.set("title", title);
+    if (model !== undefined) chat.set("model", model);
+    e.app.save(chat);
+
+    return e.json(200, {
+      id: chat.id,
+      title: chat.getString("title"),
+      model: chat.getString("model"),
+    });
+  },
+  $apis.requireAuth()
+);
+
+// Delete a chat and everything in it. Body: { chat_id }. The `chat` relation
+// on llm_chat_messages isn't set to cascade-delete, so its rows are removed
+// by hand first -- otherwise they'd linger, orphaned, pointing at a chat
+// that no longer exists.
+routerAdd(
+  "POST",
+  "/api/custom/llm/chats/delete",
+  (e) => {
+    const auth = e.requestInfo().auth;
+    if (!auth) {
+      throw new ForbiddenError("Sign-in required.");
+    }
+
+    const chatId = (e.requestInfo().body.chat_id || "").trim();
+    if (!chatId) {
+      throw new BadRequestError("chat_id is required.");
+    }
+    const chat = e.app.findRecordById("llm_chats", chatId);
+    if (chat.getString("user") !== auth.id) {
+      throw new ForbiddenError("You don't own this chat.");
+    }
+
+    const messages = e.app.findRecordsByFilter("llm_chat_messages", "chat = {:chatId}", "", 0, 0, {
+      chatId: chatId,
+    });
+    for (const message of messages) {
+      e.app.delete(message);
+    }
+    e.app.delete(chat);
+
+    return e.json(200, { id: chatId });
+  },
+  $apis.requireAuth()
+);
+
 // A chat's messages, oldest first, decrypted. ?chat=<id>, required.
 routerAdd(
   "GET",

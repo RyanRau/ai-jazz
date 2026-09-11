@@ -13,6 +13,9 @@ export type TextAreaInputProps = FormFieldProps & {
   /** Passed straight through to the underlying `<textarea>` -- e.g. for a
    * chat composer where Enter submits and Shift+Enter inserts a newline. */
   onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+  /** Focuses the textarea on mount -- e.g. the prominent composer on an
+   *  empty/greeting state, which should be ready to type into right away. */
+  autoFocus?: boolean;
 };
 
 export default function TextAreaInput({
@@ -28,6 +31,8 @@ export default function TextAreaInput({
   rows = 4,
   isDisabled,
   onKeyDown,
+  hideLabel,
+  autoFocus,
 }: TextAreaInputProps) {
   const theme = useTheme();
 
@@ -38,6 +43,7 @@ export default function TextAreaInput({
       warning={warning}
       error={error}
       required={required}
+      hideLabel={hideLabel}
     >
       {({ id, describedBy, invalid }) => (
         <textarea
@@ -50,6 +56,7 @@ export default function TextAreaInput({
           placeholder={placeholder}
           disabled={isDisabled}
           required={required}
+          autoFocus={autoFocus}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
           // Two space-joined class names, not one `css` template with

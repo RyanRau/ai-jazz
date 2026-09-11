@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import { useTheme } from "../../../theme";
 import FormInputLayout from "../FormInputLayout/FormInputLayout";
 import type { FormFieldProps } from "../FormInputLayout/FormInputLayout";
@@ -21,6 +22,16 @@ export type TextInputProps = FormFieldProps & {
    * genuinely isn't part of a login/identity flow.
    */
   autoComplete?: string;
+  /** Passed straight through to the underlying `<input>` -- e.g. for an
+   * inline-editable field where Enter commits and Escape cancels. */
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  /** Focuses the input on mount -- e.g. a field that only appears once a
+   *  "rename"/"edit" action reveals it, which should be ready to type into
+   *  immediately rather than needing a second click. */
+  autoFocus?: boolean;
+  /** Fires on blur -- e.g. an inline-editable field that commits when focus
+   *  leaves it, not just on Enter. */
+  onBlur?: () => void;
 };
 
 export default function TextInput({
@@ -37,6 +48,10 @@ export default function TextInput({
   isDisabled,
   readOnly,
   autoComplete,
+  onKeyDown,
+  hideLabel,
+  autoFocus,
+  onBlur,
 }: TextInputProps) {
   const theme = useTheme();
 
@@ -47,6 +62,7 @@ export default function TextInput({
       warning={warning}
       error={error}
       required={required}
+      hideLabel={hideLabel}
     >
       {({ id, describedBy, invalid }) => (
         <input
@@ -55,11 +71,14 @@ export default function TextInput({
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          onBlur={onBlur}
           placeholder={placeholder}
           disabled={isDisabled}
           readOnly={readOnly}
           required={required}
           autoComplete={autoComplete}
+          autoFocus={autoFocus}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
           className={controlClass(theme, { invalid, warning: Boolean(warning) })}
