@@ -97,6 +97,7 @@ function App() {
               </div>
             </Flexbox>
           }
+          collapsedTop={<AppIcon slug="tony" size={20} />}
           footer={<AccountMenu />}
         />
       }
