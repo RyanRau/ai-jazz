@@ -495,6 +495,20 @@ A label + a large number, for a headline metric that doesn't need a chart
 (e.g. a total). `value` renders with `font-variant-numeric: proportional-nums`
 per the dataviz skill's guidance for standalone big numbers.
 
+#### `Meter`
+
+| Prop          | Type                                     | Default                                 |
+| ------------- | ---------------------------------------- | --------------------------------------- |
+| `label`       | `string`                                 | required                                |
+| `value`       | `number`                                 | required                                |
+| `max`         | `number`                                 | required                                |
+| `formatValue` | `(value: number, max: number) => string` | `"${compact(value)} / ${compact(max)}"` |
+
+A labeled horizontal fill bar for a fixed budget with a hard ceiling --
+context-window usage, a storage quota -- as opposed to `StatTile`'s
+open-ended headline count. Fill color shifts `primary` → `warning` (70%) →
+`error` (90%) on its own; the caller doesn't pick a color.
+
 #### `LineChart`
 
 | Prop          | Type                    | Default              |

@@ -5,22 +5,39 @@ import {
   Button,
   ChatBubble,
   Disclosure,
-  Dropdown,
   EmptyState,
+  FileDropzone,
   Flexbox,
   Header,
   Link,
+  Meter,
   Spinner,
   Text,
   TextAreaInput,
   useTheme,
 } from "bluestar";
 import { formatDate, formatMessageTime } from "./usageHelpers";
-import type { ChatState } from "./useChat";
+import { ModelPickerModal } from "./ModelPickerModal";
+import type { AttachmentRecord, ChatState } from "./useChat";
 
 function formatElapsed(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+/** Client-side download for a generated file's content -- there's no server
+ * route to fetch it from, the text already came down with the message. */
+function downloadAttachment(a: AttachmentRecord) {
+  if (!a.content) return;
+  const blob = new Blob([a.content], { type: a.mime_type || "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = a.filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 /** Edits one chat's system prompt -- `key={chat.id}` at the call site resets
@@ -98,12 +115,31 @@ export function ChatPage({ chat }: { chat: ChatState }) {
     messages,
     draft,
     setDraft,
+    pendingImage,
+    setPendingImage,
+    pendingDocument,
+    setPendingDocument,
+    visionUnsupported,
     sending,
     error,
     send,
     generating,
     threadEndRef,
+    contextUsage,
+    canCompact,
+    compacting,
+    compactChat,
   } = chat;
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Switching to a model that can't take images makes a pending attachment
+  // stale -- clear it here, same as PlaygroundPage's own onModelChange.
+  function onModelChange(value: string | null) {
+    const next = value ?? "";
+    setModel(next);
+    if (modelList?.find((m) => m.id === next)?.vision === false) setPendingImage(null);
+  }
 
   return (
     <Flexbox direction="column" gap={16}>
@@ -120,14 +156,13 @@ export function ChatPage({ chat }: { chat: ChatState }) {
         {!selectedChat &&
           (modelList ? (
             <Flexbox direction="column" gap={8} style={{ width: 240, maxWidth: "100%" }}>
-              <Dropdown
-                label="Model"
-                options={[
-                  { label: "Gateway default", value: "" },
-                  ...modelList.map((m) => ({ label: m.id, value: m.id })),
-                ]}
-                value={model}
-                onChange={(v) => setModel(v ?? "")}
+              <Button
+                label={model || "Gateway default"}
+                aria-label="Choose a model"
+                variant="secondary"
+                appearance="outline"
+                density="dense"
+                onClick={() => setPickerOpen(true)}
               />
               <TextAreaInput
                 label="System prompt (optional)"
@@ -141,6 +176,16 @@ export function ChatPage({ chat }: { chat: ChatState }) {
             </Flexbox>
           ) : null)}
       </Flexbox>
+
+      {modelList && (
+        <ModelPickerModal
+          isOpen={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          models={modelList}
+          value={model}
+          onChange={onModelChange}
+        />
+      )}
 
       {selectedChat && (
         <Disclosure
@@ -224,6 +269,37 @@ export function ChatPage({ chat }: { chat: ChatState }) {
                     </Flexbox>
                   </Disclosure>
                 )}
+                {m.attachments.length > 0 && (
+                  <Flexbox direction="column" gap={4}>
+                    {m.attachments.map((a, i) =>
+                      a.kind === "generated" ? (
+                        <Flexbox
+                          key={i}
+                          direction="row"
+                          gap={8}
+                          alignItems="center"
+                          flexWrap="wrap"
+                        >
+                          <Text variant="caption">{a.filename}</Text>
+                          {a.content ? (
+                            <Button
+                              label="Download"
+                              appearance="text"
+                              density="dense"
+                              onClick={() => downloadAttachment(a)}
+                            />
+                          ) : (
+                            <Text variant="caption">{a.error}</Text>
+                          )}
+                        </Flexbox>
+                      ) : (
+                        <Text key={i} variant="caption">
+                          {a.error ? `${a.filename} -- ${a.error}` : `Attached: ${a.filename}`}
+                        </Text>
+                      )
+                    )}
+                  </Flexbox>
+                )}
               </Flexbox>
             );
           })
@@ -241,6 +317,48 @@ export function ChatPage({ chat }: { chat: ChatState }) {
         `}
       >
         <Flexbox direction="column" gap={8}>
+          {contextUsage && (
+            <Flexbox justifyContent="space-between" alignItems="flex-end" gap={12} flexWrap="wrap">
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <Meter
+                  label="Context used"
+                  value={contextUsage.used}
+                  max={contextUsage.total}
+                  formatValue={(v, m) => `${Math.round((v / m) * 100)}%`}
+                />
+              </div>
+              {canCompact && (
+                <Button
+                  label={compacting ? "Compacting…" : "Compact older messages"}
+                  appearance="text"
+                  density="dense"
+                  onClick={compactChat}
+                  isDisabled={compacting}
+                />
+              )}
+            </Flexbox>
+          )}
+          <Flexbox gap={12} flexWrap="wrap">
+            <div style={{ width: 220, maxWidth: "100%" }}>
+              <FileDropzone
+                label="Image (optional)"
+                value={pendingImage}
+                onChange={setPendingImage}
+                accept="image/*"
+                isDisabled={visionUnsupported}
+                warning={visionUnsupported ? "This model doesn't support image input." : undefined}
+              />
+            </div>
+            <div style={{ width: 220, maxWidth: "100%" }}>
+              <FileDropzone
+                label="Document (optional)"
+                value={pendingDocument}
+                onChange={setPendingDocument}
+                accept=".pdf,.csv,.txt,.md"
+                prompt="Drag a pdf/csv/txt/md here, or click to browse"
+              />
+            </div>
+          </Flexbox>
           <TextAreaInput
             label="Message"
             description="Enter to send, Shift+Enter for a new line"

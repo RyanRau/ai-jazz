@@ -39,6 +39,15 @@ llama_server:
 # url_fetch:
 #   enabled: true
 
+# Optional. When enabled, Chat also offers the model a `write_file` tool
+# that creates a small plain-text file (md/txt/py/html/csv) handed back to
+# the user as a download -- see README.md#file-reading-and-writing. Reading
+# an attached pdf/csv/txt/md document the user uploads is unrelated to this
+# flag and always available -- that's the user's own action, not a tool the
+# model chooses to invoke.
+# file_tools:
+#   enabled: true
+
 # `description`/`best_for` are optional, freeform, and purely informational
 # -- surfaced by GET /v1/models for a model picker UI, never read by the
 # gateway itself. `context_size` and `size_bytes` don't need declaring here:

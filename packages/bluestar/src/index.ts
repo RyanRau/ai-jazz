@@ -25,6 +25,7 @@ export * from "./components/display/Icon";
 export * from "./components/display/Badge";
 export * from "./components/display/Table";
 export * from "./components/display/StatTile";
+export * from "./components/display/Meter";
 export * from "./components/display/LineChart";
 export * from "./components/display/BarChart";
 export * from "./components/display/ChatBubble";

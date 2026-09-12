@@ -3,7 +3,6 @@ import {
   Alert,
   Button,
   Card,
-  Dropdown,
   FileDropzone,
   Flexbox,
   Header,
@@ -18,8 +17,9 @@ import type { FileDropzoneValue } from "bluestar";
 import { useGatewayAuth } from "./useGatewayAuth";
 import { parseSseLines, deltaContent, eventUsage } from "./sse";
 import { GATEWAY_URL } from "./gateway";
+import { ModelPickerModal } from "./ModelPickerModal";
+import type { ModelInfo } from "./useChat";
 
-type ModelInfo = { id: string; vision: boolean };
 type Usage = { tokens_in: number; tokens_out: number };
 
 function formatElapsed(ms: number): string {
@@ -96,6 +96,7 @@ export function PlaygroundPage() {
   // (fall back to a plain text field rather than blocking model entry).
   const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
   const [model, setModel] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [image, setImage] = useState<FileDropzoneValue | null>(null);
 
@@ -120,8 +121,27 @@ export function PlaygroundPage() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((data: { data: { id: string; vision?: boolean }[] }) =>
-        setModels(data.data.map((m) => ({ id: m.id, vision: m.vision === true })))
+      .then(
+        (data: {
+          data: {
+            id: string;
+            vision?: boolean;
+            context_size?: number | null;
+            size_bytes?: number | null;
+            description?: string | null;
+            best_for?: string | null;
+          }[];
+        }) =>
+          setModels(
+            data.data.map((m) => ({
+              id: m.id,
+              vision: m.vision === true,
+              context_size: m.context_size ?? null,
+              size_bytes: m.size_bytes ?? null,
+              description: m.description ?? null,
+              best_for: m.best_for ?? null,
+            }))
+          )
       )
       .catch(() => setModels("unavailable"));
   }, [apiKey]);
@@ -279,18 +299,23 @@ export function PlaygroundPage() {
           on the Keys page under your default key, which can't be revoked from under this page.
         </Text>
         {modelList ? (
-          <Dropdown
-            label="Model"
-            options={[
-              { label: "Gateway default", value: "" },
-              ...modelList.map((m) => ({
-                label: m.vision ? `${m.id} (vision)` : m.id,
-                value: m.id,
-              })),
-            ]}
-            value={model}
-            onChange={onModelChange}
-          />
+          <>
+            <Button
+              label={model || "Gateway default"}
+              aria-label="Choose a model"
+              variant="secondary"
+              appearance="outline"
+              density="dense"
+              onClick={() => setPickerOpen(true)}
+            />
+            <ModelPickerModal
+              isOpen={pickerOpen}
+              onClose={() => setPickerOpen(false)}
+              models={modelList}
+              value={model}
+              onChange={onModelChange}
+            />
+          </>
         ) : (
           <TextInput
             label="Model"

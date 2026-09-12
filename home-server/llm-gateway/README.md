@@ -219,6 +219,37 @@ can't blow up a turn's context. A fetch failure (bad host, timeout, no
 extractable content) degrades to an `{"error": ...}` tool result rather than
 failing the chat turn, the same as `web_search`.
 
+## File reading and writing
+
+Chat (`/v1/chat/send`) can read documents the user attaches and, optionally,
+create files for the user to download.
+
+**Reading** is always available, no config needed — it's the user's own
+action, not a tool the model chooses to invoke. Attach a pdf/csv/txt/md
+document (`attachments: [{filename, data_url}]` in the request body,
+`data_url` being a `data:<mime>;base64,<data>` URL — exactly what
+`bluestar`'s `FileDropzone` hands back) and the gateway extracts its text
+(`pypdf` for PDF, plain decode otherwise) before the model ever sees the
+request. Capped both in raw upload size (`MAX_ATTACHMENT_BYTES`) and
+extracted text length (`MAX_ATTACHMENT_TEXT_CHARS`). What's persisted and
+shown in the chat bubble stays just what the user typed; the extracted text
+rides along separately (`llm_chat_messages.attachments`) and gets folded
+back in on every later turn that replays this message — see
+`_compose_content_with_attachments` in `gateway.py` and its frontend twin in
+`apps/tony/src/useChat.ts`.
+
+**Writing** is opt-in — set `file_tools.enabled: true` and Chat also offers
+the model a `write_file` tool: markdown, plain text, Python, HTML, or CSV
+only, nothing executed anywhere, just handed back as a downloadable
+attachment (`kind: "generated"`) on the assistant's message. Disallowed
+extensions, an empty body, or content over `MAX_WRITE_FILE_CHARS` degrade to
+an `{"error": ...}` tool result rather than failing the turn.
+
+```yaml
+file_tools:
+  enabled: true
+```
+
 ## System prompts
 
 Chat (`/v1/chat/send`) resolves an effective system prompt for every turn:
@@ -239,14 +270,32 @@ Chat (`/v1/chat/send`) resolves an effective system prompt for every turn:
 The gateway itself only ever sees the already-resolved value; it doesn't know
 about per-user defaults.
 
+## Compaction
+
+A long-running chat eventually fills its model's context window (surfaced to
+the user as a usage meter in `tony`, driven by `GET /v1/models`'
+`context_size` and the latest assistant reply's `prompt_tokens`). `POST
+/v1/chat/compact` is the escape valve: given a transcript (the client decides
+what's old enough to fold in — `tony`'s `useChat.ts` keeps the last few turns
+verbatim), it runs one plain, non-streaming completion asking the model to
+summarize it, then persists the result via `POST /api/custom/llm/chats/compact`
+(`apps/pocketbase/pb_hooks/chat.pb.js`) as `llm_chats.summary` +
+`summarized_through` (a `created` timestamp cursor). From then on,
+`/v1/chat/send` folds the summary into the same effective-system-prompt slot
+system prompts use (see above), and the client stops replaying any message at
+or before `summarized_through` — the summary stands in for it instead.
+Compacting again later is additive: the existing summary rides along in the
+new transcript, so `summarized_through` only ever moves forward.
+
 ## Routes
 
-| Route                       | Auth | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| --------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /health`               | no   | gateway + loaded-model status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `GET /v1/models`            | yes  | configured models + aliases + per-model `vision`, `context_size` (from `args.ctx-size`), `size_bytes` (stat'd off `model_path`), `description`, `best_for`                                                                                                                                                                                                                                                                                                                                                                |
-| `POST /v1/chat/completions` | yes  | chat, streaming, vision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `POST /v1/chat/send`        | yes  | persistent chat turn (`tony`'s Chat page), optional `system_prompt` on a new chat — generation runs as a background task in PocketBase (`llm_chats`/`llm_chat_messages`, via `apps/pocketbase/pb_hooks/chat.pb.js`) independent of the request, so it keeps going and gets saved even if the client disconnects. The response is an SSE relay of the same chunks for as long as the client stays connected; a client that leaves polls `GET /api/custom/llm/chats/messages?chat=<id>` instead to see the finished result. |
+| Route                       | Auth | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`               | no   | gateway + loaded-model status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `GET /v1/models`            | yes  | configured models + aliases + per-model `vision`, `context_size` (from `args.ctx-size`), `size_bytes` (stat'd off `model_path`), `description`, `best_for`                                                                                                                                                                                                                                                                                                                                                                                              |
+| `POST /v1/chat/completions` | yes  | chat, streaming, vision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `POST /v1/chat/send`        | yes  | persistent chat turn (`tony`'s Chat page), optional `system_prompt` on a new chat and `attachments` on any turn — generation runs as a background task in PocketBase (`llm_chats`/`llm_chat_messages`, via `apps/pocketbase/pb_hooks/chat.pb.js`) independent of the request, so it keeps going and gets saved even if the client disconnects. The response is an SSE relay of the same chunks for as long as the client stays connected; a client that leaves polls `GET /api/custom/llm/chats/messages?chat=<id>` instead to see the finished result. |
+| `POST /v1/chat/compact`     | yes  | summarizes an older portion of a chat (one plain completion, no background task, no streaming) and persists the summary — see Compaction above                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ## Limitations
 

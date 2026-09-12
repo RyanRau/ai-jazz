@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { FileDropzoneValue } from "bluestar";
 import { pb } from "./pb";
 import { useAuthRecord } from "./useAuth";
 import { useGatewayAuth } from "./useGatewayAuth";
@@ -10,6 +11,11 @@ export type ChatSummary = {
   title: string;
   model: string;
   system_prompt: string;
+  // Compaction state -- see compactChat(). summary is what stands in for
+  // every message at or before summarized_through once compaction has run;
+  // both empty until then.
+  summary: string;
+  summarized_through: string;
   created: string;
   updated: string;
 };
@@ -21,6 +27,18 @@ export type SearchResult = { title: string; url: string; snippet: string };
 export type ToolCallRecord =
   | { type?: "web_search"; query: string; results: SearchResult[] }
   | { type: "fetch_url"; url: string; title?: string | null; content?: string; error?: string };
+// "uploaded" is a document (pdf/csv/txt/md) the user attached, read to
+// plain text server-side; "generated" is a write_file tool call's output,
+// offered back as a download. `content` is missing when `error` is set (an
+// unreadable upload, or an unsupported/oversized write_file call).
+export type AttachmentRecord = {
+  kind: "uploaded" | "generated";
+  filename: string;
+  mime_type?: string;
+  size_bytes?: number;
+  content?: string;
+  error?: string;
+};
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -30,6 +48,7 @@ export type ChatMessage = {
   tokens_out: number;
   response_ms: number;
   tool_calls: ToolCallRecord[];
+  attachments: AttachmentRecord[];
   created: string;
 };
 export type ModelInfo = {
@@ -46,6 +65,26 @@ type IdsEvent = {
   user_message_id: string;
   assistant_message_id: string;
 };
+
+// Mirrors gateway.py's _compose_content_with_attachments -- what's actually
+// sent to the model for a message includes its uploaded attachments' text,
+// even though the displayed/stored `content` stays just what the user
+// typed. Used both to replay past turns (history, below) and would need no
+// change for a fresh turn's own attachments, since /v1/chat/send composes
+// those server-side from the raw upload.
+function composeContentWithAttachments(m: ChatMessage): string {
+  const parts = [m.content];
+  for (const a of m.attachments) {
+    if (a.kind === "uploaded" && a.content) {
+      parts.push(`\n\n--- ${a.filename} ---\n${a.content}`);
+    }
+  }
+  return parts.join("");
+}
+
+// How many of the most recent messages compactChat() always keeps verbatim
+// (roughly the last few turns) rather than folding into the summary.
+const KEEP_RECENT_MESSAGES = 6;
 
 // Mirrors chat.pb.js's title derivation so the optimistic chat-list entry
 // (added the moment a new chat starts, before the next refresh) matches
@@ -98,7 +137,15 @@ export function useChat() {
   const [chatsView, setChatsView] = useState<"thread" | "all">("thread");
 
   const [draft, setDraft] = useState("");
+  // Both only meaningful for the *next* message to send -- cleared once
+  // it's on its way. Images are vision-gated and never persisted/replayed
+  // (same one-turn-only scope as Playground's own image attachment);
+  // documents are read server-side and their extracted text does persist
+  // (see ChatMessage.attachments / composeContentWithAttachments).
+  const [pendingImage, setPendingImage] = useState<FileDropzoneValue | null>(null);
+  const [pendingDocument, setPendingDocument] = useState<FileDropzoneValue | null>(null);
   const [sending, setSending] = useState(false);
+  const [compacting, setCompacting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const sendingRef = useRef(false);
@@ -221,6 +268,8 @@ export function useChat() {
     setSelectedChatId(null);
     setDraft("");
     setSystemPromptDraft("");
+    setPendingImage(null);
+    setPendingDocument(null);
     setError(null);
     setChatsView("thread");
   }
@@ -229,6 +278,8 @@ export function useChat() {
     abortRef.current?.abort();
     setMessages([]);
     setSelectedChatId(id);
+    setPendingImage(null);
+    setPendingDocument(null);
     setChatsView("thread");
   }
 
@@ -242,9 +293,21 @@ export function useChat() {
 
   async function sendWith(key: string, retryOn401: boolean): Promise<void> {
     const content = draft.trim();
+    const image = pendingImage;
+    const document = pendingDocument;
     const chat = chats?.find((c) => c.id === selectedChatId);
     const sendModel = chat?.model || model;
-    const history = messages.map((m) => ({ role: m.role, content: m.content }));
+    // A compacted chat's summary stands in for everything at or before
+    // summarized_through (see compactChat()) -- only messages after that
+    // point get replayed verbatim.
+    const summarizedThrough = chat?.summarized_through || "";
+    const replayable = summarizedThrough
+      ? messages.filter((m) => m.created > summarizedThrough)
+      : messages;
+    const history = replayable.map((m) => ({
+      role: m.role,
+      content: composeContentWithAttachments(m),
+    }));
     // Only meaningful for a brand-new chat -- an existing chat's system
     // prompt already lives server-side and is resolved fresh by the gateway
     // regardless of what (if anything) is sent here. Falls back to the
@@ -253,8 +316,18 @@ export function useChat() {
     const effectiveSystemPrompt = selectedChatId
       ? ""
       : systemPromptDraft.trim() || defaultSystemPrompt.trim();
+    // Vision-gated content parts for this turn only -- never persisted or
+    // replayed (see ChatPage.tsx/PACKAGES.md on why images stay one-turn).
+    const newTurnContent = image
+      ? [
+          { type: "text", text: content },
+          { type: "image_url", image_url: { url: image.dataUrl } },
+        ]
+      : content;
 
     setDraft("");
+    setPendingImage(null);
+    setPendingDocument(null);
     setError(null);
     setSending(true);
     sendingRef.current = true;
@@ -271,8 +344,11 @@ export function useChat() {
         body: JSON.stringify({
           chat_id: selectedChatId || undefined,
           model: sendModel || undefined,
-          messages: [...history, { role: "user", content }],
+          messages: [...history, { role: "user", content: newTurnContent }],
           system_prompt: effectiveSystemPrompt || undefined,
+          attachments: document
+            ? [{ filename: document.name, data_url: document.dataUrl }]
+            : undefined,
         }),
         signal: controller.signal,
       });
@@ -283,6 +359,8 @@ export function useChat() {
         // already cleared it, so App.tsx drops back to the login screen.
         if (!fresh) return;
         setDraft(content); // restore -- sendWith re-reads `draft` on retry
+        setPendingImage(image);
+        setPendingDocument(document);
         return sendWith(fresh, false);
       }
       if (!r.ok || !r.body) {
@@ -316,6 +394,8 @@ export function useChat() {
                   title: deriveTitle(content),
                   model: sendModel,
                   system_prompt: effectiveSystemPrompt,
+                  summary: "",
+                  summarized_through: "",
                   created: now,
                   updated: now,
                 },
@@ -334,6 +414,7 @@ export function useChat() {
                 tokens_out: 0,
                 response_ms: 0,
                 tool_calls: [],
+                attachments: [],
                 created: now,
               },
               {
@@ -345,6 +426,7 @@ export function useChat() {
                 tokens_out: 0,
                 response_ms: 0,
                 tool_calls: [],
+                attachments: [],
                 created: now,
               },
             ]);
@@ -396,12 +478,90 @@ export function useChat() {
     await sendWith(apiKey, true);
   }
 
+  // Summarizes everything except the last KEEP_RECENT_MESSAGES messages
+  // (plus, on a chat compacted before, whatever's accumulated since the
+  // last compaction) via the gateway's own current model for this chat, so
+  // future turns replay a short summary instead of the full transcript --
+  // see gateway.py's /v1/chat/compact and useChat.ts's own
+  // summarizedThrough filtering in sendWith(). A no-op when there isn't
+  // enough new history yet to bother compacting.
+  async function compactChat(): Promise<void> {
+    if (!apiKey || !selectedChat) return;
+    const alreadyCovered = selectedChat.summarized_through || "";
+    const cutoffIndex = messages.length - KEEP_RECENT_MESSAGES;
+    if (cutoffIndex <= 0) return;
+    const toSummarize = messages.slice(0, cutoffIndex).filter((m) => m.created > alreadyCovered);
+    if (toSummarize.length === 0) return;
+
+    const transcript = [
+      ...(selectedChat.summary
+        ? [{ role: "user", content: `Summary so far:\n${selectedChat.summary}` }]
+        : []),
+      ...toSummarize.map((m) => ({ role: m.role, content: composeContentWithAttachments(m) })),
+    ];
+    const summarizedThrough = toSummarize[toSummarize.length - 1].created;
+
+    setCompacting(true);
+    setError(null);
+    try {
+      const r = await fetch(`${GATEWAY_URL}/v1/chat/compact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          chat_id: selectedChat.id,
+          model: selectedChat.model,
+          transcript,
+          summarized_through: summarizedThrough,
+        }),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${r.status}`);
+      }
+      const data: { summary: string; summarized_through: string } = await r.json();
+      setChats(
+        (prev) =>
+          prev?.map((c) =>
+            c.id === selectedChat.id
+              ? { ...c, summary: data.summary, summarized_through: data.summarized_through }
+              : c
+          ) ?? prev
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't compact this chat.");
+    } finally {
+      setCompacting(false);
+    }
+  }
+
   const selectedChat = chats?.find((c) => c.id === selectedChatId) ?? null;
   const modelList = models === "unavailable" || models === null ? null : models;
   const lastMessage = messages[messages.length - 1];
   const generating = Boolean(
     lastMessage && (lastMessage.status === "pending" || lastMessage.status === "streaming")
   );
+
+  // Known false only once a specific model's capabilities are actually
+  // known (mirrors PlaygroundPage's own visionUnsupported) -- unknown
+  // (null-ish modelList, or no model picked yet) never blocks the attach
+  // control, only a confirmed-unsupported model does.
+  const activeModelId = selectedChat?.model || model;
+  const activeModelInfo = modelList?.find((m) => m.id === activeModelId);
+  const visionUnsupported = activeModelInfo !== undefined && !activeModelInfo.vision;
+
+  // The most recently completed assistant reply's prompt-token count is the
+  // best available proxy for "how much of the context window the next turn
+  // will start from" -- it already reflects system prompt + summary +
+  // history + attachments as of that call. Only shown once both that and
+  // the active model's context_size are known.
+  const lastCompletedAssistant = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant" && m.status === "complete");
+  const contextUsage =
+    activeModelInfo?.context_size && lastCompletedAssistant && lastCompletedAssistant.tokens_in > 0
+      ? { used: lastCompletedAssistant.tokens_in, total: activeModelInfo.context_size }
+      : null;
+  const canCompact = messages.length > KEEP_RECENT_MESSAGES;
 
   return {
     apiKey,
@@ -421,6 +581,11 @@ export function useChat() {
     messages,
     draft,
     setDraft,
+    pendingImage,
+    setPendingImage,
+    pendingDocument,
+    setPendingDocument,
+    visionUnsupported,
     sending,
     error,
     send,
@@ -428,6 +593,10 @@ export function useChat() {
     selectChat,
     generating,
     threadEndRef,
+    contextUsage,
+    canCompact,
+    compacting,
+    compactChat,
   };
 }
 

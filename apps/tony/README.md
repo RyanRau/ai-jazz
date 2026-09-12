@@ -34,22 +34,37 @@ A side nav switches between four pages:
   own default (set on the Keys page); an existing chat's system prompt shows
   as its own `Disclosure` and can be edited there — an edit takes effect on
   that chat's next message, not retroactively. See the gateway's README for
-  how the effective prompt is resolved.
+  how the effective prompt is resolved. A new chat's model is chosen via
+  `ModelPickerModal` (shared with Playground, below) rather than a bare
+  dropdown — a two-column `Modal`, model list on the left, the selected
+  model's full capability profile (`GET /v1/models`' `context_size`,
+  `size_bytes`, `description`, `best_for`, `vision`) on the right. Picking a
+  vision-capable model enables an image attachment (one turn only, never
+  persisted/replayed — same scope as Playground's own); a document
+  attachment (pdf/csv/txt/md) is read server-side regardless of model and
+  does persist, so later turns still have it (see the gateway README's File
+  reading and writing section). A generated file (the model's own
+  `write_file` tool call, when `file_tools.enabled`) shows under its message
+  with a Download button. A context-usage `Meter` (against the active
+  model's `context_size`) and a "Compact older messages" action appear once
+  a chat has enough history — see the gateway README's Compaction section
+  for what compacting actually does.
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
-  browser, the same as any other API client. Model is a dropdown populated
-  from the gateway's own `GET /v1/models` once a key is ready, falling back
-  to a plain text field if the gateway can't be reached; picking a
-  vision-capable model enables an image attachment field, sent as an
-  `image_url` content part. Exposes dedicated controls for the common
-  sampling params (temperature, max tokens, top P) plus an **Advanced
-  params** JSON field that merges arbitrary extra fields into the request
-  body — anything a given `llama-server` build accepts (`reasoning_budget`,
-  `min_p`, `seed`, ...) passes straight through with no gateway change
-  needed, since gateway.py forwards the body almost untouched. A **Stream
-  response** toggle reads the reply as SSE instead of waiting for the whole
-  completion (the gateway already supports this for `/v1/chat/completions`;
-  see its README). See the **Docs** page for the full parameter reference.
+  browser, the same as any other API client. Model is chosen via the same
+  `ModelPickerModal` as Chat, populated from the gateway's own `GET
+/v1/models` once a key is ready, falling back to a plain text field if the
+  gateway can't be reached; picking a vision-capable model enables an image
+  attachment field, sent as an `image_url` content part. Exposes dedicated
+  controls for the common sampling params (temperature, max tokens, top P)
+  plus an **Advanced params** JSON field that merges arbitrary extra fields
+  into the request body — anything a given `llama-server` build accepts
+  (`reasoning_budget`, `min_p`, `seed`, ...) passes straight through with no
+  gateway change needed, since gateway.py forwards the body almost
+  untouched. A **Stream response** toggle reads the reply as SSE instead of
+  waiting for the whole completion (the gateway already supports this for
+  `/v1/chat/completions`; see its README). See the **Docs** page for the
+  full parameter reference.
 - **Keys** — create/revoke API keys and see both per-key and aggregate usage
   (call count, tokens in/out, a daily time-series chart) in one place, with
   a dropdown to scope the usage section to one key or "All keys". Backed by

@@ -33,17 +33,31 @@ routerAdd(
       throw new ForbiddenError("Sign-in required.");
     }
 
+    const encKey = $os.getenv("CHAT_ENCRYPTION_KEY") || "dev-only-insecure-chat-key-32ch!";
     const records = e.app.findRecordsByFilter("llm_chats", "user = {:userId}", "-updated", 0, 0, {
       userId: auth.id,
     });
-    const chats = records.map((r) => ({
-      id: r.id,
-      title: r.getString("title"),
-      model: r.getString("model"),
-      system_prompt: r.getString("system_prompt"),
-      created: r.getString("created"),
-      updated: r.getString("updated"),
-    }));
+    const chats = records.map((r) => {
+      const summaryCipher = r.getString("summary");
+      let summary = "";
+      if (summaryCipher) {
+        try {
+          summary = $security.decrypt(summaryCipher, encKey);
+        } catch (err) {
+          summary = "";
+        }
+      }
+      return {
+        id: r.id,
+        title: r.getString("title"),
+        model: r.getString("model"),
+        system_prompt: r.getString("system_prompt"),
+        summary: summary,
+        summarized_through: r.getString("summarized_through"),
+        created: r.getString("created"),
+        updated: r.getString("updated"),
+      };
+    });
     return e.json(200, { chats: chats });
   },
   $apis.requireAuth()
@@ -96,6 +110,15 @@ routerAdd(
           toolCalls = [];
         }
       }
+      const attachmentsCipher = r.getString("attachments");
+      let attachments = [];
+      if (attachmentsCipher) {
+        try {
+          attachments = JSON.parse($security.decrypt(attachmentsCipher, encKey));
+        } catch (err) {
+          attachments = [];
+        }
+      }
       return {
         id: r.id,
         role: r.getString("role"),
@@ -105,6 +128,7 @@ routerAdd(
         tokens_out: r.getInt("tokens_out"),
         response_ms: r.getInt("response_ms"),
         tool_calls: toolCalls,
+        attachments: attachments,
         created: r.getString("created"),
       };
     });
@@ -114,9 +138,11 @@ routerAdd(
 );
 
 // Gateway-facing: start a new turn. Body: { user_id, chat_id?, model,
-// content, system_prompt? }. Creates the chat first if chat_id is empty
-// (title derived from the user's message, system_prompt stored on it if
-// given), then the user's own message (encrypted) and an assistant
+// content, system_prompt?, attachments? }. Creates the chat first if
+// chat_id is empty (title derived from the user's message, system_prompt
+// stored on it if given), then the user's own message (encrypted,
+// attachments -- gateway.py's already-JSON-encoded string of any documents
+// read for this turn -- encrypted the same way) and an assistant
 // placeholder (status: "pending") gateway.py will append to as it streams.
 // Returns the chat's current system_prompt (freshly set, or whatever an
 // existing chat already had) so the gateway can resolve the turn's
@@ -166,6 +192,7 @@ routerAdd(
       role: "user",
       content: $security.encrypt(content, encKey),
       status: "complete",
+      attachments: body.attachments ? $security.encrypt(body.attachments, encKey) : "",
     });
     e.app.save(userMessage);
 
@@ -177,11 +204,22 @@ routerAdd(
     });
     e.app.save(assistantMessage);
 
+    const summaryCipher = chat.getString("summary");
+    let summary = "";
+    if (summaryCipher) {
+      try {
+        summary = $security.decrypt(summaryCipher, encKey);
+      } catch (err) {
+        summary = "";
+      }
+    }
+
     return e.json(200, {
       chat_id: chatId,
       user_message_id: userMessage.id,
       assistant_message_id: assistantMessage.id,
       system_prompt: chat.getString("system_prompt"),
+      summary: summary,
     });
   },
   $apis.requireAuth()
@@ -218,14 +256,51 @@ routerAdd(
   $apis.requireAuth()
 );
 
+// Gateway-facing: persist a chat's compaction summary. Body: { chat_id,
+// summary, summarized_through }. Called by gateway.py's /v1/chat/compact
+// once it has a summary back from the model -- there's no direct
+// user-facing route for this (unlike system_prompt), since compaction
+// always goes through that endpoint to actually produce the summary text.
+// summary is encrypted like content/tool_calls; summarized_through (a
+// plain `created` timestamp cursor) isn't sensitive on its own, so it's
+// stored as-is.
+routerAdd(
+  "POST",
+  "/api/custom/llm/chats/compact",
+  (e) => {
+    const auth = e.requestInfo().auth;
+    if (!auth || auth.get("is_service") !== true) {
+      throw new ForbiddenError("Service account access required.");
+    }
+
+    const body = e.requestInfo().body;
+    const chatId = (body.chat_id || "").trim();
+    const summary = body.summary || "";
+    const summarizedThrough = (body.summarized_through || "").trim();
+    if (!chatId || !summary || !summarizedThrough) {
+      throw new BadRequestError("chat_id, summary, and summarized_through are required.");
+    }
+
+    const encKey = $os.getenv("CHAT_ENCRYPTION_KEY") || "dev-only-insecure-chat-key-32ch!";
+    const chat = e.app.findRecordById("llm_chats", chatId);
+    chat.set("summary", $security.encrypt(summary, encKey));
+    chat.set("summarized_through", summarizedThrough);
+    e.app.save(chat);
+
+    return e.json(200, { id: chat.id, summarized_through: chat.getString("summarized_through") });
+  },
+  $apis.requireAuth()
+);
+
 // Gateway-facing: append to a message while streaming (and mark it done).
 // Body: { message_id, content, status, tokens_in?, tokens_out?, response_ms?,
-// tool_calls? }. Called repeatedly with the running content while status is
-// "streaming", once more at the end with status "complete" -- content is
-// re-encrypted in full each call, not diffed, since a message never gets
-// long enough for that to matter. `tool_calls` is gateway.py's own
-// already-JSON-encoded string (query + results per web_search call this
-// turn made); re-encrypted here the same as content, not touched otherwise.
+// tool_calls?, attachments? }. Called repeatedly with the running content
+// while status is "streaming", once more at the end with status "complete"
+// -- content is re-encrypted in full each call, not diffed, since a message
+// never gets long enough for that to matter. `tool_calls`/`attachments` are
+// gateway.py's own already-JSON-encoded strings (search/link records, and
+// any write_file output this turn produced, respectively); re-encrypted
+// here the same as content, not touched otherwise.
 routerAdd(
   "POST",
   "/api/custom/llm/chats/messages/append",
@@ -250,6 +325,7 @@ routerAdd(
     if (body.tokens_out !== undefined) message.set("tokens_out", body.tokens_out);
     if (body.response_ms !== undefined) message.set("response_ms", body.response_ms);
     if (body.tool_calls) message.set("tool_calls", $security.encrypt(body.tool_calls, encKey));
+    if (body.attachments) message.set("attachments", $security.encrypt(body.attachments, encKey));
     e.app.save(message);
 
     // Bump the parent chat's `updated` so the chat list sorts by recent

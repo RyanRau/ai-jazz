@@ -5,7 +5,10 @@ Run: python3 gateway.py --config config.yaml
 
 import argparse
 import asyncio
+import base64
+import binascii
 import hashlib
+import io
 import ipaddress
 import json
 import os
@@ -19,6 +22,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
+import pypdf
 import trafilatura
 import uvicorn
 import yaml
@@ -601,6 +605,79 @@ def _contains_image(body: dict) -> bool:
     return False
 
 
+MAX_ATTACHMENT_BYTES = 10_000_000  # raw upload cap, before extraction
+MAX_ATTACHMENT_TEXT_CHARS = 20_000  # extracted text cap, per attachment
+ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".csv", ".txt", ".md"}
+
+
+def _decode_data_url(data_url: str) -> bytes:
+    """Parses a `data:<mime>;base64,<data>` URL -- what bluestar's
+    FileDropzone hands back on the frontend -- into raw bytes."""
+    if not data_url.startswith("data:") or "," not in data_url:
+        raise ValueError("Not a data URL.")
+    _header, _, b64 = data_url.partition(",")
+    return base64.b64decode(b64)
+
+
+def _extract_uploaded_text(filename: str, data_url: str) -> dict:
+    """Extracts plain text from an uploaded document (pdf/csv/txt/md) so the
+    model can read it, for a document attached to a Chat message. PDF text
+    extraction uses pypdf; everything else is decoded as plain text. Capped
+    both in raw size (before extraction) and extracted length (before it
+    ever reaches the model or gets stored) -- same reasoning as
+    MAX_FETCH_BYTES/MAX_FETCH_CONTENT_CHARS for fetch_url. Always returns an
+    attachment record (with an "error" key on failure) rather than raising,
+    so one bad upload can't fail the whole chat turn.
+    """
+    name = os.path.basename(filename or "attachment")
+    ext = os.path.splitext(name)[1].lower()
+    record = {"kind": "uploaded", "filename": name}
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        return {
+            **record,
+            "error": f"Unsupported file type '{ext or name}' -- only "
+            f"{', '.join(sorted(ALLOWED_UPLOAD_EXTENSIONS))} are readable.",
+        }
+    try:
+        data = _decode_data_url(data_url)
+    except (ValueError, binascii.Error):
+        return {**record, "error": "Couldn't decode the uploaded file."}
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        return {**record, "error": "File is too large to read."}
+
+    record["size_bytes"] = len(data)
+    if ext == ".pdf":
+        try:
+            reader = pypdf.PdfReader(io.BytesIO(data))
+            text = "\n\n".join(page.extract_text() or "" for page in reader.pages)
+        except Exception as e:
+            return {**record, "error": f"Couldn't read PDF: {e}"}
+    else:
+        text = data.decode("utf-8", errors="replace")
+
+    text = text.strip()
+    if not text:
+        return {**record, "error": "No readable text found in file."}
+    return {**record, "content": text[:MAX_ATTACHMENT_TEXT_CHARS]}
+
+
+def _compose_content_with_attachments(content: str, attachments: list[dict]) -> str:
+    """Appends each successfully-read attachment's text to `content` as its
+    own clearly-delimited section, for whatever's actually sent to
+    llama-server. The persisted/displayed message content stays just what
+    the user typed -- this composition happens fresh, both for the current
+    turn (here in the gateway) and for replaying past turns (tony's
+    useChat.ts does the same composition client-side from each message's
+    stored `attachments`), so a chat's later turns still carry earlier
+    attachments' text without it cluttering the chat bubble.
+    """
+    parts = [content]
+    for a in attachments:
+        if a.get("kind") == "uploaded" and a.get("content"):
+            parts.append(f"\n\n--- {a['filename']} ---\n{a['content']}")
+    return "".join(parts)
+
+
 WEB_SEARCH_TOOL = {
     "type": "function",
     "function": {
@@ -759,6 +836,66 @@ async def _fetch_url(url: str) -> dict:
     return {"url": current, "error": "Too many redirects."}
 
 
+WRITE_FILE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "write_file",
+        "description": (
+            "Create a small plain-text file for the user to download -- "
+            "markdown, plain text, Python, HTML, or CSV only. This does not "
+            "execute anything; it just hands the content back as a file."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "e.g. 'notes.md'."},
+                "content": {"type": "string", "description": "The full file content."},
+            },
+            "required": ["filename", "content"],
+        },
+    },
+}
+
+ALLOWED_WRITE_EXTENSIONS = {".md", ".txt", ".py", ".html", ".csv"}
+MAX_WRITE_FILE_CHARS = 100_000
+MIME_TYPE_BY_EXTENSION = {
+    ".md": "text/markdown",
+    ".txt": "text/plain",
+    ".py": "text/x-python",
+    ".html": "text/html",
+    ".csv": "text/csv",
+}
+
+
+def _write_file(filename: str, content: str) -> dict:
+    """Validates a write_file tool call and packages it into an attachment
+    record -- nothing is ever written to the gateway's own filesystem; this
+    just shapes the model's text into something tony can offer as a
+    download. Degrades to an {"error": ...} result on a disallowed
+    extension/name or oversized content, same pattern as the other tools.
+    """
+    name = os.path.basename((filename or "").strip())
+    if not name or name in (".", ".."):
+        return {"error": "A filename is required."}
+    ext = os.path.splitext(name)[1].lower()
+    if ext not in ALLOWED_WRITE_EXTENSIONS:
+        return {
+            "error": f"'{ext or name}' isn't a supported type "
+            f"({', '.join(sorted(ALLOWED_WRITE_EXTENSIONS))})."
+        }
+    if not content or not content.strip():
+        return {"error": "content is empty."}
+    if len(content) > MAX_WRITE_FILE_CHARS:
+        return {"error": "content is too large."}
+    return {
+        "kind": "generated",
+        "filename": name,
+        "mime_type": MIME_TYPE_BY_EXTENSION[ext],
+        "content": content,
+        "size_bytes": len(content.encode("utf-8")),
+    }
+
+
 async def _append_chat_message(
     message_id: str,
     content: str,
@@ -767,6 +904,7 @@ async def _append_chat_message(
     tokens_out: int = 0,
     response_ms: Optional[int] = None,
     tool_calls: Optional[list[dict]] = None,
+    attachments: Optional[list[dict]] = None,
 ):
     """Persists the running (or final) content of a chat message via
     PocketBase's service-account-only route. Best-effort: a failure here
@@ -782,6 +920,8 @@ async def _append_chat_message(
             payload["response_ms"] = response_ms
     if tool_calls:
         payload["tool_calls"] = json.dumps(tool_calls)
+    if attachments:
+        payload["attachments"] = json.dumps(attachments)
     try:
         await key_store._request(
             "POST", "/api/custom/llm/chats/messages/append", json=payload
@@ -808,18 +948,25 @@ async def _generate_chat_response(
     visit sees it too. Puts `None` on the queue when done, as the
     end-of-stream sentinel for a live relay.
 
-    Loops up to MAX_TOOL_ROUNDS times when web search and/or url fetching is
-    configured: a round that ends in a tool call runs it and feeds the
-    result back as a `tool` message for the next round, instead of treating
-    that round as the final answer. Tool-call chunks carry no
+    Loops up to MAX_TOOL_ROUNDS times when web search, url fetching, and/or
+    file writing is configured: a round that ends in a tool call runs it and
+    feeds the result back as a `tool` message for the next round, instead of
+    treating that round as the final answer. Tool-call chunks carry no
     `delta.content`, so the frontend (which only ever looks at
     `delta.content`) silently ignores them -- no special client-side
     handling needed.
+
+    `attachments` (already read from any files the user uploaded with this
+    turn -- see /v1/chat/send) are persisted alongside `content_parts` on
+    completion for consistency (an assistant message's attachments are
+    whatever files write_file created this turn), even though they don't
+    change here after being read once.
     """
     FLUSH_INTERVAL = 0.75
 
     content_parts: list[str] = []
-    search_records: list[dict] = []
+    tool_records: list[dict] = []
+    generated_files: list[dict] = []
     last_flush = time.time()
     start = time.time()
     acquired = False
@@ -827,11 +974,14 @@ async def _generate_chat_response(
 
     searxng_url = (CONFIG.get("web_search") or {}).get("searxng_url")
     url_fetch_enabled = (CONFIG.get("url_fetch") or {}).get("enabled", False)
+    file_tools_enabled = (CONFIG.get("file_tools") or {}).get("enabled", False)
     tools = []
     if searxng_url:
         tools.append(WEB_SEARCH_TOOL)
     if url_fetch_enabled:
         tools.append(FETCH_URL_TOOL)
+    if file_tools_enabled:
+        tools.append(WRITE_FILE_TOOL)
     if tools:
         body = {**body, "tools": tools}
 
@@ -880,7 +1030,7 @@ async def _generate_chat_response(
                                 assistant_message_id,
                                 "".join(content_parts),
                                 "streaming",
-                                tool_calls=search_records,
+                                tool_calls=tool_records,
                             )
                             last_flush = time.time()
 
@@ -913,7 +1063,7 @@ async def _generate_chat_response(
                     if tc["name"] == "web_search":
                         query = args.get("query", "")
                         results = await _web_search(query)
-                        search_records.append(
+                        tool_records.append(
                             {"type": "web_search", "query": query, "results": results}
                         )
                         tool_result = results
@@ -924,8 +1074,21 @@ async def _generate_chat_response(
                             if target
                             else {"error": "No url given."}
                         )
-                        search_records.append({"type": "fetch_url", **fetched})
+                        tool_records.append({"type": "fetch_url", **fetched})
                         tool_result = fetched
+                    elif tc["name"] == "write_file":
+                        written = _write_file(
+                            args.get("filename", ""), args.get("content", "")
+                        )
+                        if "error" in written:
+                            tool_result = written
+                        else:
+                            generated_files.append(written)
+                            tool_result = {
+                                "success": True,
+                                "filename": written["filename"],
+                                "size_bytes": written["size_bytes"],
+                            }
                     else:
                         tool_result = {"error": f"Unknown tool '{tc['name']}'."}
                     body["messages"].append(
@@ -943,7 +1106,8 @@ async def _generate_chat_response(
                 tokens_in=tracker.tokens_in,
                 tokens_out=tracker.tokens_out,
                 response_ms=int((time.time() - start) * 1000),
-                tool_calls=search_records,
+                tool_calls=tool_records,
+                attachments=generated_files,
             )
     except Exception as e:
         print(f"[gateway] chat generation failed: {e}")
@@ -951,7 +1115,8 @@ async def _generate_chat_response(
             assistant_message_id,
             "".join(content_parts),
             "error",
-            tool_calls=search_records,
+            tool_calls=tool_records,
+            attachments=generated_files,
         )
     finally:
         # acquire()/the client can fail before either exists -- guard both,
@@ -968,13 +1133,18 @@ async def _generate_chat_response(
 @app.post("/v1/chat/send")
 async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
     """Starts (or continues) a chat turn. Body: { chat_id?, model, messages,
-    system_prompt? } -- same shape as /v1/chat/completions, just with an
-    optional chat_id to continue an existing conversation. system_prompt is
-    only read when starting a new chat (chat_id empty); it's stored on the
-    new llm_chats row and from then on the chat's own stored value is what's
-    actually used, resolved fresh each turn (see effective_system_prompt
-    below) rather than trusting whatever a given request happens to send.
-    The actual generation runs as a standalone background task (see
+    system_prompt?, attachments? } -- same shape as /v1/chat/completions,
+    just with an optional chat_id to continue an existing conversation.
+    system_prompt is only read when starting a new chat (chat_id empty);
+    it's stored on the new llm_chats row and from then on the chat's own
+    stored value is what's actually used, resolved fresh each turn (see
+    effective_system_prompt below) rather than trusting whatever a given
+    request happens to send. attachments is [{filename, data_url}] for any
+    documents (pdf/csv/txt/md) the user attached to this turn -- read to
+    plain text here, persisted on the new user message, and appended to
+    what's actually sent to llama-server (see composed_content below); the
+    persisted/displayed message content itself stays just what the user
+    typed. The actual generation runs as a standalone background task (see
     _generate_chat_response) that keeps going even if this request's
     connection drops; this handler's SSE response is just a live window
     onto it for as long as the caller stays connected.
@@ -1003,6 +1173,13 @@ async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
     if not isinstance(user_content, str):
         raise HTTPException(400, "Chat messages must be plain text.")
 
+    attachments_in = body.pop("attachments", None) or []
+    uploaded_records = [
+        _extract_uploaded_text(a.get("filename", ""), a.get("data_url", ""))
+        for a in attachments_in
+        if isinstance(a, dict)
+    ]
+
     # Only meaningful for a brand-new chat (chat_id empty) -- an existing
     # chat's system prompt already lives on its llm_chats row and is what
     # comes back from the create call below regardless of what's sent here.
@@ -1017,6 +1194,7 @@ async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
             "model": model_cfg["name"],
             "content": user_content,
             "system_prompt": new_chat_system_prompt or "",
+            "attachments": json.dumps(uploaded_records) if uploaded_records else "",
         },
     )
     ids = create.json()
@@ -1028,10 +1206,35 @@ async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
     # before it's relayed to the client as the "ids" SSE event below -- the
     # client already has this chat's system prompt from its own chats list.
     effective_system_prompt = (ids.pop("system_prompt", "") or "").strip()
+
+    # A compacted chat's summary (see /v1/chat/compact) rides along in the
+    # same slot as the system prompt -- it's context the model needs every
+    # turn, same as the system prompt is, just gateway-generated instead of
+    # user-written. useChat.ts only replays messages after
+    # llm_chats.summarized_through, so this is what stands in for
+    # everything before that point.
+    summary = (ids.pop("summary", "") or "").strip()
+    if summary:
+        summary_block = f"Summary of earlier conversation:\n{summary}"
+        effective_system_prompt = (
+            f"{effective_system_prompt}\n\n{summary_block}"
+            if effective_system_prompt
+            else summary_block
+        )
+
+    # The actual API call gets the user's text plus any attached documents'
+    # extracted text; what's persisted above (and shown in the chat bubble)
+    # stays just what the user typed.
+    composed_content = (
+        _compose_content_with_attachments(user_content, uploaded_records)
+        if uploaded_records
+        else user_content
+    )
+    body["messages"] = messages[:-1] + [{**messages[-1], "content": composed_content}]
     if effective_system_prompt:
         body["messages"] = [
             {"role": "system", "content": effective_system_prompt}
-        ] + messages
+        ] + body["messages"]
 
     queue: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
     asyncio.create_task(
@@ -1052,6 +1255,82 @@ async def chat_send(request: Request, auth: dict = Depends(check_api_key)):
             yield chunk
 
     return StreamingResponse(relay(), media_type="text/event-stream")
+
+
+COMPACT_SUMMARY_INSTRUCTION = (
+    "Summarize the following conversation concisely but completely -- "
+    "preserve key facts, decisions, names, numbers, and anything needed to "
+    "continue the conversation naturally. Write it as plain notes, not a "
+    "reply to the user."
+)
+
+
+@app.post("/v1/chat/compact")
+async def chat_compact(request: Request, auth: dict = Depends(check_api_key)):
+    """Summarizes an older portion of a chat so future turns replay the
+    summary instead of the full transcript -- the escape valve for a chat
+    that's filled up its model's context. Body: { chat_id, model,
+    transcript, summarized_through }. `transcript` is [{role, content}] for
+    whatever the client wants compacted (tony's useChat.ts sends everything
+    except the tail it's keeping verbatim, plus the chat's existing summary
+    if this isn't the first compaction); `summarized_through` is the
+    `created` timestamp of the last message in that transcript, persisted
+    on llm_chats (via POST /api/custom/llm/chats/compact below) so
+    /v1/chat/send knows where the summary's coverage ends and useChat.ts
+    knows which messages to stop replaying. One plain, non-streaming,
+    non-tool completion -- unlike /v1/chat/send, a summary of
+    already-said messages doesn't need to survive a caller disconnect the
+    way live generation does, so this doesn't need a background task.
+    """
+    body = await request.json()
+    chat_id = (body.get("chat_id") or "").strip()
+    summarized_through = (body.get("summarized_through") or "").strip()
+    transcript = body.get("transcript") or []
+    if not chat_id or not summarized_through or not transcript:
+        raise HTTPException(
+            400, "chat_id, summarized_through, and transcript are required."
+        )
+
+    model_cfg = resolve_model(body.get("model"))
+    transcript_text = "\n\n".join(
+        f"{(m.get('role') or 'user').upper()}: {m.get('content', '')}" for m in transcript
+    )
+    summarize_body = {
+        "model": model_cfg["name"],
+        "messages": [
+            {"role": "system", "content": COMPACT_SUMMARY_INSTRUCTION},
+            {"role": "user", "content": transcript_text},
+        ],
+    }
+
+    await manager.acquire(model_cfg)
+    timeout = CONFIG["server"].get("request_timeout_seconds", 300)
+    client = httpx.AsyncClient(base_url=manager.base_url, timeout=timeout)
+    try:
+        async with UsageTracker(auth["key_id"], model_cfg["name"]) as tracker:
+            r = await client.post("/v1/chat/completions", json=summarize_body)
+            data = r.json()
+            tracker.update(data.get("usage") or {})
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"Upstream llama-server error: {e}")
+    finally:
+        await client.aclose()
+        await manager.release()
+
+    summary = ((data.get("choices") or [{}])[0].get("message") or {}).get("content", "").strip()
+    if not summary:
+        raise HTTPException(502, "Model returned an empty summary.")
+
+    await key_store._request(
+        "POST",
+        "/api/custom/llm/chats/compact",
+        json={
+            "chat_id": chat_id,
+            "summary": summary,
+            "summarized_through": summarized_through,
+        },
+    )
+    return {"summary": summary, "summarized_through": summarized_through}
 
 
 def main():
