@@ -37,25 +37,55 @@ every configured model and alias, plus which ones accept image input.
 The gateway forwards your request body to \`llama-server\` almost
 untouched -- it only normalizes \`model\` and, for the persistent Chat
 route, injects \`stream: true\`. That means anything your \`llama-server\`
-build accepts in an OpenAI-style chat completion request works here too,
-not just the handful the Playground puts dedicated controls in front of:
+build accepts in an OpenAI-style chat completion request works here too --
+there are two distinct kinds, and it matters which one a given knob is:
+
+**Adjustable per request** -- both Playground and Chat expose these as
+dedicated controls (see \`ModelParamControls\` if you're reading the
+source), on top of whatever the **Advanced params** JSON field lets you
+send:
 
 | Param | What it does |
 | --- | --- |
 | \`temperature\` | Higher = more random, lower = more deterministic. Usually \`0\`-\`2\`. |
 | \`top_p\` | Nucleus sampling cutoff, \`0\`-\`1\`. |
+| \`top_k\` | Only sample from the \`k\` most likely next tokens. |
+| \`min_p\` | Cuts off tokens below this fraction of the top token's probability. |
+| \`presence_penalty\` / \`frequency_penalty\` | Discourage repeating tokens that already appeared, \`-2\`-\`2\`. |
 | \`max_tokens\` | Caps the length of the reply. |
-| \`stream\` | Server-Sent Events instead of one JSON response -- see below. |
 | \`seed\` | Fixes the sampler's randomness for reproducible output, if your build supports it. |
-| \`reasoning_budget\` / \`min_p\` / ... | Whatever else your \`llama-server\` build accepts -- passes straight through. |
+| \`reasoning_effort\` | Chat-completions only: \`none\`/\`minimal\`/\`low\`/\`medium\`/\`high\`/\`xhigh\`/\`max\` -- a per-request budget *within* the model's fixed \`reasoning_budget\` ceiling below, not a replacement for it. |
+| \`stream\` | Server-Sent Events instead of one JSON response -- see below. |
+| everything else (\`repeat_penalty\`, \`dry_*\`, \`xtc_*\`, \`mirostat*\`, \`stop\`, \`grammar\`/\`json_schema\`, \`logit_bias\`, ...) | Whatever else your \`llama-server\` build accepts -- reachable through **Advanced params**, not a dedicated control. |
 
-The Playground's **Advanced params** field takes raw JSON merged into the
-request body, for exactly this -- anything not already a dedicated control.
+The **Advanced params** field takes raw JSON merged into the request body
+last, so it also wins over a dedicated control above on a key collision --
+the way to override one of them with something more exotic.
 
-**Context size is not a per-request parameter.** It's fixed per model in
-the gateway's own \`config.yaml\` (\`args.ctx-size\`), set when that model's
-\`llama-server\` process starts. Changing it means editing the gateway's
-config and restarting it, not something a request body can override.
+**Fixed at model launch (\`config.yaml\`), not a request parameter.** These
+are set in \`args\` on a model entry and only take effect when that model's
+\`llama-server\` process starts -- changing one means editing the gateway's
+config and restarting it, never something a request body can override.
+The model info button (the \`ⓘ\` next to a model picker in Playground or
+Chat) shows a given model's values read-only, plus any freeform notes its
+\`config.yaml\` entry sets:
+
+| Config field | What it does |
+| --- | --- |
+| \`ctx-size\` | The model's context window. |
+| \`reasoning-budget\` | A ceiling the per-request \`reasoning_effort\` above operates within, not the same knob. |
+| \`n-gpu-layers\` / \`batch-size\` / \`cache-type-k\`/\`v\` / rope scaling / \`--parallel\` / \`--flash-attn\` | Everything else startup-only -- see \`home-server/llm-gateway\`'s README. |
+
+## Per-chat saved params
+
+A chat can remember its own parameter overrides, separately from
+Playground's (which never persist). Expand **Model params** above a chat's
+composer, adjust anything, and hit **Save as default for this chat** to
+make those the chat's own fallback for future turns -- until then,
+adjusting params for one message doesn't change what the chat falls back
+to next time, the same way Playground's own controls don't persist either.
+**Reset to defaults** clears a chat's saved params back to plain unset
+ones.
 
 ## Streaming
 

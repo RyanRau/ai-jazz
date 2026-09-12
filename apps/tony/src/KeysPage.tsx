@@ -180,14 +180,16 @@ function RenameKeyForm({
 
 /**
  * Key management + usage, two panels: a key list on the left (with "All
- * keys" as its own row, aggregating everyone visible), the selected key's
- * detail -- rename/revoke plus its usage -- on the right. Admin sees every
- * key (with its owner) in the list; a regular user sees only their own --
- * enforced by apps/pocketbase/pb_hooks/llm.pb.js, not here. The "All keys"
- * usage view defaults to just the signed-in user's own rows regardless of
- * admin status (`usageScope`, `?mine=true`) -- an admin's own usage has no
- * other way to stand out inside an unscoped dump of every user's rows, so
- * seeing everyone's is an explicit toggle, not the landing state.
+ * keys" as its own row, aggregating whatever's currently in view), the
+ * selected key's detail -- rename/revoke plus its usage -- on the right.
+ * Both the key list and the usage view default to just the signed-in
+ * user's own, admin included (`scope`, `?mine=true` on both GET /keys and
+ * GET /usage) -- an admin's own keys/usage have no other way to stand out
+ * inside an unscoped dump of everyone's, so seeing everyone else's is an
+ * explicit toggle (in the left panel, next to "Show revoked"), not the
+ * landing state. A regular user has no broader view to switch to -- the
+ * server already always scopes them to their own regardless of `scope` --
+ * so the toggle itself only renders for an admin.
  */
 export function KeysPage() {
   const record = useAuthRecord();
@@ -205,25 +207,27 @@ export function KeysPage() {
   const [keyScopedUsage, setKeyScopedUsage] = useState<UsageRow[] | null>(null);
   const [showRevoked, setShowRevoked] = useState(false);
   const [listOpen, setListOpen] = useState(false);
-  // Meaningful for an admin only -- a non-admin's own usage is already all
-  // GET /usage ever returns them, so this stays "mine" and unused for them.
-  // Defaults to "mine": an admin's own usage isn't otherwise distinguishable
-  // inside an unscoped dump of every user's rows, so "all users" is an
-  // explicit opt-in rather than the landing view.
-  const [usageScope, setUsageScope] = useState<"mine" | "all">("mine");
+  // Meaningful for an admin only -- a non-admin's own keys/usage are
+  // already all GET /keys and GET /usage ever return them, so this stays
+  // "mine" and unused for them. Defaults to "mine": an admin's own
+  // keys/usage aren't otherwise distinguishable inside an unscoped dump of
+  // every user's, so "all users" is an explicit opt-in rather than the
+  // landing view. Governs both requests below together -- flipping to
+  // "all users" means seeing everyone's keys in the list too, not just
+  // aggregate usage, since the two would otherwise disagree about whose
+  // data is in view.
+  const [scope, setScope] = useState<"mine" | "all">("mine");
 
   const load = useCallback(() => {
+    const query = isAdmin && scope === "all" ? {} : { mine: "true" };
     return Promise.all([
-      pb.send<{ keys: KeyRow[] }>("/api/custom/llm/keys", { method: "GET" }),
-      pb.send<{ usage: UsageRow[] }>("/api/custom/llm/usage", {
-        method: "GET",
-        query: isAdmin && usageScope === "all" ? {} : { mine: "true" },
-      }),
+      pb.send<{ keys: KeyRow[] }>("/api/custom/llm/keys", { method: "GET", query }),
+      pb.send<{ usage: UsageRow[] }>("/api/custom/llm/usage", { method: "GET", query }),
     ]).then(([keysRes, usageRes]) => {
       setKeys(keysRes.keys);
       setAllUsage(usageRes.usage);
     });
-  }, [isAdmin, usageScope]);
+  }, [isAdmin, scope]);
 
   useEffect(() => {
     load();
@@ -294,6 +298,16 @@ export function KeysPage() {
 
   const keyList = (onNavigate: () => void) => (
     <Flexbox direction="column" gap={12}>
+      {isAdmin && (
+        <SegmentedControl
+          options={[
+            { label: "Mine", value: "mine" },
+            { label: "All users", value: "all" },
+          ]}
+          value={scope}
+          onChange={setScope}
+        />
+      )}
       <Switch label="Show revoked" value={showRevoked} onChange={toggleShowRevoked} />
 
       <Flexbox direction="column" gap={4}>
@@ -429,26 +443,7 @@ export function KeysPage() {
               </>
             ) : (
               <>
-                <Flexbox
-                  justifyContent="space-between"
-                  alignItems="center"
-                  flexWrap="wrap"
-                  gap={12}
-                >
-                  <Header variant="h2">
-                    {isAdmin && usageScope === "all" ? "All users" : "My usage"}
-                  </Header>
-                  {isAdmin && (
-                    <SegmentedControl
-                      options={[
-                        { label: "My usage", value: "mine" },
-                        { label: "All users", value: "all" },
-                      ]}
-                      value={usageScope}
-                      onChange={setUsageScope}
-                    />
-                  )}
-                </Flexbox>
+                <Header variant="h2">{isAdmin && scope === "all" ? "All keys" : "My keys"}</Header>
                 <UsageSection rows={rows} />
               </>
             )}

@@ -24,7 +24,8 @@ export type IconName =
   | "switch"
   | "edit"
   | "docs"
-  | "copy";
+  | "copy"
+  | "info";
 
 export type IconProps = {
   name: IconName;

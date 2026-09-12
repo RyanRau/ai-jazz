@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import AppShell from "./AppShell";
+import SideNav from "../SideNav/SideNav";
 import Link from "../Link/Link";
 import Card from "../../layout/Card/Card";
+import StatTile from "../../display/StatTile/StatTile";
 import Text from "../../text/Text/Text";
 import Header from "../../text/Header/Header";
 import Button from "../../buttons/Button/Button";
@@ -20,7 +22,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Full-width header (title pinned left, account control pinned right), centred content column, optional footer — so every app doesn't rebuild the same page chrome and they all agree on content width.",
+          "Full-width header (title pinned left, account control pinned right), a content region below it, optional footer — so every app doesn't rebuild the same page chrome. The content region is centred and width-capped by default for a plain page, but fills the available width by default once `sideNav` is given: a dashboard shell's content isn't a document that benefits from a narrow reading column, and capping it next to the rail just wastes the rest of the viewport. See `maxWidth` to override either way.",
       },
     },
   },
@@ -93,4 +95,46 @@ export const Default: Story = {
       </Flexbox>
     </AppShell>
   ),
+};
+
+export const WithSideNav: Story = {
+  render: () => (
+    <AppShell
+      sideNav={
+        <SideNav
+          items={[
+            { key: "keys", label: "Keys", icon: "key" },
+            { key: "playground", label: "Playground", icon: "search" },
+          ]}
+          activeKey="keys"
+          storageKey={null}
+        />
+      }
+    >
+      <Flexbox direction="column" gap={20}>
+        <Header variant="h2">Keys</Header>
+        <Flexbox gap={16} flexWrap="wrap">
+          <StatTile label="Total calls" value="1,204" />
+          <StatTile label="Tokens in" value="318K" />
+          <StatTile label="Tokens out" value="96.4K" />
+        </Flexbox>
+        <Card padding={24}>
+          <Text variant="subtitle">
+            No `maxWidth` passed here — a shell with `sideNav` fills the available width by default
+            instead of capping content at 960px next to the rail. Resize this story's viewport wide
+            to see the stat tiles and card actually use the space, rather than floating in a narrow
+            centred column with dead space on either side.
+          </Text>
+        </Card>
+      </Flexbox>
+    </AppShell>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "The dashboard-shell default: `sideNav` given, no `maxWidth` passed, content fills the rest of the viewport instead of being centred and capped.",
+      },
+    },
+  },
 };

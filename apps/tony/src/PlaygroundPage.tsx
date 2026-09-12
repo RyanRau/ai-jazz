@@ -7,8 +7,8 @@ import {
   FileDropzone,
   Flexbox,
   Header,
+  Icon,
   Markdown,
-  NumberInput,
   Switch,
   Text,
   TextAreaInput,
@@ -16,66 +16,19 @@ import {
 } from "bluestar";
 import type { FileDropzoneValue } from "bluestar";
 import { useGatewayAuth } from "./useGatewayAuth";
+import { useModels } from "./useModels";
+import type { ModelInfo } from "./useModels";
+import { applyModelParams, EMPTY_MODEL_PARAMS } from "./modelParams";
+import { ModelParamControls } from "./ModelParamControls";
+import { ModelInfoModal } from "./ModelInfoModal";
 import { parseSseLines, deltaContent, eventUsage } from "./sse";
 import { GATEWAY_URL } from "./gateway";
 
-type ModelInfo = { id: string; vision: boolean };
 type Usage = { tokens_in: number; tokens_out: number };
 
 function formatElapsed(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
-}
-
-/**
- * Builds the /v1/chat/completions request body from the page's controls.
- * `temperature`/`maxTokens`/`topP` cover the common sampling knobs directly;
- * `advancedParamsText` is a raw-JSON escape hatch for anything else the
- * gateway forwards untouched (llama-server's own `reasoning_budget`, `min_p`,
- * `seed`, ...) without this page needing to hardcode every possible name --
- * see home-server/llm-gateway's README on what actually passes through.
- * Whatever's in there wins over the dedicated fields on a key collision, so
- * it's also how to override the ones above with something more exotic.
- */
-function buildBody(params: {
-  model: string;
-  content: string | { type: string; text?: string; image_url?: { url: string } }[];
-  temperature: number | null;
-  maxTokens: number | null;
-  topP: number | null;
-  streamEnabled: boolean;
-  advancedParamsText: string;
-}): { body: Record<string, unknown> } | { error: string } {
-  const body: Record<string, unknown> = {
-    model: params.model.trim() || undefined,
-    messages: [{ role: "user", content: params.content }],
-  };
-  if (params.temperature !== null) body.temperature = params.temperature;
-  if (params.maxTokens !== null) body.max_tokens = params.maxTokens;
-  if (params.topP !== null) body.top_p = params.topP;
-  if (params.streamEnabled) {
-    body.stream = true;
-    // Some llama-server builds only include token counts in a streamed
-    // response's usage field when this is set -- see the gateway README's
-    // Limitations section.
-    body.stream_options = { include_usage: true };
-  }
-
-  const extraText = params.advancedParamsText.trim();
-  if (extraText) {
-    let extra: unknown;
-    try {
-      extra = JSON.parse(extraText);
-    } catch {
-      return { error: "Advanced params must be valid JSON." };
-    }
-    if (extra === null || typeof extra !== "object" || Array.isArray(extra)) {
-      return { error: 'Advanced params must be a JSON object, e.g. {"seed": 42}.' };
-    }
-    Object.assign(body, extra);
-  }
-
-  return { body };
 }
 
 /**
@@ -92,18 +45,14 @@ function buildBody(params: {
  */
 export function PlaygroundPage() {
   const { apiKey, recoverFromUnauthorized } = useGatewayAuth();
-  // null = not loaded yet, "unavailable" = the gateway couldn't be reached
-  // (fall back to a plain text field rather than blocking model entry).
-  const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
+  const models = useModels(apiKey);
   const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");
   const [image, setImage] = useState<FileDropzoneValue | null>(null);
 
-  const [temperature, setTemperature] = useState<number | null>(null);
-  const [maxTokens, setMaxTokens] = useState<number | null>(null);
-  const [topP, setTopP] = useState<number | null>(null);
+  const [params, setParams] = useState(EMPTY_MODEL_PARAMS);
   const [streamEnabled, setStreamEnabled] = useState(false);
-  const [advancedParamsText, setAdvancedParamsText] = useState("");
+  const [infoModel, setInfoModel] = useState<ModelInfo | null>(null);
 
   const [response, setResponse] = useState<string | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -112,19 +61,6 @@ export function PlaygroundPage() {
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const startRef = useRef(0);
-
-  useEffect(() => {
-    if (!apiKey) return;
-    fetch(`${GATEWAY_URL}/v1/models`, { headers: { Authorization: `Bearer ${apiKey}` } })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data: { data: { id: string; vision?: boolean }[] }) =>
-        setModels(data.data.map((m) => ({ id: m.id, vision: m.vision === true })))
-      )
-      .catch(() => setModels("unavailable"));
-  }, [apiKey]);
 
   // Stop the tick if the page is left mid-request rather than leaking a
   // dangling interval.
@@ -174,15 +110,18 @@ export function PlaygroundPage() {
         ]
       : prompt;
 
-    const built = buildBody({
-      model,
-      content,
-      temperature,
-      maxTokens,
-      topP,
-      streamEnabled,
-      advancedParamsText,
-    });
+    const base: Record<string, unknown> = {
+      model: model.trim() || undefined,
+      messages: [{ role: "user", content }],
+    };
+    if (streamEnabled) {
+      base.stream = true;
+      // Some llama-server builds only include token counts in a streamed
+      // response's usage field when this is set -- see the gateway README's
+      // Limitations section.
+      base.stream_options = { include_usage: true };
+    }
+    const built = applyModelParams(base, params);
     if ("error" in built) {
       setError(built.error);
       return;
@@ -271,126 +210,117 @@ export function PlaygroundPage() {
   }
 
   return (
-    <Card padding={24}>
-      <Flexbox direction="column" gap={16}>
+    <Flexbox direction="column" gap={16}>
+      <Flexbox direction="column" gap={4}>
         <Header variant="h2">Playground</Header>
         <Text variant="caption">
           Sends one chat completion directly to {GATEWAY_URL}, authenticated as you. Usage shows up
           on the Keys page under your default key, which can't be revoked from under this page.
         </Text>
-        {modelList ? (
-          <Dropdown
-            label="Model"
-            options={[
-              { label: "Gateway default", value: "" },
-              ...modelList.map((m) => ({
-                label: m.vision ? `${m.id} (vision)` : m.id,
-                value: m.id,
-              })),
-            ]}
-            value={model}
-            onChange={onModelChange}
-          />
-        ) : (
-          <TextInput
-            label="Model"
-            value={model}
-            onChange={setModel}
-            placeholder="leave blank for the gateway's default"
-          />
-        )}
-        <TextAreaInput
-          label="Prompt"
-          value={prompt}
-          onChange={setPrompt}
-          rows={6}
-          placeholder="Ask it something"
-        />
-        <FileDropzone
-          label="Image (optional)"
-          value={image}
-          onChange={setImage}
-          accept="image/*"
-          isDisabled={visionUnsupported}
-          warning={visionUnsupported ? `"${model}" doesn't support image input.` : undefined}
-        />
-
-        <Flexbox direction="column" gap={12}>
-          <Text variant="label">Parameters</Text>
-          <Flexbox gap={12} flexWrap="wrap">
-            <div style={{ width: 160 }}>
-              <NumberInput
-                label="Temperature"
-                value={temperature}
-                onChange={setTemperature}
-                min={0}
-                max={2}
-                step={0.1}
-                placeholder="default"
-              />
-            </div>
-            <div style={{ width: 160 }}>
-              <NumberInput
-                label="Max tokens"
-                value={maxTokens}
-                onChange={setMaxTokens}
-                min={1}
-                placeholder="default"
-              />
-            </div>
-            <div style={{ width: 160 }}>
-              <NumberInput
-                label="Top P"
-                value={topP}
-                onChange={setTopP}
-                min={0}
-                max={1}
-                step={0.05}
-                placeholder="default"
-              />
-            </div>
-          </Flexbox>
-          <Switch
-            label="Stream response"
-            value={streamEnabled}
-            onChange={setStreamEnabled}
-            description="Read the reply as it's generated instead of waiting for the whole thing."
-          />
-          <TextAreaInput
-            label="Advanced params (JSON, optional)"
-            value={advancedParamsText}
-            onChange={setAdvancedParamsText}
-            rows={2}
-            placeholder='e.g. {"reasoning_budget": 1024, "min_p": 0.05, "seed": 42}'
-            description="Merged into the request body -- anything your llama-server build accepts passes straight through. Context size is fixed per model in the gateway's config, not something a request can override."
-          />
-        </Flexbox>
-
-        <Flexbox gap={8} alignItems="center">
-          <Button
-            label={sending ? "Sending…" : "Send"}
-            onClick={send}
-            isDisabled={sending || !apiKey || !prompt}
-          />
-          {!sending && elapsedMs !== null && (
-            <Text variant="caption">
-              {formatElapsed(elapsedMs)}
-              {usage &&
-                ` · ${usage.tokens_in.toLocaleString()} in · ${usage.tokens_out.toLocaleString()} out`}
-            </Text>
-          )}
-        </Flexbox>
-        {error && (
-          <Alert variant="error" title="Request failed">
-            {error}
-          </Alert>
-        )}
-        {response && (
-          <Card padding={12}>
-            <Markdown content={response} />
-          </Card>
-        )}
       </Flexbox>
-    </Card>
+
+      <Flexbox gap={20} flexWrap="wrap" alignItems="flex-start">
+        <div style={{ flex: "1 1 380px", minWidth: 320 }}>
+          <Card padding={24}>
+            <Flexbox direction="column" gap={16}>
+              <Flexbox gap={8} alignItems="flex-end">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {modelList ? (
+                    <Dropdown
+                      label="Model"
+                      options={[
+                        { label: "Gateway default", value: "" },
+                        ...modelList.map((m) => ({
+                          label: m.vision ? `${m.id} (vision)` : m.id,
+                          value: m.id,
+                        })),
+                      ]}
+                      value={model}
+                      onChange={onModelChange}
+                    />
+                  ) : (
+                    <TextInput
+                      label="Model"
+                      value={model}
+                      onChange={setModel}
+                      placeholder="leave blank for the gateway's default"
+                    />
+                  )}
+                </div>
+                {selectedModel && (
+                  <Button
+                    label="Model info"
+                    aria-label={`About ${selectedModel.id}`}
+                    appearance="text"
+                    variant="secondary"
+                    onClick={() => setInfoModel(selectedModel)}
+                  >
+                    <Icon name="info" size={18} />
+                  </Button>
+                )}
+              </Flexbox>
+              <TextAreaInput
+                label="Prompt"
+                value={prompt}
+                onChange={setPrompt}
+                rows={6}
+                placeholder="Ask it something"
+              />
+              <FileDropzone
+                label="Image (optional)"
+                value={image}
+                onChange={setImage}
+                accept="image/*"
+                isDisabled={visionUnsupported}
+                warning={visionUnsupported ? `"${model}" doesn't support image input.` : undefined}
+              />
+
+              <ModelParamControls params={params} onChange={setParams} />
+              <Switch
+                label="Stream response"
+                value={streamEnabled}
+                onChange={setStreamEnabled}
+                description="Read the reply as it's generated instead of waiting for the whole thing."
+              />
+
+              <Button
+                label={sending ? "Sending…" : "Send"}
+                onClick={send}
+                isDisabled={sending || !apiKey || !prompt}
+              />
+            </Flexbox>
+          </Card>
+        </div>
+
+        <div style={{ flex: "2 1 420px", minWidth: 320 }}>
+          <Card padding={24}>
+            <Flexbox direction="column" gap={16}>
+              <Flexbox justifyContent="space-between" alignItems="center">
+                <Header variant="h3">Response</Header>
+                {!sending && elapsedMs !== null && (
+                  <Text variant="caption">
+                    {formatElapsed(elapsedMs)}
+                    {usage &&
+                      ` · ${usage.tokens_in.toLocaleString()} in · ${usage.tokens_out.toLocaleString()} out`}
+                  </Text>
+                )}
+              </Flexbox>
+              {error && (
+                <Alert variant="error" title="Request failed">
+                  {error}
+                </Alert>
+              )}
+              {response ? (
+                <Markdown content={response} />
+              ) : (
+                !error && <Text variant="caption">Send a prompt to see the response here.</Text>
+              )}
+            </Flexbox>
+          </Card>
+        </div>
+      </Flexbox>
+
+      <ModelInfoModal model={infoModel} onClose={() => setInfoModel(null)} />
+    </Flexbox>
   );
 }

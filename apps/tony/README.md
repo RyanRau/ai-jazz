@@ -29,33 +29,67 @@ A side nav switches between four pages:
   under its message as a `Disclosure` — "N tools used", collapsed by
   default — rather than an always-open block, since the query/results are
   useful to check but not something worth taking up space by default.
+  With no chat selected, the page is a large centred greeting and composer
+  (Claude's own new-chat screen was the direct reference) rather than a
+  mostly-empty thread view; once the first message sends, `useChat`
+  optimistically selects the new chat and the page drops into the normal
+  thread layout below. Once a chat exists, its title is inline-editable
+  (click it, Enter to save, Escape to cancel) and its model is a `Dropdown`
+  in the header — both PATCH `POST /api/custom/llm/chats/update`, which
+  changes what the _next_ message in that chat uses (`useChat`'s
+  `sendWith` always sends with the chat's own saved `model`, never the
+  page-level picker once a chat exists). Deleting a chat
+  (`POST /api/custom/llm/chats/delete`, which also removes its
+  `llm_chat_messages` rows since the relation isn't cascade-delete) sits
+  behind a `ConfirmDialog`, the same pattern Keys uses for revoking a key.
+  The composer stays pinned to the bottom of the viewport even for a short
+  or empty thread (`flex: 1` on the message list, not just
+  `position: sticky` on the composer, which only "sticks" once there's
+  enough content to scroll). A collapsed-by-default **Model params**
+  `Disclosure` above the composer (`src/ModelParamControls.tsx`, shared
+  with Playground) exposes 8 dedicated sampling-param controls plus an
+  Advanced JSON escape hatch; adjusting them only affects the next send
+  until **Save as default for this chat** persists them to the chat's own
+  `params` field (`POST /api/custom/llm/chats/params`) — opt-in, so
+  experimenting for one message never silently changes what the chat falls
+  back to later. **Reset to defaults** clears a chat's saved params back to
+  plain unset ones. An `info`-icon button next to a model picker (Playground
+  has one too) opens `ModelInfoModal`, showing that model's context size,
+  reasoning budget, and freeform notes — all startup-only config the model
+  picker itself can't show (see `gateway.py`'s `list_models`).
 - **Playground** — sends a one-off chat completion straight to the gateway
   (`VITE_LLM_GATEWAY_URL`, default `https://llm.ryanzrau.dev`) from the
   browser, the same as any other API client. Model is a dropdown populated
-  from the gateway's own `GET /v1/models` once a key is ready, falling back
-  to a plain text field if the gateway can't be reached; picking a
-  vision-capable model enables an image attachment field, sent as an
-  `image_url` content part. Exposes dedicated controls for the common
-  sampling params (temperature, max tokens, top P) plus an **Advanced
-  params** JSON field that merges arbitrary extra fields into the request
-  body — anything a given `llama-server` build accepts (`reasoning_budget`,
-  `min_p`, `seed`, ...) passes straight through with no gateway change
-  needed, since gateway.py forwards the body almost untouched. A **Stream
-  response** toggle reads the reply as SSE instead of waiting for the whole
-  completion (the gateway already supports this for `/v1/chat/completions`;
-  see its README). See the **Docs** page for the full parameter reference.
+  from the gateway's own `GET /v1/models` (`src/useModels.ts`, shared with
+  Chat) once a key is ready, falling back to a plain text field if the
+  gateway can't be reached; picking a vision-capable model enables an image
+  attachment field, sent as an `image_url` content part. Exposes 8
+  dedicated sampling-param controls (temperature, max tokens, top P, top K,
+  min P, presence/frequency penalty, seed, reasoning effort —
+  `src/ModelParamControls.tsx`/`src/modelParams.ts`, shared with Chat's own
+  per-chat params panel) plus an **Advanced params** JSON field that merges
+  arbitrary extra fields into the request body, winning over the dedicated
+  ones on a key collision — anything a given `llama-server` build accepts
+  passes straight through with no gateway change needed, since gateway.py
+  forwards the body almost untouched. Unlike Chat, nothing here persists:
+  every param resets on reload, same as a fresh Playground tab always has.
+  A **Stream response** toggle reads the reply as SSE instead of waiting
+  for the whole completion (the gateway already supports this for
+  `/v1/chat/completions`; see its README). See the **Docs** page for the
+  full parameter reference.
 - **Keys** — create/revoke API keys and see both per-key and aggregate usage
   (call count, tokens in/out, a daily time-series chart) in one place, with
   a dropdown to scope the usage section to one key or "All keys". Backed by
-  `apps/pocketbase/pb_hooks/llm.pb.js`: an `is_admin` account sees and can
-  revoke every key across every user; anyone else only ever sees their own.
-  The aggregate ("All keys") view itself defaults to just the signed-in
-  user's own usage even for an admin — a `My usage`/`All users`
-  `SegmentedControl` (admin-only; a regular user has no broader view to
-  switch to) opts into everyone's, via `GET /api/custom/llm/usage?mine=true`
-  forcing the same per-user filter a non-admin always gets. Otherwise an
-  admin's own usage would be lost inside an unscoped dump of every user's
-  rows with no way to isolate it.
+  `apps/pocketbase/pb_hooks/llm.pb.js`: an `is_admin` account can revoke
+  every key across every user; anyone else only ever sees or acts on their
+  own. Both the key list and the aggregate usage view default to just the
+  signed-in user's own, admin included — a `Mine`/`All users`
+  `SegmentedControl` in the key-list panel (admin-only; a regular user has
+  no broader view to switch to) opts into everyone's, via
+  `?mine=true` on both `GET /api/custom/llm/keys` and
+  `GET /api/custom/llm/usage`, forcing the same per-user filter a
+  non-admin always gets. Otherwise an admin's own keys/usage would be lost
+  inside an unscoped dump of every user's, with no way to isolate them.
   A key's plaintext is shown exactly once, at creation — the server never
   stores it, only its hash. Chat and Playground don't hold a key
   client-side at all: they authenticate to the gateway with the signed-in

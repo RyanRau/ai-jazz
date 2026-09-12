@@ -364,17 +364,17 @@ small functional shadow (`theme.shadow.sm`), not an ambient card shadow.
 
 ### Form controls
 
-| Component       | Value type                                   | Extra props                                                                                                                                                                                                                                                                                                          |
-| --------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TextInput`     | `string`                                     | `placeholder`, `type` (`text\|email\|password\|url\|tel`), `autoComplete` (the HTML hint, e.g. `"username"`/`"current-password"`/`"new-password"` — set it on any login/identity field or password managers won't reliably offer autofill), `readOnly` for a copyable but non-editable value (e.g. a generated link) |
-| `NumberInput`   | `number \| null`                             | `min`, `max`, `step`, `placeholder`                                                                                                                                                                                                                                                                                  |
-| `TextAreaInput` | `string`                                     | `rows` (default `4`), `placeholder`, `onKeyDown` (raw passthrough to the `<textarea>`, e.g. for a chat composer where Enter sends and Shift+Enter inserts a newline)                                                                                                                                                 |
-| `Checkbox`      | `boolean`                                    | `label` is the text beside the box; `hideLabel` visually hides it (sr-only) for dense grids where the label would be redundant                                                                                                                                                                                       |
-| `Switch`        | `boolean`                                    | same shape as `Checkbox`, toggle UI                                                                                                                                                                                                                                                                                  |
-| `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                                                                                                                                                                                                                                                                                        |
-| `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`                                                                                                                                                                                                                                                                          |
-| `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                                                                                                                                                                                                                                                                             |
-| `TokenSelect`   | `string[]`                                   | `options: { label, value }[]`, `addLabel` (default `"Add"`)                                                                                                                                                                                                                                                          |
+| Component       | Value type                                   | Extra props                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TextInput`     | `string`                                     | `placeholder`, `type` (`text\|email\|password\|url\|tel`), `autoComplete` (the HTML hint, e.g. `"username"`/`"current-password"`/`"new-password"` — set it on any login/identity field or password managers won't reliably offer autofill), `readOnly` for a copyable but non-editable value (e.g. a generated link), `onKeyDown`/`onBlur`/`autoFocus` (raw passthrough to the `<input>`, e.g. for an inline-editable field where Enter commits, Escape cancels, and it's ready to type into the moment it appears) |
+| `NumberInput`   | `number \| null`                             | `min`, `max`, `step`, `placeholder`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `TextAreaInput` | `string`                                     | `rows` (default `4`), `placeholder`, `onKeyDown` (raw passthrough to the `<textarea>`, e.g. for a chat composer where Enter sends and Shift+Enter inserts a newline), `autoFocus`                                                                                                                                                                                                                                                                                                                                   |
+| `Checkbox`      | `boolean`                                    | `label` is the text beside the box; `hideLabel` visually hides it (sr-only, still wired via `htmlFor`) for dense grids where the label would be redundant                                                                                                                                                                                                                                                                                                                                                           |
+| `Switch`        | `boolean`                                    | same shape as `Checkbox`, toggle UI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `CheckboxList`  | `string[]`                                   | `options: { label, value }[]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `RadioGroup`    | `string \| null`                             | `options: { label, value, description? }[]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `Dropdown`      | `string \| null`, or `string[]` with `multi` | `options`, `placeholder`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `TokenSelect`   | `string[]`                                   | `options: { label, value }[]`, `addLabel` (default `"Add"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 An empty `NumberInput` yields `null`, never `NaN`.
 
@@ -392,6 +392,15 @@ either way — nothing to change at call sites.
 
 `FormInputLayout` is exported for wrapping a custom control so it matches the
 rest; it takes a render function receiving `{ id, describedBy, invalid }`.
+
+`hideLabel` is a `FormFieldProps` field, not just a `Checkbox` one — every
+control built on `FormInputLayout` (`TextInput`, `TextAreaInput`, `Dropdown`,
+...) accepts it the same way: `label` stays the accessible name (still wired
+via `htmlFor`), just rendered sr-only instead of as visible text. For a
+control whose surrounding UI already conveys what it's for — an
+inline-editable page title, a composer whose placeholder and description
+already say "message" — where a floating caption above it would just add
+dead space.
 
 #### `FileDropzone`
 
@@ -477,7 +486,7 @@ a general-purpose icon library; a name is added only when a real consumer
 needs it. Names: `settings`, `logOut`, `close`, `chevronDown`, `chevronLeft`,
 `chevronRight`, `check`, `user`, `plus`, `trash`, `search`, `externalLink`,
 `image`, `key`, `chat`, `menu`, `upload`, `grid`, `switch`, `palette`,
-`edit`
+`edit`, `docs`, `copy`, `info`
 (`key`/`chat`/`menu`/`switch`/`palette` are hand-drawn for this repo, not
 adapted from Lucide).
 `color` defaults to `"currentColor"` so it inherits surrounding text/button
@@ -741,19 +750,19 @@ Native anchor props plus `variant` (`"primary" | "muted"`) and `external` (adds
 
 #### `AppShell`
 
-| Prop          | Type        | Default  |
-| ------------- | ----------- | -------- |
-| `title`       | `string`    | —        |
-| `appSwitcher` | `ReactNode` | —        |
-| `nav`         | `ReactNode` | —        |
-| `account`     | `ReactNode` | —        |
-| `sideNav`     | `ReactNode` | —        |
-| `children`    | `ReactNode` | required |
-| `footer`      | `ReactNode` | —        |
-| `maxWidth`    | `number`    | `960`    |
+| Prop          | Type        | Default   |
+| ------------- | ----------- | --------- |
+| `title`       | `string`    | —         |
+| `appSwitcher` | `ReactNode` | —         |
+| `nav`         | `ReactNode` | —         |
+| `account`     | `ReactNode` | —         |
+| `sideNav`     | `ReactNode` | —         |
+| `children`    | `ReactNode` | required  |
+| `footer`      | `ReactNode` | —         |
+| `maxWidth`    | `number`    | see below |
 
 Full-width header (title pinned left, `nav` then `account` pinned right —
-`account` is always the rightmost element), centred content column below it,
+`account` is always the rightmost element), a content region below it,
 optional footer. **The header only renders at all when it has something to
 show** — `title`, `appSwitcher`, `nav`, or `account`. An app whose branding
 and app switcher already live in `SideNav`'s own `top` slot (see below) has
@@ -761,6 +770,20 @@ no reason to pass any of these, and gets no header at all: just the rail and
 content, without a second bar repeating the same app name above it. `title`
 without a `sideNav` (e.g. a public landing page with nothing to switch
 between) still works exactly as before — pass it and the header renders.
+
+**`maxWidth` defaults differently depending on `sideNav`.** With no
+`sideNav`, it defaults to `960` — a plain page (a document, a form, a
+landing page) reads better as a centred reading column than stretched edge
+to edge. With `sideNav` given, it defaults to unset — a dashboard shell's
+content isn't a document, and it's already flanked by the rail on one
+side, so capping it too just wastes the rest of the viewport instead of
+resembling a centred column. Pass a number either way to override (e.g.
+a settings/profile page still wants a narrow column even inside a
+dashboard shell — see `apps/ryanzrau`'s `/settings` route). A page that
+itself has a comfortable reading width regardless of the shell's own cap
+(a chat thread, say) can add its own inner `max-width` wrapper around just
+that region instead of fighting the shell's default — see
+`apps/tony/src/ChatPage.tsx`.
 
 `sideNav` (typically a `SideNav`) is locked to the true left edge, below the
 header (if any), spanning its own full height — not inside the centred

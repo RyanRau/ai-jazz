@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { useToast } from "bluestar";
 import { pb } from "./pb";
 import { useAuthRecord } from "./useAuth";
 import { useGatewayAuth } from "./useGatewayAuth";
+import { useModels } from "./useModels";
+import { applyModelParams, EMPTY_MODEL_PARAMS } from "./modelParams";
+import type { ModelParams } from "./modelParams";
 import { GATEWAY_URL } from "./gateway";
 import { parseSseLines, deltaContent } from "./sse";
 
@@ -9,6 +13,11 @@ export type ChatSummary = {
   id: string;
   title: string;
   model: string;
+  /** Saved sampling-param defaults for this chat's next turn -- `null` when
+   *  none have been saved (see saveChatDefaultParams/resetChatParams), in
+   *  which case sendWith() sends with plain unset params, same as
+   *  Playground's own defaults. */
+  params: ModelParams | null;
   created: string;
   updated: string;
 };
@@ -26,7 +35,6 @@ export type ChatMessage = {
   tool_calls: ToolCallRecord[];
   created: string;
 };
-export type ModelInfo = { id: string; vision: boolean };
 type IdsEvent = {
   type: "ids";
   chat_id: string;
@@ -67,9 +75,11 @@ export function useChat() {
   // that only ever mounted post-login.
   const record = useAuthRecord();
   const { apiKey, recoverFromUnauthorized } = useGatewayAuth();
+  const toast = useToast();
 
-  const [models, setModels] = useState<ModelInfo[] | "unavailable" | null>(null);
+  const models = useModels(apiKey);
   const [model, setModel] = useState("");
+  const [chatParams, setChatParams] = useState<ModelParams>(EMPTY_MODEL_PARAMS);
 
   const [chats, setChats] = useState<ChatSummary[] | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -87,19 +97,6 @@ export function useChat() {
   const sendingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!apiKey) return;
-    fetch(`${GATEWAY_URL}/v1/models`, { headers: { Authorization: `Bearer ${apiKey}` } })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data: { data: { id: string; vision?: boolean }[] }) =>
-        setModels(data.data.map((m) => ({ id: m.id, vision: m.vision === true })))
-      )
-      .catch(() => setModels("unavailable"));
-  }, [apiKey]);
 
   function refreshChats() {
     return pb
@@ -155,6 +152,24 @@ export function useChat() {
     threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Loads the selected chat's own saved params (or plain defaults for a new
+  // chat / one with none saved) whenever the selection itself changes --
+  // adjusted directly during render (React's documented pattern for
+  // resetting state when something it depends on changes -- see
+  // https://react.dev/learn/you-might-not-need-an-effect), not in an
+  // effect, so this doesn't cost an extra render pass. Deliberately keyed
+  // only on `selectedChatId` (tracked via `paramsSyncedChatId`), not
+  // `chats` itself, so a background chats refresh (e.g. after sending a
+  // message) can't stomp over params you're mid-editing but haven't
+  // explicitly saved yet -- see modelParams.ts for why saving is opt-in
+  // rather than automatic.
+  const [paramsSyncedChatId, setParamsSyncedChatId] = useState<string | null>(null);
+  if (selectedChatId !== paramsSyncedChatId) {
+    setParamsSyncedChatId(selectedChatId);
+    const chat = chats?.find((c) => c.id === selectedChatId);
+    setChatParams(chat?.params ?? EMPTY_MODEL_PARAMS);
+  }
+
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -185,11 +200,79 @@ export function useChat() {
     setChatsView("thread");
   }
 
+  async function renameChat(id: string, title: string) {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    setChats((prev) => prev?.map((c) => (c.id === id ? { ...c, title: trimmed } : c)) ?? prev);
+    await pb.send("/api/custom/llm/chats/update", {
+      method: "POST",
+      body: { chat_id: id, title: trimmed },
+    });
+  }
+
+  async function updateChatModel(id: string, newModel: string) {
+    setChats((prev) => prev?.map((c) => (c.id === id ? { ...c, model: newModel } : c)) ?? prev);
+    await pb.send("/api/custom/llm/chats/update", {
+      method: "POST",
+      body: { chat_id: id, model: newModel },
+    });
+  }
+
+  async function deleteChat(id: string) {
+    await pb.send("/api/custom/llm/chats/delete", { method: "POST", body: { chat_id: id } });
+    setChats((prev) => prev?.filter((c) => c.id !== id) ?? prev);
+    if (id === selectedChatId) newChat();
+    toast.success("Chat deleted");
+  }
+
+  // Persists the *current* `chatParams` as this chat's default for future
+  // turns -- opt-in, not automatic (see modelParams.ts): adjusting params
+  // for one message doesn't change what the chat falls back to next time
+  // unless this is explicitly called.
+  async function saveChatDefaultParams() {
+    if (!selectedChatId) return;
+    await pb.send("/api/custom/llm/chats/params", {
+      method: "POST",
+      body: { chat_id: selectedChatId, params: chatParams },
+    });
+    setChats(
+      (prev) =>
+        prev?.map((c) => (c.id === selectedChatId ? { ...c, params: chatParams } : c)) ?? prev
+    );
+    toast.success("Saved as default for this chat");
+  }
+
+  async function resetChatParams() {
+    setChatParams(EMPTY_MODEL_PARAMS);
+    if (!selectedChatId) return;
+    await pb.send("/api/custom/llm/chats/params", {
+      method: "POST",
+      body: { chat_id: selectedChatId },
+    });
+    setChats(
+      (prev) => prev?.map((c) => (c.id === selectedChatId ? { ...c, params: null } : c)) ?? prev
+    );
+    toast.success("Reset to defaults");
+  }
+
   async function sendWith(key: string, retryOn401: boolean): Promise<void> {
     const content = draft.trim();
     const chat = chats?.find((c) => c.id === selectedChatId);
     const sendModel = chat?.model || model;
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
+
+    const built = applyModelParams(
+      {
+        chat_id: selectedChatId || undefined,
+        model: sendModel || undefined,
+        messages: [...history, { role: "user", content }],
+      },
+      chatParams
+    );
+    if ("error" in built) {
+      setError(built.error);
+      return;
+    }
 
     setDraft("");
     setError(null);
@@ -205,11 +288,7 @@ export function useChat() {
       const r = await fetch(`${GATEWAY_URL}/v1/chat/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-        body: JSON.stringify({
-          chat_id: selectedChatId || undefined,
-          model: sendModel || undefined,
-          messages: [...history, { role: "user", content }],
-        }),
+        body: JSON.stringify(built.body),
         signal: controller.signal,
       });
 
@@ -251,6 +330,7 @@ export function useChat() {
                   id: ev.chat_id,
                   title: deriveTitle(content),
                   model: sendModel,
+                  params: null,
                   created: now,
                   updated: now,
                 },
@@ -357,6 +437,13 @@ export function useChat() {
     send,
     newChat,
     selectChat,
+    renameChat,
+    updateChatModel,
+    deleteChat,
+    chatParams,
+    setChatParams,
+    saveChatDefaultParams,
+    resetChatParams,
     generating,
     threadEndRef,
   };

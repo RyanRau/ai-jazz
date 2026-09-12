@@ -1,3 +1,4 @@
+import { css } from "goober";
 import { useId } from "react";
 import type { ReactNode } from "react";
 import { useTheme } from "../../../theme";
@@ -19,6 +20,15 @@ export type FormFieldProps = {
   /** Form field name. `useForm().field(name)` supplies this. */
   name?: string;
   isDisabled?: boolean;
+  /**
+   * Visually hides `label` (kept for screen readers, still wired via
+   * `htmlFor`, via sr-only styling) instead of rendering it as visible
+   * text — same idea as `Checkbox`'s own `hideLabel`. For a control whose
+   * surrounding UI already conveys what it's for (an inline-editable page
+   * title, say) where a floating caption above it would just add dead
+   * space. Defaults to `false`.
+   */
+  hideLabel?: boolean;
 };
 
 export type FormInputLayoutProps = Omit<FormFieldProps, "name" | "isDisabled"> & {
@@ -29,12 +39,25 @@ export type FormInputLayoutProps = Omit<FormFieldProps, "name" | "isDisabled"> &
   children: (ids: { id: string; describedBy: string | undefined; invalid: boolean }) => ReactNode;
 };
 
+const srOnly = css`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+`;
+
 export default function FormInputLayout({
   label,
   description,
   warning,
   error,
   required,
+  hideLabel = false,
   children,
 }: FormInputLayoutProps) {
   const theme = useTheme();
@@ -51,7 +74,7 @@ export default function FormInputLayout({
         // and does not forward htmlFor, so wrapping a <label> in a Text
         // as="label" would nest two labels — invalid, and the association goes
         // to whichever one the browser picks.
-        <label htmlFor={id}>
+        <label htmlFor={id} className={hideLabel ? srOnly : undefined}>
           <Text as="span" variant="label">
             {label}
             {required && (

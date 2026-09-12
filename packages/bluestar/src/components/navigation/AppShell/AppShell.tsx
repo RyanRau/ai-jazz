@@ -33,23 +33,36 @@ export type AppShellProps = {
    * without this prop keeps exactly as before.
    */
   sideNav?: ReactNode;
-  /** Page content, width-constrained and centred. */
+  /**
+   * Page content. Fills the available width by default when `sideNav` is
+   * given (see `maxWidth`) — width-constrained and centred otherwise.
+   */
   children: ReactNode;
   /** Optional footer below the content. */
   footer?: ReactNode;
-  /** Max content width in pixels. Defaults to `960`. */
+  /**
+   * Max content width in pixels, centring `children` (and `footer`) inside
+   * it. Defaults to `960` for a plain page (no `sideNav`) — a document/form
+   * reads better as a centred reading column than stretched edge to edge.
+   * Defaults to unset (fills the available width) when `sideNav` is given:
+   * that's a dashboard shell, not a document, and its content is already
+   * flanked by the rail on one side — capping it too just leaves dead
+   * space instead of anything resembling a centred column. Pass a number
+   * either way to override.
+   */
   maxWidth?: number;
 };
 
 /**
  * Full-width header (title pinned left, account control pinned right),
- * centred content column below it, optional footer.
+ * a content region below it (centred and width-capped, or full-width — see
+ * `maxWidth`), optional footer.
  *
  * Exists so every app doesn't rebuild the same page chrome — and so they all
  * agree on content width and header treatment. The header intentionally
- * does NOT share the content column's max-width: a nav bar reading as
- * "centered in a lot of empty space" on a wide viewport is the wrong look —
- * real nav bars pin to the true edges of the viewport.
+ * does NOT share the content column's max-width even when capped: a nav bar
+ * reading as "centered in a lot of empty space" on a wide viewport is the
+ * wrong look — real nav bars pin to the true edges of the viewport.
  */
 export default function AppShell({
   title,
@@ -59,7 +72,7 @@ export default function AppShell({
   sideNav,
   children,
   footer,
-  maxWidth = 960,
+  maxWidth,
 }: AppShellProps) {
   const theme = useTheme();
   const [isMobile, setIsMobile] = useState(
@@ -114,6 +127,11 @@ export default function AppShell({
   // bar repeating the same app name above it.
   const hasHeaderContent = Boolean(title || appSwitcher || nav || account);
 
+  // An explicit maxWidth always wins; otherwise a plain page (no sideNav)
+  // keeps the original centred-column default, while a dashboard shell
+  // (sideNav given) gets no cap at all -- see the prop's own doc comment.
+  const effectiveMaxWidth = maxWidth ?? (sideNav ? null : 960);
+
   // Raw CSS text, not a `css`-generated class name: `css()` returns a class
   // name string, and embedding that as literal text inside another `css`
   // template is invalid CSS that silently drops the whole declaration (this
@@ -121,8 +139,7 @@ export default function AppShell({
   // built but only ever wired up correctly for the footer's own div below).
   const centredRules = `
     width: 100%;
-    max-width: ${maxWidth}px;
-    margin: 0 auto;
+    ${effectiveMaxWidth ? `max-width: ${effectiveMaxWidth}px; margin: 0 auto;` : ""}
     padding: 0 16px;
   `;
 
@@ -159,7 +176,14 @@ export default function AppShell({
             position: fixed;
             top: 12px;
             left: 12px;
-            z-index: 1;
+            /* Higher than a plain sticky-in-content z-index (1 is the
+               obvious first value a page reaches for, e.g. a page's own
+               sticky header staying above its own scrolling content) --
+               this button is app-level chrome, the only way to open nav on
+               mobile, and must never end up underneath a page's content
+               just because that content is also positioned and also
+               happens to render later in the DOM at this same corner. */
+            z-index: 10;
             background-color: ${theme.colors.background};
             border: 1px solid ${theme.colors.border};
             box-shadow: ${theme.shadow.sm};

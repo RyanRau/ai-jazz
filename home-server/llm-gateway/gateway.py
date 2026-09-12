@@ -474,6 +474,13 @@ async def list_models():
                 "object": "model",
                 "aliases": m.get("aliases", []),
                 "vision": m.get("vision", False),
+                # Startup-CLI-only config, surfaced read-only for the info
+                # modal -- neither is something a request can override (see
+                # the README's Parameters section), so this is the only way
+                # the UI can show them at all.
+                "context_size": (m.get("args", {}) or {}).get("ctx-size"),
+                "reasoning_budget": (m.get("args", {}) or {}).get("reasoning-budget"),
+                "notes": m.get("notes", ""),
             }
             for m in CONFIG["models"]
         ],

@@ -42,8 +42,18 @@ export type DropdownProps = SingleProps | MultiProps;
  */
 export default function Dropdown(props: DropdownProps) {
   const theme = useTheme();
-  const { options, label, description, warning, error, required, name, placeholder, isDisabled } =
-    props;
+  const {
+    options,
+    label,
+    description,
+    warning,
+    error,
+    required,
+    name,
+    placeholder,
+    isDisabled,
+    hideLabel,
+  } = props;
   const popoverId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -101,6 +111,7 @@ export default function Dropdown(props: DropdownProps) {
       warning={warning}
       error={error}
       required={required}
+      hideLabel={hideLabel}
     >
       {({ id, describedBy, invalid }) => {
         const base = controlClass(theme, { invalid, warning: Boolean(warning) });

@@ -37,6 +37,13 @@ models:
     model_path: "~/server/llm/models/qwen3.5-2b/Qwen3.5-2B-Q4_K_M.gguf"
     mmproj_path: "~/server/llm/models/qwen3.5-2b/mmproj-BF16.gguf"
     vision: true
+    # Freeform markdown shown in Tony's model info modal -- pros/cons,
+    # tradeoffs, whatever's useful to know before picking this one. Optional;
+    # omit for no info button on this model.
+    notes: |
+      Smallest, fastest model on this box -- good for quick/simple tasks
+      where latency matters more than depth. Struggles with anything
+      requiring multi-step reasoning.
     args:
       ctx-size: 32768
       n-gpu-layers: 99
@@ -49,6 +56,9 @@ models:
     model_path: "~/server/llm/models/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf"
     mmproj_path: "~/server/llm/models/qwen3.5-4b/mmproj-BF16.gguf"
     vision: true
+    notes: |
+      A step up from the 2B in reasoning quality, still fast. Reasonable
+      default for everyday chat.
     args:
       ctx-size: 32768
       n-gpu-layers: 99
@@ -61,6 +71,9 @@ models:
     model_path: "~/server/llm/models/qwen3.5-9b/Qwen3.5-9B-Q4_K_M.gguf"
     mmproj_path: "~/server/llm/models/qwen3.5-9b/mmproj-BF16.gguf"
     vision: true
+    notes: |
+      The general-purpose default -- best balance of quality and speed on
+      this hardware for most chat and vision tasks.
     args:
       ctx-size: 16384
       n-gpu-layers: 99
@@ -72,6 +85,9 @@ models:
     aliases: ["coder"]
     model_path: "~/server/llm/models/qwen2.5-coder-7b/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
     vision: false
+    notes: |
+      Tuned for code -- reach for this over the general-purpose models for
+      anything code-generation or code-review shaped. No vision support.
     args:
       ctx-size: 24576
       n-gpu-layers: 99
@@ -83,6 +99,10 @@ models:
     aliases: ["phi4"]
     model_path: "~/server/llm/models/phi-4-14b/phi-4-Q4_K_M.gguf"
     vision: false
+    notes: |
+      Largest model on this box -- strongest reasoning, slowest and most
+      memory-hungry. Worth the wait for genuinely hard problems, overkill
+      for quick questions.
     args:
       ctx-size: 8192
       n-gpu-layers: 99
