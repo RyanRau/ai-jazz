@@ -110,6 +110,7 @@ function App() {
       sideNav={
         <SideNav
           top={<AppSwitcher appName="Stash" icon={<AppIcon slug="stash" size={20} />} />}
+          collapsedTop={<AppIcon slug="stash" size={20} />}
           footer={<AccountMenu />}
         />
       }
