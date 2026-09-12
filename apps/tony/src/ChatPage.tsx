@@ -14,6 +14,7 @@ import {
   Icon,
   Link,
   Spinner,
+  StickyHeader,
   Text,
   TextAreaInput,
   TextInput,
@@ -135,134 +136,111 @@ function ChatHeader({
   }
 
   return (
-    <Flexbox
-      justifyContent="space-between"
-      alignItems="flex-start"
-      flexWrap="wrap"
-      gap={12}
-      style={{
-        position: "sticky",
-        // `top: 0` alone sticks 24px below the *true* top of the scrollport
-        // -- that offset is measured from main's own padding edge, and
-        // AppShell's `main` has `padding-top: 24px`. That left a permanent
-        // 24px gap above the header where scrolled message content (a code
-        // block, in particular) painted straight through, since nothing
-        // else covers that strip once you've scrolled -- confirmed via
-        // `elementFromPoint`, not just a screenshot artifact. The standard
-        // fix for a sticky header inside a padded scroll container:
-        // negative-offset by the padding, pull the box up to match, then
-        // restore the same visual gap with the header's own padding.
-        top: -24,
-        marginTop: -24,
-        paddingTop: 24,
-        zIndex: 1,
-        backgroundColor: theme.colors.background,
-        paddingBottom: 12,
-        borderBottom: `1px solid ${theme.colors.border}`,
-      }}
-    >
-      <Flexbox direction="column" gap={4} style={{ minWidth: 0, flex: "1 1 240px" }}>
-        {editingTitle ? (
-          <TextInput
-            label="Chat title"
-            hideLabel
-            value={titleDraft}
-            onChange={setTitleDraft}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitTitle();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setTitleDraft(chat.title);
-                setEditingTitle(false);
-              }
-            }}
-            onBlur={commitTitle}
-            autoFocus
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setEditingTitle(true)}
-            aria-label={`Rename "${chat.title}"`}
-            className={css`
-              display: inline-flex;
-              align-items: center;
-              gap: 6px;
-              max-width: 100%;
-              background: transparent;
-              border: none;
-              padding: 2px 4px;
-              margin: -2px -4px;
-              cursor: pointer;
-              border-radius: ${theme.radius.sm};
-              &:hover {
-                background-color: ${theme.colors.surfaceHover};
-              }
-              &:focus-visible {
-                outline: 2px solid ${theme.colors.focusRing};
-                outline-offset: 2px;
-              }
-            `}
-          >
-            <div
-              style={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                minWidth: 0,
-              }}
-            >
-              <Header variant="h2">{chat.title}</Header>
-            </div>
-            <Icon name="edit" size={14} color={theme.colors.textMuted} />
-          </button>
-        )}
-        <Text variant="caption">Started {formatDate(chat.created)}</Text>
-      </Flexbox>
-
-      <Flexbox gap={8} alignItems="center">
-        {modelList ? (
-          // 260, not some tighter width -- controlClass floors every form
-          // control at a 240px min-width, so anything narrower than that
-          // just overflows its wrapper and overlaps whatever sits next to
-          // it (here, the delete button).
-          <div style={{ width: 260 }}>
-            <Dropdown
-              label="Model"
+    <StickyHeader>
+      <Flexbox justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={12}>
+        <Flexbox direction="column" gap={4} style={{ minWidth: 0, flex: "1 1 240px" }}>
+          {editingTitle ? (
+            <TextInput
+              label="Chat title"
               hideLabel
-              options={modelList.map((m) => ({ label: m.id, value: m.id }))}
-              value={chat.model}
-              onChange={(v) => v && onModelChange(v)}
+              value={titleDraft}
+              onChange={setTitleDraft}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitTitle();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setTitleDraft(chat.title);
+                  setEditingTitle(false);
+                }
+              }}
+              onBlur={commitTitle}
+              autoFocus
             />
-          </div>
-        ) : (
-          <Badge variant="neutral">{chat.model}</Badge>
-        )}
-        {modelList?.some((m) => m.id === chat.model) && (
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingTitle(true)}
+              aria-label={`Rename "${chat.title}"`}
+              className={css`
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                max-width: 100%;
+                background: transparent;
+                border: none;
+                padding: 2px 4px;
+                margin: -2px -4px;
+                cursor: pointer;
+                border-radius: ${theme.radius.sm};
+                &:hover {
+                  background-color: ${theme.colors.surfaceHover};
+                }
+                &:focus-visible {
+                  outline: 2px solid ${theme.colors.focusRing};
+                  outline-offset: 2px;
+                }
+              `}
+            >
+              <div
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  minWidth: 0,
+                }}
+              >
+                <Header variant="h2">{chat.title}</Header>
+              </div>
+              <Icon name="edit" size={14} color={theme.colors.textMuted} />
+            </button>
+          )}
+          <Text variant="caption">Started {formatDate(chat.created)}</Text>
+        </Flexbox>
+
+        <Flexbox gap={8} alignItems="center">
+          {modelList ? (
+            // 260, not some tighter width -- controlClass floors every form
+            // control at a 240px min-width, so anything narrower than that
+            // just overflows its wrapper and overlaps whatever sits next to
+            // it (here, the delete button).
+            <div style={{ width: 260 }}>
+              <Dropdown
+                label="Model"
+                hideLabel
+                options={modelList.map((m) => ({ label: m.id, value: m.id }))}
+                value={chat.model}
+                onChange={(v) => v && onModelChange(v)}
+              />
+            </div>
+          ) : (
+            <Badge variant="neutral">{chat.model}</Badge>
+          )}
+          {modelList?.some((m) => m.id === chat.model) && (
+            <Button
+              label="Model info"
+              aria-label={`About ${chat.model}`}
+              appearance="text"
+              variant="secondary"
+              onClick={onInfoRequest}
+            >
+              <Icon name="info" size={18} />
+            </Button>
+          )}
           <Button
-            label="Model info"
-            aria-label={`About ${chat.model}`}
+            label="Delete chat"
+            aria-label="Delete chat"
             appearance="text"
-            variant="secondary"
-            onClick={onInfoRequest}
+            variant="destructive"
+            density="dense"
+            onClick={onDeleteRequest}
           >
-            <Icon name="info" size={18} />
+            <Icon name="trash" size={16} />
           </Button>
-        )}
-        <Button
-          label="Delete chat"
-          aria-label="Delete chat"
-          appearance="text"
-          variant="destructive"
-          density="dense"
-          onClick={onDeleteRequest}
-        >
-          <Icon name="trash" size={16} />
-        </Button>
+        </Flexbox>
       </Flexbox>
-    </Flexbox>
+    </StickyHeader>
   );
 }
 
