@@ -142,7 +142,19 @@ function ChatHeader({
       gap={12}
       style={{
         position: "sticky",
-        top: 0,
+        // `top: 0` alone sticks 24px below the *true* top of the scrollport
+        // -- that offset is measured from main's own padding edge, and
+        // AppShell's `main` has `padding-top: 24px`. That left a permanent
+        // 24px gap above the header where scrolled message content (a code
+        // block, in particular) painted straight through, since nothing
+        // else covers that strip once you've scrolled -- confirmed via
+        // `elementFromPoint`, not just a screenshot artifact. The standard
+        // fix for a sticky header inside a padded scroll container:
+        // negative-offset by the padding, pull the box up to match, then
+        // restore the same visual gap with the header's own padding.
+        top: -24,
+        marginTop: -24,
+        paddingTop: 24,
         zIndex: 1,
         backgroundColor: theme.colors.background,
         paddingBottom: 12,
