@@ -52,6 +52,7 @@ export * from "./components/navigation/Pagination";
 export * from "./components/navigation/ListRow";
 export * from "./components/navigation/ThemeToggle";
 export * from "./components/navigation/ThemePicker";
+export * from "./components/navigation/StickyHeader";
 
 // Text
 export * from "./components/text/Header";

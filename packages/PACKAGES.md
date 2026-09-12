@@ -808,6 +808,37 @@ detect "that click was a navigation, not a collapse-toggle," so it stays
 open until dismissed. Nothing here needs wiring from the app; it's automatic
 based on `sideNav` being passed and the viewport width.
 
+#### `StickyHeader`
+
+| Prop       | Type        | Default  |
+| ---------- | ----------- | -------- |
+| `children` | `ReactNode` | required |
+
+A sticky header for content living inside a `sideNav`-bearing `AppShell`'s
+own scrolling `main` — a page's own title/actions row, pinned above its
+content as it scrolls (a chat's title/model/delete row, say). Distinct from
+`AppShell`'s own header above (branding/nav/account, which sits outside
+`main` entirely and never needs this) — use `StickyHeader` for a page's own
+in-content header, not app-level chrome.
+
+Plain `position: sticky; top: 0` isn't enough here above the `sm`
+breakpoint (desktop, where `main` itself is the scroll container): `main`
+has its own `padding-top: 24px`, and a sticky element's `top` offset is
+measured from the scrollport's _padding_ edge, not its true top — so
+`top: 0` alone sticks 24px below the actual top of the viewport, leaving a
+permanent gap above it where scrolled content paints straight through once
+you've scrolled past the first screen. `StickyHeader` compensates
+(`top: -24px; margin-top: -24px; padding-top: 24px`, net zero at rest) —
+don't reach for this fix yourself in an app; use the component. Below `sm`
+(mobile, where `sideNav` moves into a drawer and the whole page scrolls
+instead), that compensation doesn't apply — `main` isn't the scroll
+container there, so the same offset would overcorrect and clip the
+header's own content off-screen — `StickyHeader` gates it to exactly the
+breakpoint `AppShell` itself uses, with a smaller flat 8px top padding
+below it instead (enough that a heading's own line box doesn't start
+flush at `y: 0`, which visibly clips glyph tops against the true viewport
+edge otherwise).
+
 #### `SideNav`
 
 | Prop               | Type                    | Default                        |

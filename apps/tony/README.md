@@ -35,7 +35,9 @@ A side nav switches between four pages:
   optimistically selects the new chat and the page drops into the normal
   thread layout below. Once a chat exists, its title is inline-editable
   (click it, Enter to save, Escape to cancel) and its model is a `Dropdown`
-  in the header — both PATCH `POST /api/custom/llm/chats/update`, which
+  in the header (`bluestar`'s `StickyHeader` — a chat's title/model/delete
+  row pinned above the thread as it scrolls) — both PATCH
+  `POST /api/custom/llm/chats/update`, which
   changes what the _next_ message in that chat uses (`useChat`'s
   `sendWith` always sends with the chat's own saved `model`, never the
   page-level picker once a chat exists). Deleting a chat
