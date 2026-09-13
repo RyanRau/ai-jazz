@@ -1,0 +1,24 @@
+{
+  "name": "mono",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
+  "features": {
+    // Talks to the HOST's docker daemon (not a nested one) so containers
+    // `infra/devbox/devbox up` starts publish ports on the real host — the
+    // machine your browser is actually on — instead of being trapped inside
+    // this container's own network namespace.
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteUser": "node",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
+    }
+  }
+  // Local Docker Desktop / WSL only: infra/devbox binds host port 80 directly,
+  // which VS Code doesn't need to forward since it's the real host, not a port
+  // inside this container. Running this devcontainer in a remote environment
+  // (e.g. Codespaces) instead needs "forwardPorts": [80] added here, and you'd
+  // browse the forwarded URL rather than a *.localtest.me alias.
+}

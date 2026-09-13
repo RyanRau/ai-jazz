@@ -17,6 +17,7 @@ reach it, and how to debug it when they don't.
 | `templates/app/`      | The app template (`.tpl` files, placeholders substituted by `new_app.py`)                                                                         |
 | `AUDIT.md`            | Architecture assessment, known weaknesses, deliberate omissions                                                                                   |
 | `traefik/dynamic/`    | Static Traefik routes for backends that aren't Docker containers Traefik can discover via labels — currently just `home-server/llm-gateway`       |
+| `devbox/`             | Disposable local copies of the whole app stack for development — see `devbox/README.md`                                                           |
 
 `generate-compose.py` and `validate_deploy.py` need `pyyaml` and nothing else.
 

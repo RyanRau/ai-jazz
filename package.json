@@ -10,7 +10,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "validate": "python3 infra/validate_deploy.py",
-    "new-app": "python3 infra/new_app.py"
+    "new-app": "python3 infra/new_app.py",
+    "devbox": "bash infra/devbox/devbox"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

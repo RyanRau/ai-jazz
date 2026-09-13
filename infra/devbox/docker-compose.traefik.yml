@@ -1,0 +1,29 @@
+# The one long-lived piece of a devbox: a local, HTTP-only Traefik that every
+# `devbox up` instance joins as an external network. Started once (idempotent —
+# `devbox up` brings it up if it isn't already running) and left running across
+# however many instances you spin up and tear down.
+#
+# Not rendered from deploy.yml — it doesn't route any app itself, it only
+# discovers containers carrying `traefik.enable=true` labels, which is exactly
+# what infra/generate-compose.py --devbox emits per app.
+services:
+  traefik:
+    image: traefik:v2.11
+    container_name: devbox-traefik
+    restart: unless-stopped
+    command:
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - web
+
+networks:
+  web:
+    name: devbox_web
+    driver: bridge

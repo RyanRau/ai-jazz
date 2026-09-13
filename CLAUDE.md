@@ -8,6 +8,8 @@ work.
 ## Repo Structure
 
 ```
+.devcontainer/     # VS Code container for developing this repo (Node, Python, Docker CLI,
+                   # Claude Code CLI preinstalled) — see infra/devbox/README.md
 apps/              # Deployable apps (Dockerfile + nginx.conf per app)
   ryanzrau/        # Personal site → ryanzrau.dev. Signed out: a public
                    # landing page. Signed in: sidebar adds the app catalog
@@ -22,7 +24,7 @@ packages/
 home-server/       # Tools that run on home hardware, NOT the deploy pipeline
   llm-gateway/     # Auth + on-demand model swap in front of llama-server
 infra/             # deploy tooling: generate-compose, validate_deploy, select_apps,
-                   # new_app, retire_test_apps, templates/, README, AUDIT
+                   # new_app, retire_test_apps, templates/, README, AUDIT, devbox/
 deploy.yml         # Source of truth for which apps are deployed and their subdomains
 ```
 

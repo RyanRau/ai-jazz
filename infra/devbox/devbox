@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# Spins up an isolated, disposable copy of the whole app stack (every enabled
+# app in deploy.yml + PocketBase), routed by a shared local Traefik at
+# <app>.<slug>.localtest.me — the same shape of URL production serves, just
+# local. Run several at once: each instance gets its own random slug, its own
+# Compose project, its own PocketBase volume, and none of them can collide.
+#
+# Usage:
+#   infra/devbox/devbox up [--ref main] [--local] [--name SLUG] [--domain localtest.me]
+#   infra/devbox/devbox down SLUG [--purge]
+#   infra/devbox/devbox ls
+#   infra/devbox/devbox logs SLUG [-- SERVICE]
+#
+# `up` with no flags clones origin/main fresh into an ephemeral workdir under
+# ~/.devbox and builds that — an independent, throwaway preview. Pass --local
+# to build the checkout you're actually sitting in instead (what you want when
+# previewing edits you're making right now, e.g. from inside the devcontainer).
+#
+# localtest.me is a public DNS wildcard that resolves any of its subdomains to
+# 127.0.0.1 — no /etc/hosts or dnsmasq setup needed. See infra/devbox/README.md
+# if you'd rather use a literal `.devbox` alias instead.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+STATE_DIR="${DEVBOX_STATE_DIR:-$HOME/.devbox/instances}"
+TRAEFIK_COMPOSE="$SCRIPT_DIR/docker-compose.traefik.yml"
+
+ADJECTIVES=(quiet swift lucky brave calm bright rusty tidy sunny bold plain solid gentle sharp lively quick amber violet coral cobalt)
+NOUNS=(otter finch heron ferret badger sparrow marten kestrel osprey lynx magpie plover harrier tern vireo)
+
+log() { echo "devbox: $*" >&2; }
+die() { echo "devbox: error: $*" >&2; exit 1; }
+
+require_docker() {
+  command -v docker >/dev/null 2>&1 || die "docker not found on PATH"
+  docker compose version >/dev/null 2>&1 || die "'docker compose' (the plugin, not docker-compose) is required"
+}
+
+require_pyyaml() {
+  python3 -c "import yaml" 2>/dev/null || die "python3's pyyaml module is required — pip install pyyaml"
+}
+
+random_slug() {
+  local a n
+  for _ in $(seq 1 20); do
+    a=${ADJECTIVES[$RANDOM % ${#ADJECTIVES[@]}]}
+    n=${NOUNS[$RANDOM % ${#NOUNS[@]}]}
+    if [ ! -e "$STATE_DIR/$a-$n" ]; then
+      echo "$a-$n"
+      return
+    fi
+  done
+  echo "devbox-$RANDOM"
+}
+
+ensure_traefik() {
+  if ! docker ps --format '{{.Names}}' | grep -qx devbox-traefik; then
+    log "starting the shared local Traefik (devbox-traefik, host port 80)..."
+    docker compose -p devbox-traefik -f "$TRAEFIK_COMPOSE" up -d
+  fi
+}
+
+write_meta() {
+  local dir=$1
+  cat >"$dir/meta" <<EOF
+SLUG=$2
+DOMAIN=$3
+WORKDIR=$4
+SOURCE=$5
+CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+}
+
+cmd_up() {
+  local ref=main local_mode=0 name="" domain=localtest.me
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --ref) ref=$2; shift 2 ;;
+      --local) local_mode=1; shift ;;
+      --name) name=$2; shift 2 ;;
+      --domain) domain=$2; shift 2 ;;
+      *) die "unknown argument: $1" ;;
+    esac
+  done
+
+  require_docker
+  require_pyyaml
+  mkdir -p "$STATE_DIR"
+
+  local slug=${name:-$(random_slug)}
+  local instance_dir="$STATE_DIR/$slug"
+  [ -e "$instance_dir" ] && die "instance '$slug' already exists (devbox down $slug first, or pick --name)"
+  mkdir -p "$instance_dir"
+
+  local workdir source
+  if [ "$local_mode" = 1 ]; then
+    workdir="$REPO_ROOT"
+    source="local:$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+    log "using your current checkout at $workdir"
+  else
+    local origin_url
+    origin_url=$(git -C "$REPO_ROOT" remote get-url origin)
+    workdir="$instance_dir/src"
+    source="clone:$ref"
+    log "cloning $origin_url@$ref into $workdir..."
+    git clone --quiet --depth 1 --branch "$ref" "$origin_url" "$workdir"
+  fi
+
+  ensure_traefik
+
+  log "rendering deploy.yml for slug '$slug'..."
+  local gen_output
+  gen_output=$(cd "$workdir" && python3 infra/generate-compose.py \
+    --devbox --slug "$slug" --domain "$domain" --output "$instance_dir/compose.yml")
+  echo "$gen_output" | sed 's/^/devbox: /' >&2
+
+  log "building and starting containers (this can take a few minutes on first run)..."
+  docker compose -p "devbox-$slug" -f "$instance_dir/compose.yml" --project-directory "$workdir" \
+    up -d --build
+
+  write_meta "$instance_dir" "$slug" "$domain" "$workdir" "$source"
+
+  if docker ps --format '{{.Names}}' | grep -qx "pocketbase-$slug"; then
+    log "waiting for pocketbase-$slug to become healthy..."
+    for _ in $(seq 1 30); do
+      status=$(docker inspect --format '{{.State.Health.Status}}' "pocketbase-$slug" 2>/dev/null || echo "")
+      [ "$status" = "healthy" ] && break
+      sleep 2
+    done
+    docker exec "pocketbase-$slug" /pb/pocketbase superuser upsert dev@devbox.local devbox-dev-password \
+      >/dev/null 2>&1 || log "pocketbase superuser bootstrap skipped (already set, or not ready yet — run it by hand if needed)"
+    log "pocketbase admin: dev@devbox.local / devbox-dev-password (dev-only, don't reuse this)"
+  fi
+
+  echo
+  echo "devbox '$slug' is up:"
+  echo "$gen_output" | grep '→' | sed -E 's/.* → (.*)/  http:\/\/\1/'
+  echo
+  echo "  devbox down $slug     # tear it down"
+  echo "  devbox logs $slug     # follow logs"
+}
+
+load_meta() {
+  local dir="$STATE_DIR/$1"
+  [ -f "$dir/meta" ] || die "no such devbox instance: $1"
+  # shellcheck disable=SC1090
+  . "$dir/meta"
+}
+
+cmd_down() {
+  local slug=${1:-}; shift || true
+  [ -n "$slug" ] || die "usage: devbox down SLUG [--purge]"
+  local purge=0
+  [ "${1:-}" = "--purge" ] && purge=1
+
+  load_meta "$slug"
+  local instance_dir="$STATE_DIR/$slug"
+  local extra=()
+  [ "$purge" = 1 ] && extra+=(-v)
+
+  docker compose -p "devbox-$slug" -f "$instance_dir/compose.yml" --project-directory "$WORKDIR" \
+    down "${extra[@]}"
+
+  if [ "$purge" = 1 ]; then
+    rm -rf "$instance_dir"
+    log "removed instance state and volumes for '$slug'"
+  fi
+}
+
+cmd_ls() {
+  mkdir -p "$STATE_DIR"
+  if [ -z "$(ls -A "$STATE_DIR" 2>/dev/null)" ]; then
+    echo "no devbox instances"
+    return
+  fi
+  printf '%-20s %-12s %-30s %s\n' SLUG SOURCE DOMAIN CONTAINERS
+  for dir in "$STATE_DIR"/*/; do
+    slug=$(basename "$dir")
+    [ -f "$dir/meta" ] || continue
+    ( . "$dir/meta"
+      count=$(docker ps --filter "label=com.docker.compose.project=devbox-$slug" -q | wc -l | tr -d ' ')
+      printf '%-20s %-12s %-30s %s running\n' "$slug" "$SOURCE" "$DOMAIN" "$count" )
+  done
+}
+
+cmd_logs() {
+  local slug=${1:-}; shift || true
+  [ -n "$slug" ] || die "usage: devbox logs SLUG [SERVICE]"
+  load_meta "$slug"
+  docker compose -p "devbox-$slug" -f "$STATE_DIR/$slug/compose.yml" --project-directory "$WORKDIR" \
+    logs -f "$@"
+}
+
+case "${1:-}" in
+  up) shift; cmd_up "$@" ;;
+  down) shift; cmd_down "$@" ;;
+  ls|list) cmd_ls ;;
+  logs) shift; cmd_logs "$@" ;;
+  *)
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+    ;;
+esac
