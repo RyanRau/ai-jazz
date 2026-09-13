@@ -103,14 +103,58 @@ that matters, and never reuse this password anywhere real.
   `--name <same-slug>` on the next `up --local` to rebuild with new edits (a
   running instance doesn't hot-reload; it's a built image, not a dev server).
 
-## Using this from the VS Code devcontainer
+## Using this from VS Code
 
-`.devcontainer/` at the repo root attaches VS Code to a container with Node,
-Python, Docker CLI (talking to the _host's_ daemon via
-docker-outside-of-docker — so anything `devbox up` starts runs on your real
-machine, not trapped inside this container), and the Claude Code CLI
-preinstalled. Open the repo in VS Code, "Reopen in Container," then run
-`infra/devbox/devbox up --local` from its integrated terminal — the app
-becomes reachable from your normal browser at
-`http://<app>.<slug>.localtest.me` because the containers it starts are
-siblings on your host's Docker, not nested inside this one.
+`.devcontainer/` gives Node, Python, the Docker CLI (talking to the _host's_
+daemon — anything `devbox up` starts runs on your real machine, not trapped
+in a nested container), and the Claude Code CLI, either way below. Once
+attached, `infra/devbox/devbox up --local` from the integrated terminal
+becomes reachable from your normal browser at `http://<app>.<slug>.localtest.me`,
+because the containers it starts are siblings on your host's Docker.
+
+**If you already have the repo checked out:** open it in VS Code, "Reopen in
+Container" — this builds `.devcontainer/devcontainer.json` (features +
+`postCreateCommand`) against that checkout.
+
+**If you don't want a local checkout at all:** run the standalone,
+prebuilt image instead. It needs nothing on your machine but Docker — it
+clones the repo into _its own_ filesystem the first time it starts, into a
+named volume so the clone (and anything you build inside it) survives a
+restart:
+
+```bash
+docker volume create mono-workspace
+
+docker run -d --name mono-dev \
+  -e REPO_REF=main \
+  -v mono-workspace:/workspace \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v ~/.ssh:/root/.ssh:ro \
+  ghcr.io/ryanrau/mono/devcontainer:latest
+```
+
+Then in VS Code: `Cmd/Ctrl+Shift+P` → **"Dev Containers: Attach to Running
+Container..."** → `mono-dev` → open `/workspace/mono`. Nothing is ever
+written to your filesystem directly — the clone lives inside the
+`mono-workspace` Docker volume, not a folder you'd see in Finder/Explorer.
+
+Notes:
+
+- `-v ~/.ssh:/root/.ssh:ro` gives the container your GitHub identity to clone
+  a private repo (and to `git push` from inside it later) — the entrypoint
+  adds `github.com`'s host key at every startup so it doesn't hang on an
+  unanswerable host-key prompt, since mounting `~/.ssh` replaces the whole
+  directory, including anything baked into the image at build time.
+- `-v /var/run/docker.sock:/var/run/docker.sock` is what makes `devbox up`
+  work from inside this container at all (docker-outside-of-docker, done by
+  hand here rather than via a devcontainer feature).
+- `-e REPO_REF=<branch>` clones a different branch — e.g. one that hasn't
+  merged to `main` yet, like this feature.
+- The image is published by `.github/workflows/devcontainer-image.yml`
+  whenever `.devcontainer/**` changes on `main`, or on demand via **Actions →
+  Build Devcontainer Image → Run workflow**. It's dev tooling, not a deployed
+  app, so it's outside `deploy.yml` and the regular Build and Deploy workflow.
+- Muse Code isn't baked into the image (its installer is `curl | bash` from
+  a third-party host — not something that should run unattended at
+  image-build time). Run it once yourself after attaching:
+  `curl -fsSL https://dev.meta.ai/install.sh | bash`.
