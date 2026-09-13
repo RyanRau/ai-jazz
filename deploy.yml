@@ -31,21 +31,21 @@ apps:
     # see infra/README.md's "Runtime secrets" for how this reaches
     # /opt/apps/.env. Without it, chat.pb.js falls back to a hardcoded
     # dev-only key, which is fine locally but not in production.
-    environment:
-      CHAT_ENCRYPTION_KEY: "${CHAT_ENCRYPTION_KEY}"
-    volumes:
-      - pb_data:/pb/pb_data
-    # Optional: enables hub's "invite user" feature to actually email the
+    #
+    # SMTP_* enables hub's "invite user" feature to actually email the
     # activation link instead of falling back to a copy/paste link. Unset
     # in /opt/apps/.env until real SMTP creds exist -- see
     # apps/pocketbase/README.md.
     environment:
+      CHAT_ENCRYPTION_KEY: "${CHAT_ENCRYPTION_KEY}"
       SMTP_HOST: "${SMTP_HOST}"
       SMTP_PORT: "${SMTP_PORT}"
       SMTP_USERNAME: "${SMTP_USERNAME}"
       SMTP_PASSWORD: "${SMTP_PASSWORD}"
       SMTP_SENDER_ADDRESS: "${SMTP_SENDER_ADDRESS}"
       SMTP_SENDER_NAME: "${SMTP_SENDER_NAME}"
+    volumes:
+      - pb_data:/pb/pb_data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
       interval: 30s
